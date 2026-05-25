@@ -102,8 +102,26 @@ export default function DashboardWebsiteEditor() {
         loadWebsite();
     }, [id, toast]);
 
+    // Load available AI providers
+    useEffect(() => {
+        Promise.all([
+            fetch("/api/settings/openai", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch("/api/settings/gemini", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch("/api/settings/openrouter", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch("/api/settings/deepseek", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
+        ]).then(([openai, gemini, openrouter, deepseek]) => {
+            const available: AIProvider[] = [];
+            if (openai?.apiKey) available.push('openai');
+            if (gemini?.apiKey) available.push('gemini');
+            if (openrouter?.apiKey) available.push('openrouter');
+            if (deepseek?.apiKey) available.push('deepseek');
+            setAvailableAIProviders(available);
+        });
+    }, []);
+
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedStats, setGeneratedStats] = useState<{ services: number, locations: number } | null>(null);
+    const [availableAIProviders, setAvailableAIProviders] = useState<AIProvider[]>([]);
 
     const handleChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -481,16 +499,18 @@ export default function DashboardWebsiteEditor() {
                                         </div>
                                         <div className="flex flex-col items-end gap-3">
                                             <div className="w-full min-w-[220px]">
-                                                <Label className="text-xs uppercase tracking-[0.2em] text-gray-400">AI Provider</Label>
+                                                <Label className="text-xs uppercase tracking-[0.2em] text-gray-400">AI Provider {isAIProvider((formData as any).contentAiProvider) && <span className="text-green-400 text-xs ml-1">• Using {(formData as any).contentAiProvider === 'openai' ? 'OpenAI' : (formData as any).contentAiProvider === 'gemini' ? 'Gemini' : (formData as any).contentAiProvider === 'openrouter' ? 'OpenRouter' : 'DeepSeek'}</span>}</Label>
                                                 <select
                                                     value={isAIProvider((formData as any).contentAiProvider) ? (formData as any).contentAiProvider : "gemini"}
                                                     onChange={(e) => handleChange("contentAiProvider", e.target.value)}
-                                                    className="mt-2 w-full h-10 px-3 rounded-md bg-[#1a1a2e] border border-white/10 text-white focus:outline-none focus:border-[#7C3AED]"
+                                                    className="mt-2 w-full h-10 px-3 rounded-md bg-[#1a1a2e] border border-white/10 text-white focus:outline-none focus:border-[#7C3AED] disabled:opacity-50"
+                                                    disabled={availableAIProviders.length === 0}
                                                 >
-                                                    <option value="gemini">Google Gemini</option>
-                                                    <option value="openai">OpenAI</option>
-                                                    <option value="openrouter">OpenRouter</option>
-                                                    <option value="deepseek">DeepSeek</option>
+                                                    {availableAIProviders.length === 0 && <option value="">No AI providers configured</option>}
+                                                    {availableAIProviders.includes('gemini') && <option value="gemini">Google Gemini {isAIProvider((formData as any).contentAiProvider) && (formData as any).contentAiProvider === 'gemini' && '✓'}</option>}
+                                                    {availableAIProviders.includes('openai') && <option value="openai">OpenAI {isAIProvider((formData as any).contentAiProvider) && (formData as any).contentAiProvider === 'openai' && '✓'}</option>}
+                                                    {availableAIProviders.includes('openrouter') && <option value="openrouter">OpenRouter {isAIProvider((formData as any).contentAiProvider) && (formData as any).contentAiProvider === 'openrouter' && '✓'}</option>}
+                                                    {availableAIProviders.includes('deepseek') && <option value="deepseek">DeepSeek {isAIProvider((formData as any).contentAiProvider) && (formData as any).contentAiProvider === 'deepseek' && '✓'}</option>}
                                                 </select>
                                                 <p className="mt-2 text-xs text-gray-400">
                                                     Uses the saved API key for the selected provider from API Setup.

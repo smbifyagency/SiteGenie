@@ -1023,6 +1023,7 @@ export default function WDSiteEditor() {
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [visualEditorOverrides, setVisualEditorOverrides] = useState<Record<string, string>>({});
   const [aiProvider, setAiProvider] = useState<AIProvider>("gemini");
+  const [availableAIProviders, setAvailableAIProviders] = useState<AIProvider[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstLoadRef = useRef(true);
@@ -1219,8 +1220,20 @@ export default function WDSiteEditor() {
         fetch("/api/settings/openrouter", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch("/api/settings/deepseek", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
       ]).then(([openai, gemini, openrouter, deepseek]) => {
-        const hasKey = (openai?.apiKey) || (gemini?.apiKey) || (openrouter?.apiKey) || (deepseek?.apiKey) || bd.openaiApiKey || bd.geminiApiKey || bd.deepseekApiKey;
+        const available: AIProvider[] = [];
+        if (openai?.apiKey || bd.openaiApiKey) available.push('openai');
+        if (gemini?.apiKey || bd.geminiApiKey) available.push('gemini');
+        if (openrouter?.apiKey) available.push('openrouter');
+        if (deepseek?.apiKey || bd.deepseekApiKey) available.push('deepseek');
+        
+        setAvailableAIProviders(available);
+        const hasKey = available.length > 0;
         setApiStatus(hasKey ? "ready" : "none");
+        
+        // Set aiProvider to first available or keep current if available
+        if (hasKey && !available.includes(aiProvider)) {
+          setAiProvider(available[0]);
+        }
       });
 
       // Try to load pre-generated files (stored as customFiles in DB)
@@ -2456,15 +2469,18 @@ export default function WDSiteEditor() {
                 {/* AI Provider selector + Generate button */}
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <Label className="text-xs text-gray-400">AI Provider</Label>
+                    <Label className="text-xs text-gray-400">AI Provider {aiProvider && <span className="text-green-400 text-xs ml-1">• Using {aiProvider === 'openai' ? 'OpenAI' : aiProvider === 'gemini' ? 'Gemini' : aiProvider === 'openrouter' ? 'OpenRouter' : 'DeepSeek'}</span>}</Label>
                     <select
-                      className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white mt-1"
+                      className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white mt-1 disabled:opacity-50"
                       value={aiProvider}
                       onChange={e => { setAiProvider(e.target.value as AIProvider); updateField("contentAiProvider", e.target.value); }}
+                      disabled={availableAIProviders.length === 0}
                     >
-                      <option value="openai">OpenAI</option>
-                      <option value="gemini">Gemini</option>
-                      <option value="openrouter">OpenRouter</option>
+                      {availableAIProviders.length === 0 && <option value="">No AI providers configured</option>}
+                      {availableAIProviders.includes('openai') && <option value="openai">OpenAI {aiProvider === 'openai' && '✓'}</option>}
+                      {availableAIProviders.includes('gemini') && <option value="gemini">Gemini {aiProvider === 'gemini' && '✓'}</option>}
+                      {availableAIProviders.includes('openrouter') && <option value="openrouter">OpenRouter {aiProvider === 'openrouter' && '✓'}</option>}
+                      {availableAIProviders.includes('deepseek') && <option value="deepseek">DeepSeek {aiProvider === 'deepseek' && '✓'}</option>}
                     </select>
                   </div>
                   <Button
@@ -3346,13 +3362,13 @@ export default function WDSiteEditor() {
               <div className="rounded-lg border border-sky-900/60 bg-sky-950/25 p-4 space-y-3">
                 <p className="text-sm font-semibold text-sky-200">Recommended Deploy Process</p>
                 <ol className="list-decimal space-y-2 pl-4 text-xs text-sky-100/90">
-                  <li>Website final karne ke baad pehle apna Netlify site name find karein aur availability check karein.</li>
-                  <li>Agar URL available ho, usi final URL ko Google Search Console me property ke taur par add karein.</li>
-                  <li>Search Console ka verification meta tag copy karke neeche <strong className="text-sky-100">Custom Head Code</strong> me paste karein.</li>
-                  <li>Google Analytics me isi website ko add karein, zaroori script/snippet Custom Head Code me paste karein, aur GA4 Measurement ID alag se field me enter karein.</li>
-                  <li>Uske baad deploy karein taake ek hi deployment me verification aur analytics dono live ho jayein.</li>
+                  <li>After finalizing your website, find your Netlify site name first and check its availability.</li>
+                  <li>If the URL is available, add that final URL to Google Search Console as a property.</li>
+                  <li>Copy the verification meta tag from Search Console and paste it in <strong className="text-sky-100">Custom Head Code</strong> below.</li>
+                  <li>Add this website to Google Analytics, paste the required tracking script in Custom Head Code, and enter your GA4 Measurement ID in the dedicated field.</li>
+                  <li>Then deploy so that both verification and analytics go live in a single deployment.</li>
                 </ol>
-                <p className="text-[11px] text-sky-200/80">Custom Head Code me multiple meta, script, aur link tags paste kar sakte hain. Editor side par koi hard length limit apply nahi ki gayi.</p>
+                <p className="text-[11px] text-sky-200/80">You can paste multiple meta, script, and link tags in Custom Head Code. There is no hard length limit on the editor side.</p>
               </div>
 
               {deployedUrl && (
@@ -3456,7 +3472,7 @@ export default function WDSiteEditor() {
                   className="bg-gray-800 border-gray-700 text-white text-sm"
                   placeholder="G-XXXXXXXXXX"
                 />
-                <p className="text-xs text-gray-600">Google Analytics → Admin → Data Streams → apna Measurement ID yahan paste karein. Agar Google full site tag/script de to usay Custom Head Code me paste karein.</p>
+                <p className="text-xs text-gray-600">Go to Google Analytics → Admin → Data Streams to find your Measurement ID (starts with G-) and enter it here. If Google provides a complete site tag or script, paste that in Custom Head Code instead.</p>
               </div>
 
               {/* Custom Head Code */}
@@ -3472,7 +3488,7 @@ export default function WDSiteEditor() {
                   spellCheck={false}
                   rows={10}
                 />
-                <p className="text-xs text-gray-600">Yahan Google Search Console meta tag, Google Analytics snippet, Bing/Pinterest verification, Meta Pixel, ya koi bhi third-party &lt;meta&gt;, &lt;script&gt;, ya &lt;link&gt; code paste kar sakte hain. Yeh har page ke &lt;head&gt; me inject hoga.</p>
+                <p className="text-xs text-gray-600">Paste your Google Search Console verification meta tag, Google Analytics tracking code, and any third-party scripts here (Bing verification, Pinterest tags, Meta Pixel, etc.). This code will be injected into the &lt;head&gt; of every page.</p>
               </div>
 
               <div className="rounded-lg bg-gray-800/50 border border-gray-700/50 p-3 space-y-3">

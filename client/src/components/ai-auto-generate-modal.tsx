@@ -405,6 +405,16 @@ export function AIAutoGenerateModal({ open, onOpenChange, onGenerate }: AIAutoGe
                       )}
                     </div>
                   </SelectItem>
+                  <SelectItem value="deepseek" disabled={!hasDeepSeek}>
+                    <div className="flex items-center gap-2">
+                      <span>DeepSeek</span>
+                      {hasDeepSeek ? (
+                        <CheckCircle className="h-3 w-3 text-green-600" />
+                      ) : (
+                        <XCircle className="h-3 w-3 text-red-600" />
+                      )}
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {!hasAnyAI && (

@@ -97,8 +97,29 @@ export function BlogGenerationInterface({
   const [selectedPrompt, setSelectedPrompt] = useState('');
   const [aiProvider, setAiProvider] = useState('openai');
   const [includeImages, setIncludeImages] = useState(true);
+  const [availableAIProviders, setAvailableAIProviders] = useState<string[]>([]);
 
   const { toast } = useToast();
+
+  // Load available AI providers on mount
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/settings/openai", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/settings/gemini", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/settings/openrouter", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/settings/deepseek", { credentials: "include" }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([openai, gemini, openrouter, deepseek]) => {
+      const available: string[] = [];
+      if (openai?.apiKey) available.push('openai');
+      if (gemini?.apiKey) available.push('gemini');
+      if (openrouter?.apiKey) available.push('openrouter');
+      if (deepseek?.apiKey) available.push('deepseek');
+      setAvailableAIProviders(available);
+      if (available.length > 0 && !available.includes(aiProvider)) {
+        setAiProvider(available[0]);
+      }
+    });
+  }, []);
 
   const quillModules = {
     toolbar: [
@@ -403,16 +424,17 @@ export function BlogGenerationInterface({
                 </div>
 
                 <div>
-                  <Label htmlFor="aiProvider">AI Provider</Label>
-                  <Select value={aiProvider} onValueChange={setAiProvider}>
+                  <Label htmlFor="aiProvider">AI Provider {aiProvider && <span className="text-green-400 text-xs ml-1">• Using {aiProvider === 'openai' ? 'OpenAI' : aiProvider === 'gemini' ? 'Gemini' : aiProvider === 'openrouter' ? 'OpenRouter' : 'DeepSeek'}</span>}</Label>
+                  <Select value={aiProvider} onValueChange={setAiProvider} disabled={availableAIProviders.length === 0}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="openai">OpenAI (GPT-4.1)</SelectItem>
-                      <SelectItem value="gemini">Google Gemini</SelectItem>
-                      <SelectItem value="openrouter">OpenRouter</SelectItem>
-                      <SelectItem value="deepseek">DeepSeek</SelectItem>
+                      {availableAIProviders.length === 0 && <SelectItem value="">No AI providers configured</SelectItem>}
+                      {availableAIProviders.includes('openai') && <SelectItem value="openai">OpenAI (GPT-4.1) {aiProvider === 'openai' && '✓'}</SelectItem>}
+                      {availableAIProviders.includes('gemini') && <SelectItem value="gemini">Google Gemini {aiProvider === 'gemini' && '✓'}</SelectItem>}
+                      {availableAIProviders.includes('openrouter') && <SelectItem value="openrouter">OpenRouter {aiProvider === 'openrouter' && '✓'}</SelectItem>}
+                      {availableAIProviders.includes('deepseek') && <SelectItem value="deepseek">DeepSeek {aiProvider === 'deepseek' && '✓'}</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
