@@ -597,22 +597,22 @@ WRITING RULES
 OUTPUT FORMAT (strict JSON, no markdown fences):
 {
   "introParas": [
-    "Paragraph 1: 150-220 words. Explain the problem homeowners face, why ${biz.primaryCity} residents trust ${biz.name}, and what makes you different. Include specific examples.",
-    "Paragraph 2: 150-220 words. Describe your service process, credentials, and commitment to quality in ${biz.primaryCity}. Mention certifications and experience.",
-    "Paragraph 3: 150-220 words. Detail your expertise with specific service types, tools, and methods used. Explain what customers can expect.",
-    "Paragraph 4: 120-150 words. Call to action paragraph mentioning the service areas and why acting fast matters. Include urgency without being pushy."
+    "Paragraph 1: 110-160 words. Explain the problem homeowners face, why ${biz.primaryCity} residents trust ${biz.name}, and what makes you different. Include specific examples.",
+    "Paragraph 2: 110-160 words. Describe your service process, credentials, and commitment to quality in ${biz.primaryCity}. Mention certifications and experience.",
+    "Paragraph 3: 110-160 words. Detail your expertise with specific service types, tools, and methods used. Explain what customers can expect.",
+    "Paragraph 4: 90-130 words. Call to action paragraph mentioning the service areas and why acting fast matters. Include urgency without being pushy."
   ],
   "faqs": [
-    { "question": "Specific question about ${primaryKeyword} in ${biz.primaryCity}", "answer": "100-150 word detailed answer" },
-    { "question": "Question about pricing or cost", "answer": "100-150 word detailed answer" },
-    { "question": "Question about qualifications or licensing", "answer": "100-150 word detailed answer" },
-    { "question": "Question about response time or availability", "answer": "100-150 word detailed answer" },
-    { "question": "Question about the process or what to expect", "answer": "100-150 word detailed answer" },
-    { "question": "Question about a common problem or concern", "answer": "100-150 word detailed answer" },
-    { "question": "Question about safety or guarantees", "answer": "100-150 word detailed answer" },
-    { "question": "Question about service area coverage", "answer": "100-150 word detailed answer" },
-    { "question": "Question about maintenance or prevention", "answer": "100-150 word detailed answer" },
-    { "question": "Question about choosing the right provider", "answer": "100-150 word detailed answer" }
+    { "question": "Specific question about ${primaryKeyword} in ${biz.primaryCity}", "answer": "70-120 word detailed answer" },
+    { "question": "Question about pricing or cost", "answer": "70-120 word detailed answer" },
+    { "question": "Question about qualifications or licensing", "answer": "70-120 word detailed answer" },
+    { "question": "Question about response time or availability", "answer": "70-120 word detailed answer" },
+    { "question": "Question about the process or what to expect", "answer": "70-120 word detailed answer" },
+    { "question": "Question about a common problem or concern", "answer": "70-120 word detailed answer" },
+    { "question": "Question about safety or guarantees", "answer": "70-120 word detailed answer" },
+    { "question": "Question about service area coverage", "answer": "70-120 word detailed answer" },
+    { "question": "Question about maintenance or prevention", "answer": "70-120 word detailed answer" },
+    { "question": "Question about choosing the right provider", "answer": "70-120 word detailed answer" }
   ],
   "seoBody": "200-300 word paragraph naturally weaving in ${primaryKeyword}, ${biz.primaryCity}, business name, and key services. Reads like expert local content, not keyword stuffing. Include specific benefits and community connection.",
   "processSteps": [
@@ -646,7 +646,7 @@ OUTPUT FORMAT (strict JSON, no markdown fences):
   }
 }
 
-Generate all content above as valid JSON. Each introParas item must be a single string paragraph. Total content must be at least 4000 words.
+Generate all content above as valid JSON. Each introParas item must be a single string paragraph. Total content should be at least 1800 words.
 `;
 }
 

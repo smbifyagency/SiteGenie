@@ -1189,88 +1189,105 @@ async function generateLocalServiceAIContent(
   categoryName: string,
   primaryKeyword: string
 ): Promise<LocalServiceAIContent | null> {
-  try {
-    const user = await storage.getUser(userId);
-    if (!user || (user.role !== 'user' && user.role !== 'paid' && user.role !== 'admin')) {
-      console.log('Local service AI content: skipping (user role)');
-      return null;
-    }
-
-    const providerOrder = getAIProviderOrder(
-      bd.contentAiProvider,
-      bd.aiProvider
-    );
-
-    let provider: AIProvider = providerOrder[0] || 'gemini';
-    let apiKey: string | null = null;
-
-    for (const candidateProvider of providerOrder) {
-      const websiteApiKey =
-        candidateProvider === 'openai'
-          ? stringValue(bd.openaiApiKey)
-          : candidateProvider === 'gemini'
-            ? stringValue(bd.geminiApiKey)
-            : candidateProvider === 'openrouter'
-              ? stringValue(bd.openrouterApiKey)
-              : stringValue(bd.deepseekApiKey);
-
-      if (websiteApiKey) {
-        provider = candidateProvider;
-        apiKey = websiteApiKey;
-        break;
-      }
-
-      const storedApiKey = await getAIProviderConfig(userId, candidateProvider);
-      if (storedApiKey) {
-        provider = candidateProvider;
-        apiKey = storedApiKey;
-        break;
-      }
-    }
-
-    if (!apiKey) {
-      console.log('Local service AI content: skipping (no API key)');
-      return null;
-    }
-
-    const biz: PromptBusinessContext = {
-      name: bd.businessName || 'Local Business',
-      type: categoryName,
-      primaryCity: bd.city || bd.primaryCity || '',
-      locations: Array.isArray(bd.serviceAreas) ? bd.serviceAreas : (bd.serviceAreas || '').split(',').map((s: string) => s.trim()).filter(Boolean),
-      services: Array.isArray(bd.services) ? bd.services : (bd.services || '').split(',').map((s: string) => s.trim()).filter(Boolean),
-      phone: bd.phone || '',
-      yearsInBusiness: bd.yearsInBusiness,
-      usp: bd.usp || bd.uniqueSellingPoint,
-    };
-
-    const prompt = buildLocalServiceContentPrompt(biz, categoryName, primaryKeyword);
-    console.log(`Generating AI content for local service site: ${biz.name} (${categoryName})`);
-
-    const result = await generateStructuredJsonWithProvider(provider, apiKey, prompt, {
-      maxTokens: 6500,
-      temperature: 0.7,
-    });
-
-    const out: LocalServiceAIContent = { providerUsed: provider };
-    if (Array.isArray(result.introParas) && result.introParas.length > 0) out.introParas = result.introParas;
-    if (Array.isArray(result.faqs) && result.faqs.length > 0) out.faqs = result.faqs;
-    if (typeof result.seoBody === 'string' && result.seoBody.trim()) out.seoBody = result.seoBody;
-    if (Array.isArray(result.processSteps) && result.processSteps.length > 0) out.processSteps = result.processSteps;
-    if (Array.isArray(result.whyChooseUs) && result.whyChooseUs.length > 0) out.whyChooseUs = result.whyChooseUs;
-    if (typeof result.aboutContent === 'string' && result.aboutContent.trim()) out.aboutContent = result.aboutContent;
-    if (Array.isArray(result.testimonials) && result.testimonials.length > 0) out.testimonials = result.testimonials;
-    if (result.serviceDescriptions && typeof result.serviceDescriptions === 'object') {
-      const { _instructions, ...descs } = result.serviceDescriptions;
-      if (Object.keys(descs).length > 0) out.serviceDescriptions = descs;
-    }
-
-    console.log(`AI content generated: introParas=${out.introParas?.length ?? 0}, faqs=${out.faqs?.length ?? 0}, whyChooseUs=${out.whyChooseUs?.length ?? 0}, testimonials=${out.testimonials?.length ?? 0}, serviceDescs=${out.serviceDescriptions ? Object.keys(out.serviceDescriptions).length : 0}`);
-    return out;
-  } catch (err) {
-    console.error('Local service AI content generation failed, using template fallback:', err);
+  const user = await storage.getUser(userId);
+  if (!user || (user.role !== 'user' && user.role !== 'paid' && user.role !== 'admin')) {
+    console.log('Local service AI content: skipping (user role)');
     return null;
   }
+
+  const providerOrder = getAIProviderOrder(
+    bd.contentAiProvider,
+    bd.aiProvider
+  );
+
+  const providerCandidates: Array<{ provider: AIProvider; apiKey: string }> = [];
+
+  for (const candidateProvider of providerOrder) {
+    const websiteApiKey =
+      candidateProvider === 'openai'
+        ? stringValue(bd.openaiApiKey)
+        : candidateProvider === 'gemini'
+          ? stringValue(bd.geminiApiKey)
+          : candidateProvider === 'openrouter'
+            ? stringValue(bd.openrouterApiKey)
+            : stringValue(bd.deepseekApiKey);
+
+    if (websiteApiKey) {
+      providerCandidates.push({ provider: candidateProvider, apiKey: websiteApiKey });
+      continue;
+    }
+
+    const storedApiKey = await getAIProviderConfig(userId, candidateProvider);
+    if (storedApiKey) {
+      providerCandidates.push({ provider: candidateProvider, apiKey: storedApiKey });
+    }
+  }
+
+  if (providerCandidates.length === 0) {
+    console.log('Local service AI content: skipping (no API key)');
+    return null;
+  }
+
+  const biz: PromptBusinessContext = {
+    name: bd.businessName || 'Local Business',
+    type: categoryName,
+    primaryCity: bd.city || bd.primaryCity || '',
+    locations: Array.isArray(bd.serviceAreas) ? bd.serviceAreas : (bd.serviceAreas || '').split(',').map((s: string) => s.trim()).filter(Boolean),
+    services: Array.isArray(bd.services) ? bd.services : (bd.services || '').split(',').map((s: string) => s.trim()).filter(Boolean),
+    phone: bd.phone || '',
+    yearsInBusiness: bd.yearsInBusiness,
+    usp: bd.usp || bd.uniqueSellingPoint,
+  };
+
+  const fullPrompt = buildLocalServiceContentPrompt(biz, categoryName, primaryKeyword);
+  const compactPrompt = fullPrompt
+    .replace('Total content must be at least 4000 words.', 'Total content should be at least 1800 words, prioritizing quality and strict valid JSON.')
+    .replace('4000 words', '1800 words');
+
+  console.log(`Generating AI content for local service site: ${biz.name} (${categoryName})`);
+
+  let lastError: unknown = null;
+
+  for (const candidate of providerCandidates) {
+    const promptAttempts: Array<{ prompt: string; maxTokens: number; label: string }> = [
+      { prompt: fullPrompt, maxTokens: 4200, label: 'full' },
+      { prompt: compactPrompt, maxTokens: 3000, label: 'compact' },
+    ];
+
+    for (const attempt of promptAttempts) {
+      try {
+        const result = await generateStructuredJsonWithProvider(candidate.provider, candidate.apiKey, attempt.prompt, {
+          maxTokens: attempt.maxTokens,
+          temperature: 0.7,
+        });
+
+        const out: LocalServiceAIContent = { providerUsed: candidate.provider };
+        if (Array.isArray(result.introParas) && result.introParas.length > 0) out.introParas = result.introParas;
+        if (Array.isArray(result.faqs) && result.faqs.length > 0) out.faqs = result.faqs;
+        if (typeof result.seoBody === 'string' && result.seoBody.trim()) out.seoBody = result.seoBody;
+        if (Array.isArray(result.processSteps) && result.processSteps.length > 0) out.processSteps = result.processSteps;
+        if (Array.isArray(result.whyChooseUs) && result.whyChooseUs.length > 0) out.whyChooseUs = result.whyChooseUs;
+        if (typeof result.aboutContent === 'string' && result.aboutContent.trim()) out.aboutContent = result.aboutContent;
+        if (Array.isArray(result.testimonials) && result.testimonials.length > 0) out.testimonials = result.testimonials;
+        if (result.serviceDescriptions && typeof result.serviceDescriptions === 'object') {
+          const { _instructions, ...descs } = result.serviceDescriptions;
+          if (Object.keys(descs).length > 0) out.serviceDescriptions = descs;
+        }
+
+        if (!out.introParas && !out.faqs && !out.seoBody && !out.processSteps && !out.whyChooseUs && !out.aboutContent && !out.testimonials && !out.serviceDescriptions) {
+          throw new Error(`Provider ${candidate.provider} returned empty structured content`);
+        }
+
+        console.log(`AI content generated with ${candidate.provider} (${attempt.label}): introParas=${out.introParas?.length ?? 0}, faqs=${out.faqs?.length ?? 0}, whyChooseUs=${out.whyChooseUs?.length ?? 0}, testimonials=${out.testimonials?.length ?? 0}, serviceDescs=${out.serviceDescriptions ? Object.keys(out.serviceDescriptions).length : 0}`);
+        return out;
+      } catch (err) {
+        lastError = err;
+        console.error(`Local service AI generation failed with ${candidate.provider} (${attempt.label}). Trying next option...`, err);
+      }
+    }
+  }
+
+  throw new Error(`AI generation failed across all configured providers. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
 // Helper function to generate AI content for dynamic pages
@@ -7133,13 +7150,86 @@ Generated on: ${new Date().toISOString()}`;
       );
 
       if (!aiContent) {
-        return res.status(402).json({ error: "No AI API key configured. Save an OpenAI, Gemini, or OpenRouter key on this site or in Settings → API Keys." });
+        return res.status(402).json({ error: "No AI API key configured. Save an OpenAI, Gemini, OpenRouter, or DeepSeek key in API Setup before generating content." });
       }
+
+      const serviceDescriptions = (aiContent.serviceDescriptions && typeof aiContent.serviceDescriptions === 'object')
+        ? aiContent.serviceDescriptions
+        : {};
+
+      const homepageContent = {
+        metaTitle: `${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || ''} | ${bd.businessName || 'Local Business'}`.replace(/\s+/g, ' ').trim(),
+        metaDescription: `${bd.businessName || 'Local Business'} provides ${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || ''}. Contact us for fast, professional service.`.replace(/\s+/g, ' ').trim(),
+        hero: {
+          h1: `${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || 'Your Area'}`,
+          subheadline: Array.isArray(aiContent.introParas) && aiContent.introParas.length > 0
+            ? aiContent.introParas[0]
+            : `${bd.businessName || 'Local Business'} provides trusted service for homeowners and businesses in ${bd.city || 'your area'}.`,
+          primaryCTA: 'Get Free Estimate',
+          trustLine: aiContent.providerUsed ? `AI content generated with ${aiContent.providerUsed}` : 'Professional service you can trust',
+        },
+        intro: {
+          h2: `About ${bd.businessName || 'Our Company'} in ${bd.city || ''}`.trim(),
+          paragraphs: Array.isArray(aiContent.introParas) && aiContent.introParas.length > 0 ? aiContent.introParas : [],
+        },
+        servicesSection: {
+          h2: `Our ${bd.city || ''} Services`.trim(),
+          intro: `Explore the main services offered by ${bd.businessName || 'our team'}.`,
+          cards: (Array.isArray(bd.services) ? bd.services : []).map((service: string) => ({
+            service,
+            h3: service,
+            description: serviceDescriptions[service] || `Professional ${service.toLowerCase()} support for your property.`,
+            internalLink: {
+              anchor: service,
+              slug: `/services/${service.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${String(bd.city || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`,
+            },
+          })),
+        },
+        whyUsSection: {
+          h2: `Why Choose ${bd.businessName || 'Us'}`,
+          points: Array.isArray(aiContent.whyChooseUs) && aiContent.whyChooseUs.length > 0
+            ? aiContent.whyChooseUs
+            : [],
+        },
+        processSection: Array.isArray(aiContent.processSteps) && aiContent.processSteps.length > 0
+          ? {
+              h2: `Our Process`,
+              steps: aiContent.processSteps,
+            }
+          : undefined,
+        locationsSection: {
+          h2: `Areas We Serve`,
+          body: aiContent.seoBody || `${bd.businessName || 'Our team'} serves ${Array.isArray(bd.serviceAreas) ? bd.serviceAreas.join(', ') : bd.city || ''}.`,
+          locationLinks: (Array.isArray(bd.serviceAreas) ? bd.serviceAreas : []).map((cityName: string) => ({
+            city: cityName,
+            anchor: cityName,
+            slug: `/locations/${cityName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`,
+          })),
+        },
+        faqSection: {
+          h2: `Frequently Asked Questions`,
+          faqs: Array.isArray(aiContent.faqs) ? aiContent.faqs : [],
+        },
+        finalCTA: {
+          h2: `Ready to Get Started?`,
+          body: aiContent.seoBody || `Contact ${bd.businessName || 'our team'} today for help in ${bd.city || 'your area'}.`,
+          ctaButton: 'Call Now',
+          phone: bd.phone || '',
+        },
+        seoFootnote: aiContent.seoBody
+          ? {
+              h2: `${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || ''}`.trim(),
+              body: aiContent.seoBody,
+              targetKeywords: [bd.primaryKeyword || catConfig.defaultPrimaryKeyword, bd.city || '', ...(Array.isArray(bd.services) ? bd.services.slice(0, 4) : [])].filter(Boolean),
+            }
+          : undefined,
+      };
 
       // Save AI content fields into businessData
       const updatedBd = {
         ...bd,
         contentAiProvider: aiContent.providerUsed ?? bd.contentAiProvider,
+        homepageContent: homepageContent,
         _aiIntroParas: aiContent.introParas ?? bd._aiIntroParas,
         _aiFaqs: aiContent.faqs ?? bd._aiFaqs,
         _aiSeoBody: aiContent.seoBody ?? bd._aiSeoBody,
@@ -7155,7 +7245,13 @@ Generated on: ${new Date().toISOString()}`;
       return res.json({ success: true, content: aiContent });
     } catch (err: any) {
       console.error("generate-local-ai error:", err);
-      return res.status(500).json({ error: err.message || "AI generation failed" });
+      const message = err?.message || "AI generation failed";
+      const timeoutLike = /timeout|timed out|gateway|504/i.test(message);
+      return res.status(timeoutLike ? 504 : 500).json({
+        error: timeoutLike
+          ? "AI generation timed out on current provider. Please retry or switch AI provider."
+          : message,
+      });
     }
   });
 

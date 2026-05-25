@@ -481,13 +481,36 @@ function buildLocationSlug(city: string): string {
 
 function generateGoogleMap(data: WDBusinessData, focusCity?: string): string {
   const city = focusCity || data.city;
-  const query = encodeURIComponent(`${data.businessName}, ${data.address}, ${city}, ${data.state}`);
+  const addressQuery = encodeURIComponent([data.address, city, data.state].filter(Boolean).join(', '));
+  const fallbackSrc = `https://www.google.com/maps?q=${addressQuery}&output=embed`;
+
+  const rawMapInput = (data.googleMapsUrl || '').trim();
+  let mapSrc = fallbackSrc;
+
+  if (rawMapInput) {
+    if (rawMapInput.includes('<iframe')) {
+      const srcMatch = rawMapInput.match(/src=["']([^"']+)["']/i);
+      mapSrc = srcMatch?.[1] || fallbackSrc;
+    } else {
+      mapSrc = rawMapInput;
+    }
+  }
+
+  if (!/^https?:\/\//i.test(mapSrc)) {
+    mapSrc = fallbackSrc;
+  }
+
+  const hasEmbedFormat = /output=embed|\/maps\/embed|pb=!/i.test(mapSrc);
+  if (!hasEmbedFormat) {
+    mapSrc = fallbackSrc;
+  }
+
   return `<div style="border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-top:1rem;">
     <iframe
-      src="https://www.google.com/maps?q=${query}&output=embed"
+      src="${mapSrc}"
       width="100%" height="350" style="border:0;display:block;" loading="lazy"
       referrerpolicy="no-referrer-when-downgrade"
-      title="Map showing ${data.businessName} in ${city}, ${data.state}"
+      title="Map showing ${data.address}, ${city}, ${data.state}"
       allowfullscreen></iframe>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:1.5rem;margin-top:1.25rem;padding:1rem;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.05);">
@@ -2865,7 +2888,13 @@ export function generateServicePage(
   ];
 
   const benefitsH2 = content?.benefitsSection?.h2 || data._servicePageBenefitsH2 || `Why Hire ${data.businessName} for ${service} in ${data.city}`;
-  const benefitPoints = content?.benefitsSection?.points || data._servicePageBenefits || [
+  const aiWhyChooseUsPoints = Array.isArray((data as any)._aiWhyChooseUs) ? (data as any)._aiWhyChooseUs : [];
+  const benefitPoints = content?.benefitsSection?.points || (aiWhyChooseUsPoints.length > 0
+    ? aiWhyChooseUsPoints.slice(0, 6).map((pt: any) => ({
+        heading: pt.heading,
+        body: pt.body,
+      }))
+    : null) || data._servicePageBenefits || [
     { heading: `Licensed ${data.primaryKeyword} Professionals`, body: `Every technician is properly licensed and insured for ${service.toLowerCase()} work in ${data.state} — protecting you and your property on every job.` },
     { heading: 'Correct First Time', body: `We diagnose the root cause and fix it properly, so you're not calling us back for the same problem. Quality workmanship means long-lasting results.` },
     { heading: 'Upfront Written Estimates', body: `No surprise bills. You receive a clear, itemized written estimate before any work begins — and we never start without your approval.` },
@@ -2897,7 +2926,7 @@ export function generateServicePage(
       }));
 
   const faqH2 = content?.faqSection?.h2 || `${service} in ${data.city} — Frequently Asked Questions`;
-  const faqs = content?.faqSection?.faqs || [
+  const faqs = content?.faqSection?.faqs || data._faqs || [
     { question: `How much does ${service.toLowerCase()} cost in ${data.city}?`, answer: `The cost of ${service.toLowerCase()} depends on the scope of the work needed. We provide free on-site assessments and written estimates before any work begins — no surprises. Call us for an accurate quote for your specific situation.` },
     { question: `How long does ${service.toLowerCase()} take?`, answer: `Timelines vary depending on the size and complexity of the job. We will give you a realistic timeline during our initial assessment and keep you updated throughout the project.` },
     { question: `Can I do ${service.toLowerCase()} myself?`, answer: `Some minor issues can be addressed by homeowners, but most ${service.toLowerCase()} work requires professional tools, training, and experience to be done safely and correctly. Improper work can lead to bigger problems and higher costs — professional service is almost always the better investment.` },
@@ -2919,7 +2948,7 @@ export function generateServicePage(
         }));
 
   const ctaH2 = content?.finalCTA?.h2 || `Get Professional ${service} in ${data.city} Today`;
-  const ctaBody = content?.finalCTA?.body || `${data.businessName} is ready to respond to your ${service.toLowerCase()} needs in ${data.city}. Call now for immediate assistance or submit a request for non-emergency services.`;
+  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `${data.businessName} is ready to respond to your ${service.toLowerCase()} needs in ${data.city}. Call now for immediate assistance or submit a request for non-emergency services.`;
 
   // Build HTML sections
   const overviewHTML = overviewParas.map(p => `<p>${p}</p>`).join('');
@@ -3127,28 +3156,41 @@ export function generateLocationPage(
   const trustBadges = content?.hero?.trustBadges || data._trustBadges || ['Licensed & Insured', 'Free Estimates', 'Upfront Pricing', '24/7 Available'];
 
   const introH2 = content?.localIntroSection?.h2 || `${data.businessName} — ${data.primaryKeyword} Experts in ${city}`;
-  const introParas = content?.localIntroSection?.paragraphs || [
+  const aiIntroForCity = Array.isArray((data as any)._aiIntroParas) && (data as any)._aiIntroParas.length > 0
+    ? (data as any)._aiIntroParas.slice(0, 3).map((p: string) =>
+        (data.city && city && data.city !== city)
+          ? p.replace(new RegExp(data.city, 'gi'), city)
+          : p
+      )
+    : null;
+  const introParas = content?.localIntroSection?.paragraphs || aiIntroForCity || [
     `When you need ${data.primaryKeyword.toLowerCase()} in ${city}, fast professional response makes the difference. ${data.businessName} serves homeowners and businesses throughout ${city} with expert service, licensed technicians, and upfront pricing.`,
     `Our team knows ${city} — the local properties, common issues, and what it takes to get the job done right. This local expertise means faster service and better results for your specific situation.`,
     `${data.businessName} works with all major insurance providers when applicable and can guide you through the process from start to finish. We document everything to support your claim and keep you informed every step of the way.`,
   ];
 
   const servCityH2 = content?.servicesInCitySection?.h2 || `Our ${kwBase(data.primaryKeyword)} Services in ${city}`;
-  const servCityIntro = content?.servicesInCitySection?.intro || `${data.businessName} provides a full range of professional ${kwBase(data.primaryKeyword).toLowerCase()} services to homeowners and businesses throughout ${city} and surrounding areas.`;
+  const servCityIntro = content?.servicesInCitySection?.intro || data._seoBody || `${data.businessName} provides a full range of professional ${kwBase(data.primaryKeyword).toLowerCase()} services to homeowners and businesses throughout ${city} and surrounding areas.`;
+  const aiWhyChooseUsPoints = Array.isArray((data as any)._aiWhyChooseUs) ? (data as any)._aiWhyChooseUs : [];
   const serviceCards = content?.servicesInCitySection?.serviceCards?.length
     ? content.servicesInCitySection.serviceCards
     : data.services.map(s => ({
         service: s,
         icon: 'tool',
         h3: `${s} in ${city}`,
-        description: `Professional ${s.toLowerCase()} for ${city} homeowners and businesses. Fast response, certified technicians.`,
+        description: (data as any)._aiServiceDescs?.[s] || `Professional ${s.toLowerCase()} for ${city} homeowners and businesses. Fast response, certified technicians.`,
         internalLink: { anchor: `${s} in ${city}`, slug: data.enableMatrixPages
           ? `../matrix/${slugify(s)}-in-${slugify(city)}.html`
           : `../services/${slugify(s)}-${slugify(data.city)}.html` },
       }));
 
   const whyLocalH2 = content?.whyLocalSection?.h2 || `Why ${city} Residents Trust ${data.businessName}`;
-  const whyLocalPoints = content?.whyLocalSection?.points || [
+  const whyLocalPoints = content?.whyLocalSection?.points || (aiWhyChooseUsPoints.length > 0
+    ? aiWhyChooseUsPoints.slice(0, 4).map((pt: any) => ({
+        heading: pt.heading,
+        body: pt.body,
+      }))
+    : null) || [
     { heading: `Local ${city} Knowledge`, body: `We understand the specific needs of ${city} properties and deliver service that's tailored to local conditions and requirements.` },
     { heading: 'Rapid Response Time', body: `Our crews are positioned to reach ${city} properties quickly — because fast service often means better outcomes.` },
     { heading: 'Community Reputation', body: `${data.businessName} has earned the trust of ${city} homeowners through honest assessments, upfront pricing, and professional results.` },
@@ -3159,7 +3201,7 @@ export function generateLocationPage(
   const areasBody = content?.localAreaSection?.body || `${data.businessName} serves all neighborhoods and districts within ${city}. Our response coverage includes the greater ${city} area, surrounding communities, and neighboring ZIP codes. If you are unsure whether we cover your location, call us at ${data.phone} — we will give you an honest answer.`;
 
   const faqH2 = content?.faqSection?.h2 || `${data.primaryKeyword} in ${city} — Common Questions`;
-  const faqs = content?.faqSection?.faqs || [
+  const faqs = content?.faqSection?.faqs || data._faqs || [
     { question: `How fast can you respond in ${city}?`, answer: `Our ${city} team is available around the clock. Response times depend on your location and current demand — we will give you an honest ETA when you call.` },
     { question: `Do you serve all of ${city}?`, answer: `Yes. We serve all areas within ${city} as well as surrounding communities. If you are unsure whether we cover your specific location, just call us and we will confirm immediately.` },
     { question: `Does ${data.businessName} work with insurance companies?`, answer: `Yes. We work with all major insurance carriers. We provide complete documentation to support your claim and can communicate directly with your adjuster if you prefer.` },
@@ -3169,7 +3211,7 @@ export function generateLocationPage(
   ];
 
   const ctaH2 = content?.finalCTA?.h2 || `Need ${data.primaryKeyword} in ${city}? Contact Us Now`;
-  const ctaBody = content?.finalCTA?.body || `${data.businessName} is ready to help ${city} homeowners and businesses with professional ${data.primaryKeyword.toLowerCase()}. Call now or submit a request and we will follow up promptly.`;
+  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `${data.businessName} is ready to help ${city} homeowners and businesses with professional ${data.primaryKeyword.toLowerCase()}. Call now or submit a request and we will follow up promptly.`;
 
   // Build HTML sections
   const introParagraphsHTML = introParas.map(p => `<p>${p}</p>`).join('');

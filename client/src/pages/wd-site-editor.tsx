@@ -77,6 +77,7 @@ interface WDSiteData {
   primaryColor: string;
   secondaryColor: string;
   contactFormEmbed?: string;
+  googleMapsUrl?: string;
   // AI Content
   homepageContent?: any;
   serviceContent?: Record<string, any>;
@@ -111,6 +112,12 @@ interface WDSiteData {
   faviconUrl?: string;
 }
 
+function buildAddressMapEmbedUrl(address?: string, city?: string, state?: string): string {
+  const composed = [address, city, state].map((part) => (part || '').trim()).filter(Boolean).join(', ');
+  if (!composed) return '';
+  return `https://www.google.com/maps?q=${encodeURIComponent(composed)}&output=embed`;
+}
+
 interface PublishChecklistItem {
   id: string;
   title: string;
@@ -123,9 +130,14 @@ const PUBLISH_CHECKLIST_ITEMS: PublishChecklistItem[] = [
   {
     id: "business-details",
     title: "Business details are correct",
-    description: "Confirm your business name, phone, address, and main contact details.",
+    description: "Confirm your business name, phone, address, and Google Maps iframe URL for the contact page map.",
     targetTab: "business",
-    autoReady: (data) => Boolean(data.businessName?.trim() && data.phone?.trim() && (data.address?.trim() || data.city?.trim())),
+    autoReady: (data) => Boolean(
+      data.businessName?.trim() &&
+      data.phone?.trim() &&
+      (data.address?.trim() || data.city?.trim()) &&
+      data.googleMapsUrl?.trim()
+    ),
   },
   {
     id: "logo-uploaded",
@@ -255,6 +267,7 @@ function getSampleData(catId: string): Partial<WDSiteData> {
     urlSlug: slug,
     primaryColor: config.defaultPalette.primary,
     secondaryColor: config.defaultPalette.secondary,
+    googleMapsUrl: buildAddressMapEmbedUrl('4821 Oak Hollow Drive', 'Austin', 'TX'),
   };
 }
 
@@ -328,6 +341,7 @@ function siteDataToWDData(data: WDSiteData): Record<string, any> {
     logoUrl: (data as any).logoUrl,
     faviconUrl: (data as any).faviconUrl,
     customHeadCode: (data as any).customHeadCode,
+    googleMapsUrl: data.googleMapsUrl,
     facebookUrl: data.facebookUrl,
     instagramUrl: data.instagramUrl,
     googleUrl: data.googleUrl,
@@ -1169,6 +1183,7 @@ export default function WDSiteEditor() {
         primaryColor: bd.primaryColor || "#1e3a5f",
         secondaryColor: bd.secondaryColor || "#0ea5e9",
         contactFormEmbed: bd.contactFormEmbed || "",
+        googleMapsUrl: bd.googleMapsUrl || buildAddressMapEmbedUrl(bd.address || "", bd.city || "", bd.state || ""),
         openaiApiKey: bd.openaiApiKey || "",
         geminiApiKey: bd.geminiApiKey || "",
         contentAiProvider: isAIProvider(bd.contentAiProvider)
@@ -1337,7 +1352,13 @@ export default function WDSiteEditor() {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         if (res.status === 402) {
-          toast({ title: "No AI API key", description: "Add or save an OpenAI, Gemini, or OpenRouter key first.", variant: "destructive" });
+          toast({ title: "No AI API key", description: "Add or save an OpenAI, Gemini, OpenRouter, or DeepSeek key first.", variant: "destructive" });
+        } else if (res.status === 504) {
+          toast({
+            title: "Generation timed out",
+            description: errData.error || "Current provider took too long. Please retry or switch provider.",
+            variant: "destructive"
+          });
         } else {
           throw new Error(errData.error || `Server error ${res.status}`);
         }
@@ -2210,6 +2231,30 @@ export default function WDSiteEditor() {
                     <Label className="text-xs text-gray-400">State</Label>
                     <Input value={siteData.state} onChange={e => updateField("state", e.target.value)} className="bg-gray-800 border-gray-700 text-white mt-1 text-sm" />
                   </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs text-gray-500">Google Maps Iframe URL (required for Contact page map)</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[10px] border-gray-700 text-gray-300"
+                      onClick={() => updateField("googleMapsUrl", buildAddressMapEmbedUrl(siteData.address, siteData.city, siteData.state))}
+                    >
+                      Auto-fill from address
+                    </Button>
+                  </div>
+                  <Input
+                    value={siteData.googleMapsUrl || ""}
+                    onChange={e => updateField("googleMapsUrl", e.target.value)}
+                    className="bg-gray-800 border-gray-700 text-white mt-1 text-sm"
+                    placeholder="https://www.google.com/maps?q=Your+Address&output=embed"
+                  />
+                  {!siteData.googleMapsUrl?.trim() && (
+                    <p className="text-[10px] text-amber-400 mt-1">Map iframe URL is required for accurate address map display on Contact page.</p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-gray-400">Primary Keyword</Label>
