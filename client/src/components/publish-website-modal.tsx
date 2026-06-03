@@ -75,6 +75,8 @@ interface PublishWebsiteModalProps {
   onBeforeDeploy?: () => Promise<void> | void;
   /** Callback when deployment succeeds */
   onDeploySuccess?: (url: string, siteName: string) => void;
+  publishTier?: '1' | '2' | '3';
+  onChangePublishTier?: (tier: '1' | '2' | '3') => void;
 }
 
 export function PublishWebsiteModal({
@@ -91,6 +93,8 @@ export function PublishWebsiteModal({
   onReviewChecklist,
   onBeforeDeploy,
   onDeploySuccess,
+  publishTier,
+  onChangePublishTier,
 }: PublishWebsiteModalProps) {
   const { toast } = useToast();
   const isRedeploy = Boolean(deployedUrl);
@@ -114,6 +118,8 @@ export function PublishWebsiteModal({
   const [deployPhase, setDeployPhase] = useState("");
   const [resultUrl, setResultUrl] = useState("");
   const [resultSiteName, setResultSiteName] = useState("");
+  const [localTier, setLocalTier] = useState<'1' | '2' | '3'>('3');
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const checklistNeedsAttention = (checklistCompletion?.percent ?? 100) < 100;
   const modalSteps = (checklistNeedsAttention
     ? ["checklist", "api-check", "url-search", "deploying"]
@@ -121,6 +127,56 @@ export function PublishWebsiteModal({
   const currentStepIndex = step === "success"
     ? modalSteps.length - 1
     : Math.max(modalSteps.indexOf(step), 0);
+
+  // ── Polling & Status Check ─────────────────────────────────────────
+  const startPollingStatus = useCallback(() => {
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+    
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/websites/${websiteId}/generation-status`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        if (data.status === 'generating') {
+          setDeployProgress(Math.max(data.progress || 0, 15));
+          setDeployPhase("Generating website pages copy...");
+        } else if (data.status === 'deploying') {
+          setDeployProgress(Math.max(data.progress || 0, 75));
+          setDeployPhase("Publishing to Netlify CDN...");
+        } else if (data.status === 'completed') {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+          setDeployProgress(100);
+          setDeployPhase("Website is live!");
+          const finalUrl = `https://${slug || data.siteName || resultSiteName || currentSiteName || defaultSlug}.netlify.app`;
+          setResultUrl(finalUrl);
+          setResultSiteName(slug || data.siteName || resultSiteName || currentSiteName || defaultSlug);
+          setStep("success");
+          setIsDeploying(false);
+          onDeploySuccess?.(finalUrl, slug || data.siteName || resultSiteName || currentSiteName || defaultSlug);
+        } else if (data.status === 'failed') {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+          setIsDeploying(false);
+          setStep("url-search");
+          toast({
+            title: "Background Generation Failed",
+            description: data.error || "An unknown error occurred during AI generation.",
+            variant: "destructive",
+          });
+        }
+      } catch (err) {
+        console.error("Error polling generation status:", err);
+      }
+    }, 2000);
+  }, [websiteId, slug, resultSiteName, currentSiteName, defaultSlug, onDeploySuccess, toast]);
+
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
 
   // ── Initialize on open ─────────────────────────────────────────────
   useEffect(() => {
@@ -138,6 +194,7 @@ export function PublishWebsiteModal({
     setResultUrl("");
     setResultSiteName("");
     setIsDeploying(false);
+    setLocalTier(publishTier || '3');
 
     // Pre-fill slug
     if (isRedeploy && currentSiteName) {
@@ -153,7 +210,26 @@ export function PublishWebsiteModal({
     if (!checklistNeedsAttention) {
       void checkApiStatus();
     }
-  }, [checklistNeedsAttention, currentSiteName, defaultSlug, isOpen, isRedeploy]);
+
+    // Load publishTier and background generation status from server
+    fetch(`/api/websites/${websiteId}/generation-status`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) {
+          if (d.publishTier) {
+            setLocalTier(d.publishTier);
+          }
+          if (d.status === 'generating' || d.status === 'deploying') {
+            setStep('deploying');
+            setIsDeploying(true);
+            setDeployProgress(d.progress || 0);
+            setDeployPhase(d.status === 'deploying' ? 'Publishing to Netlify CDN...' : 'Generating website pages copy...');
+            startPollingStatus();
+          }
+        }
+      })
+      .catch(err => console.error("Error fetching status on load:", err));
+  }, [checklistNeedsAttention, currentSiteName, defaultSlug, isOpen, isRedeploy, publishTier, websiteId, startPollingStatus]);
 
   // ── API Status Check ──────────────────────────────────────────────
   async function checkApiStatus() {
@@ -271,12 +347,9 @@ export function PublishWebsiteModal({
       await onBeforeDeploy?.();
 
       setDeployProgress(15);
-      setDeployPhase("Generating website files...");
+      setDeployPhase("Initiating deployment...");
 
       // Phase 2: Deploy via the WD endpoint
-      setDeployProgress(30);
-      setDeployPhase("Uploading homepage & core pages...");
-
       const res = await fetch(`/api/websites/${websiteId}/deploy-wd`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -284,6 +357,7 @@ export function PublishWebsiteModal({
         body: JSON.stringify({
           netlifyApiKey: netlifyToken || "masked",
           siteName: slug,
+          publishTier: localTier,
         }),
       });
 
@@ -292,26 +366,22 @@ export function PublishWebsiteModal({
         throw new Error(errData.error || errData.message || `Server error ${res.status}`);
       }
 
-      setDeployProgress(70);
-      setDeployPhase("Publishing to Netlify CDN...");
-
       const data = await res.json();
-      const url = data.url || `https://${slug}.netlify.app`;
-
-      // Simulate CDN propagation wait
-      setDeployProgress(85);
-      setDeployPhase("Propagating to global CDN...");
-
-      // Brief wait so user sees propagation step  
-      await new Promise(r => setTimeout(r, 1500));
-
-      setDeployProgress(100);
-      setDeployPhase("Website is live!");
-      setResultUrl(url);
-      setResultSiteName(slug);
-      setStep("success");
-
-      onDeploySuccess?.(url, slug);
+      
+      if (data.status === 'generating') {
+        setDeployProgress(15);
+        setDeployPhase("Generating website pages copy...");
+        startPollingStatus();
+      } else {
+        const url = data.url || `https://${slug}.netlify.app`;
+        setDeployProgress(100);
+        setDeployPhase("Website is live!");
+        setResultUrl(url);
+        setResultSiteName(slug);
+        setStep("success");
+        onDeploySuccess?.(url, slug);
+        setIsDeploying(false);
+      }
     } catch (err) {
       toast({
         title: "Deployment Failed",
@@ -319,7 +389,6 @@ export function PublishWebsiteModal({
         variant: "destructive",
       });
       setStep("url-search");
-    } finally {
       setIsDeploying(false);
     }
   }
@@ -567,6 +636,57 @@ export function PublishWebsiteModal({
                     {slugMessage}
                   </p>
                 )}
+              </div>
+
+              {/* Deployment Tier Selection */}
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-400 font-medium">Select Publish Scope (Deployment Stage)</Label>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  {[
+                    {
+                      id: '1',
+                      title: 'Core Pages Only',
+                      desc: 'Home, About, Contact, Gallery, FAQ. Dropdowns and location links hidden to index safely.',
+                    },
+                    {
+                      id: '2',
+                      title: 'Complete Site',
+                      desc: 'Core + individual service and target location pages for standard local search.',
+                    },
+                    {
+                      id: '3',
+                      title: 'Matrix Pages',
+                      desc: 'Core + service-location combination pages for maximum local footprint.',
+                    },
+                  ].map((tierItem) => {
+                    const isSelected = localTier === tierItem.id;
+                    return (
+                      <button
+                        key={tierItem.id}
+                        type="button"
+                        onClick={() => {
+                          setLocalTier(tierItem.id as '1' | '2' | '3');
+                          onChangePublishTier?.(tierItem.id as '1' | '2' | '3');
+                        }}
+                        className={`flex flex-col text-left p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? 'border-[#7C3AED] bg-[#7C3AED]/10 text-white'
+                            : 'border-gray-800 bg-gray-900/60 hover:border-gray-700 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1 w-full">
+                          <span className="text-xs font-semibold">{tierItem.title}</span>
+                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                            isSelected ? 'border-[#7C3AED] bg-[#7C3AED]' : 'border-gray-600'
+                          }`}>
+                            {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-gray-400 leading-tight">{tierItem.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Action buttons */}

@@ -17,6 +17,7 @@ declare module "express-session" {
       openrouter?: string;
       netlify?: string;
       unsplash?: string;
+      deepseek?: string;
     };
   }
 }
@@ -27,7 +28,7 @@ const COOKIE_NAME = "smbify_auth";
 const TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const GUEST_API_KEYS_COOKIE_NAME = "smbify_guest_api_keys";
 const GUEST_API_KEYS_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
-const GUEST_API_KEY_PROVIDERS = ["openai", "gemini", "openrouter", "netlify", "unsplash"] as const;
+const GUEST_API_KEY_PROVIDERS = ["openai", "gemini", "openrouter", "deepseek", "netlify", "unsplash"] as const;
 const USE_SECURE_COOKIES = process.env.NODE_ENV === "production";
 
 type GuestApiKeyProvider = (typeof GUEST_API_KEY_PROVIDERS)[number];

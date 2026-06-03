@@ -7302,6 +7302,443 @@ Generated on: ${new Date().toISOString()}`;
   // ── Generate AI content for a local service site ────────────────────────────
   // Called from the editor BEFORE deploy. Generates unique copy and saves it
   // to businessData so rebuildPreview() picks it up immediately.
+  // ── Background Job & Compilation Helpers ─────────────────────────────────────
+
+  async function performNetlifyDeploy(
+    websiteId: string,
+    userId: string,
+    netlifyApiKey: string,
+    siteName: string,
+    publishTier: '1' | '2' | '3'
+  ): Promise<{ url: string; siteName: string }> {
+    const website = await storage.getWebsite(websiteId);
+    if (!website || website.userId !== userId) {
+      throw new Error("Website not found");
+    }
+
+    const bd = { ...((website.businessData || {}) as any) };
+    bd.publishTier = publishTier;
+
+    bd.services = uniqueValues([
+      ...parseDeployList(bd.services),
+      ...parseDeployList(bd.additionalServices),
+    ]);
+    bd.serviceAreas = uniqueValues([
+      ...parseDeployList(bd.serviceAreas, { locationMode: true, preferredState: stringValue(bd.state) }),
+      ...parseDeployList(bd.additionalLocations, { locationMode: true, preferredState: stringValue(bd.state) }),
+    ]);
+
+    const rawDomain = siteName || bd.urlSlug || (bd.businessName || website.title || 'my-site');
+    const domain = rawDomain.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 63);
+
+    if (!domain) {
+      throw new Error("Site name is required.");
+    }
+
+    const categoryId = bd.categoryId || website.template || 'water-damage';
+    const { getCategoryConfig: getCC2, generateLocalServiceWebsite: genLS } = await import('../client/src/lib/local-service-engine.js');
+
+    // Homepage content check (fallback)
+    const hasAiContent = bd._aiIntroParas || bd._aiFaqs || bd._aiSeoBody || bd._aiProcessSteps;
+    if (!hasAiContent) {
+      try {
+        const catConfig = getCC2(categoryId);
+        const aiContent = await generateLocalServiceAIContent(
+          bd, userId, catConfig.name, catConfig.defaultPrimaryKeyword
+        );
+        if (aiContent) {
+          if (aiContent.introParas) bd._aiIntroParas = aiContent.introParas;
+          if (aiContent.faqs) bd._aiFaqs = aiContent.faqs;
+          if (aiContent.seoBody) bd._aiSeoBody = aiContent.seoBody;
+          if (aiContent.processSteps) bd._aiProcessSteps = aiContent.processSteps;
+        }
+      } catch (aiErr) {
+        console.error('AI content injection skipped in deploy:', aiErr);
+      }
+    }
+
+    // Favicon conversion
+    let faviconBinary: Buffer | null = null;
+    let faviconFilename: string | null = null;
+    if (bd.faviconUrl && typeof bd.faviconUrl === 'string' && bd.faviconUrl.startsWith('data:')) {
+      const fmatch = bd.faviconUrl.match(/^data:([^;]+);base64,([A-Za-z0-9+/=\n]+)$/);
+      if (fmatch) {
+        const rawType = fmatch[1];
+        const ext = /x-icon|vnd\.microsoft\.icon/.test(rawType) ? 'ico'
+          : rawType === 'image/svg+xml' ? 'svg'
+            : rawType === 'image/jpeg' ? 'jpg' : 'png';
+        faviconFilename = `favicon.${ext}`;
+        faviconBinary = Buffer.from(fmatch[2].replace(/\n/g, ''), 'base64');
+        bd.faviconUrl = `/${faviconFilename}`;
+      }
+    }
+
+    const deployedServiceAreas = uniqueValues(
+      (bd.serviceAreas as string[])
+        .map((location: string) => normalizeLocationLabel(location, stringValue(bd.state)))
+        .filter(Boolean)
+    );
+    const deployedCity =
+      normalizeLocationLabel(
+        stringValue(bd.city) || stringValue(bd.heroLocation) || deployedServiceAreas[0],
+        stringValue(bd.state)
+      ) ||
+      stringValue(bd.city) ||
+      deployedServiceAreas[0] ||
+      "";
+
+    const generatorData = {
+      ...bd,
+      city: deployedCity,
+      serviceAreas: deployedServiceAreas,
+      locationContent: normalizeLocationContentMap(bd.locationContent, stringValue(bd.state)),
+    };
+
+    const files = genLS(categoryId, generatorData, domain);
+
+    // Apply custom files overrides
+    const seoProtectedFiles = new Set(['sitemap.html']);
+    const storedCustomFiles = website.customFiles as Record<string, string> | null;
+    if (storedCustomFiles && typeof storedCustomFiles === 'object') {
+      for (const [filename, content] of Object.entries(storedCustomFiles)) {
+        if (typeof content === 'string' && filename.endsWith('.html') && !seoProtectedFiles.has(filename)) {
+          (files as any)[filename] = content;
+        }
+      }
+    }
+
+    // Apply customImages
+    if (bd.customImages && typeof bd.customImages === 'object' && Object.keys(bd.customImages).length > 0) {
+      for (const [filename, html] of Object.entries(files as Record<string, string>)) {
+        if (!filename.endsWith('.html') || typeof html !== 'string') continue;
+        let updated = html as string;
+        for (const [key, customSrc] of Object.entries(bd.customImages as Record<string, string>)) {
+          if (!customSrc) continue;
+          updated = updated.replace(
+            new RegExp(`(<img[^>]*data-placeholder="${key}"[^>]*)src="[^"]*"`, 'gs'),
+            `$1src="${customSrc}"`
+          );
+          updated = updated.replace(
+            new RegExp(`(<img[^>]*)src="[^"]*"([^>]*data-placeholder="${key}")`, 'gs'),
+            `$1src="${customSrc}"$2`
+          );
+        }
+        (files as any)[filename] = updated;
+      }
+    }
+
+    // Correct base domain
+    const correctBase = `https://${domain}.netlify.app`;
+    for (const [filename, content] of Object.entries(files)) {
+      if (typeof content !== 'string') continue;
+      const fixed = (content as string).replace(
+        /https:\/\/[a-z0-9][-a-z0-9]*\.netlify\.app/gi,
+        correctBase
+      );
+      if (fixed !== content) {
+        (files as any)[filename] = fixed;
+      }
+    }
+
+    // Extract base64 image data-urls
+    const extractedImages = new Map<string, string>();
+    let imgIndex = 0;
+    const processedFiles: Record<string, string> = {};
+    for (const [filename, rawContent] of Object.entries(files)) {
+      const processed = (rawContent as string).replace(
+        /data:image\/(jpeg|png|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+/g,
+        (match) => {
+          if (extractedImages.has(match)) return extractedImages.get(match)!;
+          const typeStr = match.match(/^data:image\/([^;]+);/)?.[1] ?? 'jpeg';
+          const ext = typeStr === 'svg+xml' ? 'svg' : typeStr === 'jpeg' ? 'jpg' : typeStr;
+          const imgPath = `/images/custom-${imgIndex++}.${ext}`;
+          extractedImages.set(match, imgPath);
+          return imgPath;
+        }
+      );
+      processedFiles[filename] = processed;
+    }
+
+    // Build ZIP
+    const zip = new JSZip();
+    for (const [filename, content] of Object.entries(processedFiles)) {
+      zip.file(filename, content);
+    }
+    for (const [dataUrl, imgPath] of extractedImages.entries()) {
+      const base64 = dataUrl.split(',')[1];
+      zip.file(imgPath.slice(1), Buffer.from(base64, 'base64'));
+    }
+    if (faviconFilename && faviconBinary) {
+      zip.file(faviconFilename, faviconBinary);
+    }
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+    // Resolve or create Netlify site
+    const { NetlifyAPI } = await import('netlify');
+    const netlify = new NetlifyAPI(netlifyApiKey);
+    let site: any;
+    try {
+      const sites = await netlify.listSites({ name: domain });
+      site = (sites as any[]).find((s: any) => s.name === domain);
+    } catch { /* will create */ }
+
+    if (!site) {
+      try {
+        site = await netlify.createSite({ body: { name: domain } });
+      } catch (error) {
+        throw new Error(getNetlifyErrorMessage(error, domain));
+      }
+    }
+
+    // Upload ZIP
+    const uploadRes = await fetch(`https://api.netlify.com/api/v1/sites/${site.id}/deploys`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${netlifyApiKey}`, 'Content-Type': 'application/zip' },
+      body: new Uint8Array(zipBuffer) as any,
+    });
+    if (!uploadRes.ok) {
+      const msg = await uploadRes.text().catch(() => uploadRes.statusText);
+      throw new Error(`Netlify upload failed (${uploadRes.status}): ${msg}`);
+    }
+
+    const siteUrl = `https://${domain}.netlify.app`;
+
+    // Update DB
+    await storage.updateWebsite(websiteId, {
+      netlifyUrl: siteUrl,
+      netlifyDeploymentStatus: 'deployed',
+      lastDeployedAt: new Date(),
+    });
+
+    // Ping search engines
+    const sitemapUrl = encodeURIComponent(`${siteUrl}/sitemap.xml`);
+    Promise.all([
+      fetch(`https://www.google.com/ping?sitemap=${sitemapUrl}`).catch(() => { }),
+      fetch(`https://www.bing.com/ping?sitemap=${sitemapUrl}`).catch(() => { }),
+    ]).catch(() => { });
+
+    return { url: siteUrl, siteName: domain };
+  }
+
+  async function runBackgroundGenerationAndDeploy(
+    websiteId: string,
+    userId: string,
+    publishTier: '1' | '2' | '3',
+    netlifyApiKey?: string,
+    siteName?: string
+  ) {
+    try {
+      const website = await storage.getWebsite(websiteId);
+      if (!website) return;
+
+      let bd = { ...((website.businessData || {}) as any) };
+      bd.publishTier = publishTier;
+      bd.generationStatus = 'generating';
+      bd.generationProgress = 5;
+      bd.generationError = null;
+      await storage.updateWebsite(websiteId, { businessData: bd });
+
+      const categoryId = bd.categoryId || website.template || 'water-damage';
+      const { getCategoryConfig: getCC } = await import('../client/src/lib/local-service-engine.js');
+      const catConfig = getCC(categoryId);
+
+      const provider = bd.contentAiProvider || 'openai';
+      const apiKey = await getAIProviderConfig(userId, provider);
+
+      // 1. Core/Homepage AI content
+      const hasHomepageContent = bd._aiIntroParas && bd._aiFaqs && bd._aiSeoBody && bd._aiProcessSteps;
+      if (!hasHomepageContent && apiKey) {
+        console.log(`[Background Job] Generating core/homepage content for ${websiteId}...`);
+        const aiContent = await generateLocalServiceAIContent(
+          bd, userId, catConfig.name, catConfig.defaultPrimaryKeyword
+        );
+        if (aiContent) {
+          bd._aiIntroParas = aiContent.introParas || bd._aiIntroParas;
+          bd._aiFaqs = aiContent.faqs || bd._aiFaqs;
+          bd._aiSeoBody = aiContent.seoBody || bd._aiSeoBody;
+          bd._aiProcessSteps = aiContent.processSteps || bd._aiProcessSteps;
+          bd._aiWhyChooseUs = aiContent.whyChooseUs || bd._aiWhyChooseUs;
+          bd._aiAboutContent = aiContent.aboutContent || bd._aiAboutContent;
+          bd._aiTestimonials = aiContent.testimonials || bd._aiTestimonials;
+          bd._aiServiceDescs = aiContent.serviceDescriptions || bd._aiServiceDescs;
+
+          // Generate homepageContent structure
+          const serviceDescriptions = bd._aiServiceDescs || {};
+          bd.homepageContent = {
+            metaTitle: `${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || ''} | ${bd.businessName || 'Local Business'}`.replace(/\s+/g, ' ').trim(),
+            metaDescription: `${bd.businessName || 'Local Business'} provides ${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || ''}. Contact us for fast, professional service.`.replace(/\s+/g, ' ').trim(),
+            hero: {
+              h1: `${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || 'Your Area'}`,
+              subheadline: Array.isArray(bd._aiIntroParas) && bd._aiIntroParas.length > 0 ? bd._aiIntroParas[0] : `${bd.businessName || 'Local Business'} provides trusted service.`,
+              primaryCTA: 'Get Free Estimate',
+              trustLine: 'Professional service you can trust',
+            },
+            intro: {
+              h2: `About ${bd.businessName || 'Our Company'} in ${bd.city || ''}`.trim(),
+              paragraphs: bd._aiIntroParas || [],
+            },
+            servicesSection: {
+              h2: `Our ${bd.city || ''} Services`.trim(),
+              intro: `Explore the main services offered by ${bd.businessName || 'our team'}.`,
+              cards: (Array.isArray(bd.services) ? bd.services : []).map((service: string) => ({
+                service,
+                h3: service,
+                description: serviceDescriptions[service] || `Professional ${service.toLowerCase()} support for your property.`,
+                internalLink: {
+                  anchor: service,
+                  slug: `/services/${service.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${String(bd.city || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`,
+                },
+              })),
+            },
+            whyUsSection: {
+              h2: `Why Choose ${bd.businessName || 'Us'}`,
+              points: bd._aiWhyChooseUs || [],
+            },
+            processSection: bd._aiProcessSteps ? { h2: `Our Process`, steps: bd._aiProcessSteps } : undefined,
+            locationsSection: {
+              h2: `Areas We Serve`,
+              body: bd._aiSeoBody || `${bd.businessName || 'Our team'} serves ${bd.city || ''}.`,
+              locationLinks: (Array.isArray(bd.serviceAreas) ? bd.serviceAreas : []).map((cityName: string) => ({
+                city: cityName,
+                anchor: cityName,
+                slug: `/locations/${cityName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`,
+              })),
+            },
+            faqSection: {
+              h2: `Frequently Asked Questions`,
+              faqs: bd._aiFaqs || [],
+            },
+            finalCTA: {
+              h2: `Ready to Get Started?`,
+              body: bd._aiSeoBody || `Contact ${bd.businessName || 'our team'} today for help in ${bd.city || 'your area'}.`,
+              ctaButton: 'Call Now',
+              phone: bd.phone || '',
+            },
+          };
+        }
+      }
+
+      bd.generationProgress = 15;
+      await storage.updateWebsite(websiteId, { businessData: bd });
+
+      // 2. Dynamic pages copy (if Stage 2 or Stage 3)
+      if ((publishTier === '2' || publishTier === '3') && apiKey) {
+        console.log(`[Background Job] Generating dynamic pages copy for ${websiteId}...`);
+
+        const normalizedBD = normalizeBusinessDataForGeneration(bd);
+        const additionalServices = splitValues(
+          normalizedBD?.additionalServices ||
+          normalizedBD?.services ||
+          normalizedBD?.heroService
+        ).slice(0, 350);
+
+        const additionalLocations = splitValues(
+          normalizedBD?.additionalLocations ||
+          normalizedBD?.serviceAreas ||
+          normalizedBD?.heroLocation
+        ).slice(0, 350);
+
+        const totalItems = additionalServices.length + additionalLocations.length;
+        let completedItems = 0;
+
+        bd.serviceContent = bd.serviceContent || {};
+        bd.locationContent = bd.locationContent || {};
+
+        // 2a. Services
+        if (additionalServices.length > 0) {
+          const pendingServices = additionalServices.filter(s => !bd.serviceContent[s]);
+          const alreadyDoneCount = additionalServices.length - pendingServices.length;
+          completedItems += alreadyDoneCount;
+
+          if (pendingServices.length > 0) {
+            await pLimit(pendingServices, 3, async (service) => {
+              try {
+                const otherServices = additionalServices.filter(s => s !== service).map(s => `/services/${s.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${bd.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`);
+                const serviceSlug = `/services/${service.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${bd.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
+                const locationSlugMap = additionalLocations.map(l => ({
+                  city: l,
+                  slug: `/locations/${l.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`
+                }));
+                const servicePrompt = buildServicePagePrompt(normalizedBD, service, serviceSlug, locationSlugMap, otherServices);
+                const content = await generateStructuredJsonWithProvider(provider, apiKey, servicePrompt, { maxTokens: 6000, temperature: 0.7 });
+
+                bd.serviceContent[service] = content;
+                completedItems++;
+                bd.generationProgress = Math.round(15 + ((completedItems / totalItems) * 70));
+                await storage.updateWebsite(websiteId, { businessData: { ...bd } });
+
+                await new Promise(r => setTimeout(r, 500));
+              } catch (err) {
+                console.error(`[Background Job] Service AI error for ${service}:`, err);
+              }
+            });
+          }
+        }
+
+        // 2b. Locations
+        if (additionalLocations.length > 0) {
+          const pendingLocations = additionalLocations.filter(l => !bd.locationContent[l]);
+          const alreadyDoneCount = additionalLocations.length - pendingLocations.length;
+          completedItems += alreadyDoneCount;
+
+          if (pendingLocations.length > 0) {
+            await pLimit(pendingLocations, 3, async (location) => {
+              try {
+                const serviceSlugMap = additionalServices.map(s => ({
+                  service: s,
+                  slug: `/services/${s.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${bd.city.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`
+                }));
+                const locationPrompt = buildLocationPagePrompt(normalizedBD, location, serviceSlugMap, []);
+                const content = await generateStructuredJsonWithProvider(provider, apiKey, locationPrompt, { maxTokens: 6000, temperature: 0.7 });
+
+                bd.locationContent[location] = content;
+                completedItems++;
+                bd.generationProgress = Math.round(15 + ((completedItems / totalItems) * 70));
+                await storage.updateWebsite(websiteId, { businessData: { ...bd } });
+
+                await new Promise(r => setTimeout(r, 500));
+              } catch (err) {
+                console.error(`[Background Job] Location AI error for ${location}:`, err);
+              }
+            });
+          }
+        }
+      }
+
+      bd.generationProgress = 90;
+      await storage.updateWebsite(websiteId, { businessData: bd });
+
+      // 3. Compile and Deploy
+      if (netlifyApiKey && siteName) {
+        console.log(`[Background Job] Deploying to Netlify...`);
+        bd.generationStatus = 'deploying';
+        await storage.updateWebsite(websiteId, { businessData: bd });
+
+        await performNetlifyDeploy(websiteId, userId, netlifyApiKey, siteName, publishTier);
+      }
+
+      bd.generationStatus = 'completed';
+      bd.generationProgress = 100;
+      bd.generationError = null;
+      await storage.updateWebsite(websiteId, { businessData: bd });
+      console.log(`[Background Job] Job completed for ${websiteId}.`);
+    } catch (err: any) {
+      console.error(`[Background Job] Failed for ${websiteId}:`, err);
+      try {
+        const website = await storage.getWebsite(websiteId);
+        if (website) {
+          const bd = { ...((website.businessData || {}) as any) };
+          bd.generationStatus = 'failed';
+          bd.generationError = err.message || String(err);
+          await storage.updateWebsite(websiteId, { businessData: bd });
+        }
+      } catch {}
+    }
+  }
+
+  // ── Generate AI content for a local service site ────────────────────────────
+  // Triggers background content generation for the homepage and optionally
+  // service/location subpages, depending on the selected publishTier.
   app.post("/api/websites/:id/generate-local-ai", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -7312,137 +7749,68 @@ Generated on: ${new Date().toISOString()}`;
         return res.status(404).json({ error: "Website not found" });
       }
 
-      const bd = (website.businessData || {}) as any;
+      const bd = { ...((website.businessData || {}) as any) };
 
-      // Accept provider override from request body
-      const { aiProvider: reqProvider } = req.body || {};
+      // Accept provider override or tier override from request body
+      const { aiProvider: reqProvider, publishTier: reqTier } = req.body || {};
       if (reqProvider && typeof reqProvider === 'string') {
         bd.contentAiProvider = reqProvider;
       }
+      
+      const publishTier = reqTier || bd.publishTier || '3';
+      bd.publishTier = publishTier;
+      bd.generationStatus = 'generating';
+      bd.generationProgress = 0;
+      bd.generationError = null;
+      
+      await storage.updateWebsite(id, { businessData: bd });
 
-      const categoryId = bd.categoryId || website.template || 'water-damage';
-      const { getCategoryConfig: getCC } = await import('../client/src/lib/local-service-engine.js');
-      const catConfig = getCC(categoryId);
-
-      const aiContent = await generateLocalServiceAIContent(
-        bd, userId, catConfig.name, catConfig.defaultPrimaryKeyword
-      );
-
-      if (!aiContent) {
+      const provider = bd.contentAiProvider || 'openai';
+      const hasApiKey = await getAIProviderConfig(userId, provider);
+      if (!hasApiKey) {
         return res.status(402).json({ error: "No AI API key configured. Save an OpenAI, Gemini, OpenRouter, or DeepSeek key in API Setup before generating content." });
       }
 
-      const serviceDescriptions = (aiContent.serviceDescriptions && typeof aiContent.serviceDescriptions === 'object')
-        ? aiContent.serviceDescriptions
-        : {};
+      // Start the background generation worker
+      runBackgroundGenerationAndDeploy(id, userId, publishTier);
 
-      const homepageContent = {
-        metaTitle: `${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || ''} | ${bd.businessName || 'Local Business'}`.replace(/\s+/g, ' ').trim(),
-        metaDescription: `${bd.businessName || 'Local Business'} provides ${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || ''}. Contact us for fast, professional service.`.replace(/\s+/g, ' ').trim(),
-        hero: {
-          h1: `${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || 'Your Area'}`,
-          subheadline: Array.isArray(aiContent.introParas) && aiContent.introParas.length > 0
-            ? aiContent.introParas[0]
-            : `${bd.businessName || 'Local Business'} provides trusted service for homeowners and businesses in ${bd.city || 'your area'}.`,
-          primaryCTA: 'Get Free Estimate',
-          trustLine: aiContent.providerUsed ? `AI content generated with ${aiContent.providerUsed}` : 'Professional service you can trust',
-        },
-        intro: {
-          h2: `About ${bd.businessName || 'Our Company'} in ${bd.city || ''}`.trim(),
-          paragraphs: Array.isArray(aiContent.introParas) && aiContent.introParas.length > 0 ? aiContent.introParas : [],
-        },
-        servicesSection: {
-          h2: `Our ${bd.city || ''} Services`.trim(),
-          intro: `Explore the main services offered by ${bd.businessName || 'our team'}.`,
-          cards: (Array.isArray(bd.services) ? bd.services : []).map((service: string) => ({
-            service,
-            h3: service,
-            description: serviceDescriptions[service] || `Professional ${service.toLowerCase()} support for your property.`,
-            internalLink: {
-              anchor: service,
-              slug: `/services/${service.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${String(bd.city || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`,
-            },
-          })),
-        },
-        whyUsSection: {
-          h2: `Why Choose ${bd.businessName || 'Us'}`,
-          points: Array.isArray(aiContent.whyChooseUs) && aiContent.whyChooseUs.length > 0
-            ? aiContent.whyChooseUs
-            : [],
-        },
-        processSection: Array.isArray(aiContent.processSteps) && aiContent.processSteps.length > 0
-          ? {
-              h2: `Our Process`,
-              steps: aiContent.processSteps,
-            }
-          : undefined,
-        locationsSection: {
-          h2: `Areas We Serve`,
-          body: aiContent.seoBody || `${bd.businessName || 'Our team'} serves ${Array.isArray(bd.serviceAreas) ? bd.serviceAreas.join(', ') : bd.city || ''}.`,
-          locationLinks: (Array.isArray(bd.serviceAreas) ? bd.serviceAreas : []).map((cityName: string) => ({
-            city: cityName,
-            anchor: cityName,
-            slug: `/locations/${cityName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`,
-          })),
-        },
-        faqSection: {
-          h2: `Frequently Asked Questions`,
-          faqs: Array.isArray(aiContent.faqs) ? aiContent.faqs : [],
-        },
-        finalCTA: {
-          h2: `Ready to Get Started?`,
-          body: aiContent.seoBody || `Contact ${bd.businessName || 'our team'} today for help in ${bd.city || 'your area'}.`,
-          ctaButton: 'Call Now',
-          phone: bd.phone || '',
-        },
-        seoFootnote: aiContent.seoBody
-          ? {
-              h2: `${bd.primaryKeyword || catConfig.defaultPrimaryKeyword} in ${bd.city || ''}`.trim(),
-              body: aiContent.seoBody,
-              targetKeywords: [bd.primaryKeyword || catConfig.defaultPrimaryKeyword, bd.city || '', ...(Array.isArray(bd.services) ? bd.services.slice(0, 4) : [])].filter(Boolean),
-            }
-          : undefined,
-      };
-
-      // Save AI content fields into businessData
-      const updatedBd = {
-        ...bd,
-        contentAiProvider: aiContent.providerUsed ?? bd.contentAiProvider,
-        homepageContent: homepageContent,
-        _aiIntroParas: aiContent.introParas ?? bd._aiIntroParas,
-        _aiFaqs: aiContent.faqs ?? bd._aiFaqs,
-        _aiSeoBody: aiContent.seoBody ?? bd._aiSeoBody,
-        _aiProcessSteps: aiContent.processSteps ?? bd._aiProcessSteps,
-        _aiWhyChooseUs: aiContent.whyChooseUs ?? bd._aiWhyChooseUs,
-        _aiAboutContent: aiContent.aboutContent ?? bd._aiAboutContent,
-        _aiTestimonials: aiContent.testimonials ?? bd._aiTestimonials,
-        _aiServiceDescs: aiContent.serviceDescriptions ?? bd._aiServiceDescs,
-      };
-
-      await storage.updateWebsite(id, { businessData: updatedBd });
-
-      return res.json({ success: true, content: aiContent });
+      return res.json({ success: true, status: 'generating', message: "Content generation started in background." });
     } catch (err: any) {
       console.error("generate-local-ai error:", err);
-      const message = err?.message || "AI generation failed";
-      const timeoutLike = /timeout|timed out|gateway|504/i.test(message);
-      return res.status(timeoutLike ? 504 : 500).json({
-        error: timeoutLike
-          ? "AI generation timed out on current provider. Please retry or switch AI provider."
-          : message,
+      return res.status(500).json({ error: err.message || "AI generation failed" });
+    }
+  });
+
+  // ── GET website background generation progress ────────────────────────────
+  app.get("/api/websites/:id/generation-status", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const website = await storage.getWebsite(id);
+      if (!website || website.userId !== userId) {
+        return res.status(404).json({ error: "Website not found" });
+      }
+      const bd = (website.businessData || {}) as any;
+      return res.json({
+        status: bd.generationStatus || 'idle',
+        progress: bd.generationProgress ?? 0,
+        error: bd.generationError || null,
+        publishTier: bd.publishTier || '3',
       });
+    } catch (err: any) {
+      console.error("GET generation-status error:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch status" });
     }
   });
 
   // ── WD Website Deploy (water-damage template specific) ───────────────────────
-  // Bypasses the old generic generator; uses generateWaterDamageWebsite directly.
-  // Does NOT poll for deploy completion — returns URL immediately after ZIP upload
-  // to stay within Vercel's 60s function timeout.
+  // Accepts a publishTier to deploy only core pages (Stage 1), standard local copy (Stage 2),
+  // or full combo matrix (Stage 3). If any page content is missing, starts background generation first.
   app.post("/api/websites/:id/deploy-wd", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      let { netlifyApiKey, siteName } = req.body;
+      let { netlifyApiKey, siteName, publishTier: reqTier } = req.body;
 
       const website = await storage.getWebsite(id);
       if (!website || website.userId !== userId) {
@@ -7461,14 +7829,15 @@ Generated on: ${new Date().toISOString()}`;
       }
 
       const bd = { ...((website.businessData || {}) as any) };
+      const publishTier = reqTier || bd.publishTier || '3';
+      bd.publishTier = publishTier;
+      await storage.updateWebsite(id, { businessData: bd });
 
-      // Match the same newline/semicolon-aware parsing used when businessData is saved.
-      // Keep raw location values for AI generation, then strip state from labels only for deploy output.
-      bd.services = uniqueValues([
+      const services = uniqueValues([
         ...parseDeployList(bd.services),
         ...parseDeployList(bd.additionalServices),
       ]);
-      bd.serviceAreas = uniqueValues([
+      const locations = uniqueValues([
         ...parseDeployList(bd.serviceAreas, { locationMode: true, preferredState: stringValue(bd.state) }),
         ...parseDeployList(bd.additionalLocations, { locationMode: true, preferredState: stringValue(bd.state) }),
       ]);
@@ -7480,197 +7849,32 @@ Generated on: ${new Date().toISOString()}`;
         return res.status(400).json({ error: "Site name is required." });
       }
 
-      // Generate all HTML files using the appropriate category template
-      const categoryId = (bd as any).categoryId || website.template || 'water-damage';
-
-      const { getCategoryConfig: getCC2, generateLocalServiceWebsite: genLS } = await import('../client/src/lib/local-service-engine.js');
-
-      // Only generate AI content if not already present — avoid slow API call on every redeploy
-      const hasAiContent = bd._aiIntroParas || bd._aiFaqs || bd._aiSeoBody || bd._aiProcessSteps;
-      if (!hasAiContent) {
-        try {
-          const catConfig = getCC2(categoryId);
-          const aiContent = await generateLocalServiceAIContent(
-            bd, userId, catConfig.name, catConfig.defaultPrimaryKeyword
-          );
-          if (aiContent) {
-            if (aiContent.introParas) bd._aiIntroParas = aiContent.introParas;
-            if (aiContent.faqs) bd._aiFaqs = aiContent.faqs;
-            if (aiContent.seoBody) bd._aiSeoBody = aiContent.seoBody;
-            if (aiContent.processSteps) bd._aiProcessSteps = aiContent.processSteps;
-          }
-        } catch (aiErr) {
-          console.error('AI content injection skipped:', aiErr);
+      // Check if we need to generate homepage AI content or subpage AI content
+      const needsHomepage = !bd._aiIntroParas || !bd._aiFaqs || !bd._aiSeoBody || !bd._aiProcessSteps;
+      
+      let needsDynamicPages = false;
+      if (publishTier === '2' || publishTier === '3') {
+        bd.serviceContent = bd.serviceContent || {};
+        bd.locationContent = bd.locationContent || {};
+        const pendingServices = services.filter((s: string) => !bd.serviceContent[s]);
+        const pendingLocations = locations.filter((l: string) => !bd.locationContent[l]);
+        if (pendingServices.length > 0 || pendingLocations.length > 0) {
+          needsDynamicPages = true;
         }
       }
 
-      // Extract favicon data URL to a real binary file before generation,
-      // so it ends up as /favicon.* in the ZIP instead of an inline data URL
-      let faviconBinary: Buffer | null = null;
-      let faviconFilename: string | null = null;
-      if (bd.faviconUrl && typeof bd.faviconUrl === 'string' && bd.faviconUrl.startsWith('data:')) {
-        const fmatch = bd.faviconUrl.match(/^data:([^;]+);base64,([A-Za-z0-9+/=\n]+)$/);
-        if (fmatch) {
-          const rawType = fmatch[1];
-          const ext = /x-icon|vnd\.microsoft\.icon/.test(rawType) ? 'ico'
-            : rawType === 'image/svg+xml' ? 'svg'
-              : rawType === 'image/jpeg' ? 'jpg' : 'png';
-          faviconFilename = `favicon.${ext}`;
-          faviconBinary = Buffer.from(fmatch[2].replace(/\n/g, ''), 'base64');
-          bd.faviconUrl = `/${faviconFilename}`; // replace data URL with actual path in HTML
-        }
+      const provider = bd.contentAiProvider || 'openai';
+      const hasApiKey = await getAIProviderConfig(userId, provider);
+
+      if ((needsHomepage || needsDynamicPages) && hasApiKey) {
+        // Trigger background generation and deploy
+        runBackgroundGenerationAndDeploy(id, userId, publishTier, netlifyApiKey, domain);
+        return res.json({ success: true, status: 'generating', message: "Content generation running in background." });
       }
 
-      const deployedServiceAreas = uniqueValues(
-        (bd.serviceAreas as string[])
-          .map((location: string) => normalizeLocationLabel(location, stringValue(bd.state)))
-          .filter(Boolean)
-      );
-      const deployedCity =
-        normalizeLocationLabel(
-          stringValue(bd.city) || stringValue(bd.heroLocation) || deployedServiceAreas[0],
-          stringValue(bd.state)
-        ) ||
-        stringValue(bd.city) ||
-        deployedServiceAreas[0] ||
-        "";
-
-      const generatorData = {
-        ...bd,
-        city: deployedCity,
-        serviceAreas: deployedServiceAreas,
-        locationContent: normalizeLocationContentMap(bd.locationContent, stringValue(bd.state)),
-      };
-
-      const files = genLS(categoryId, generatorData, domain);
-
-      // Apply any visual editor overrides saved in customFiles
-      // Skip SEO pages (sitemap.html) — always use freshly generated versions
-      const seoProtectedFiles = new Set(['sitemap.html']);
-      const storedCustomFiles = website.customFiles as Record<string, string> | null;
-      if (storedCustomFiles && typeof storedCustomFiles === 'object') {
-        for (const [filename, content] of Object.entries(storedCustomFiles)) {
-          if (typeof content === 'string' && filename.endsWith('.html') && !seoProtectedFiles.has(filename)) {
-            (files as any)[filename] = content;
-          }
-        }
-      }
-
-      // Re-apply customImages after customFiles override — storedCustomFiles may contain
-      // old HTML with placeholder URLs that would overwrite the freshly generated images.
-      if (bd.customImages && typeof bd.customImages === 'object' && Object.keys(bd.customImages).length > 0) {
-        for (const [filename, html] of Object.entries(files as Record<string, string>)) {
-          if (!filename.endsWith('.html') || typeof html !== 'string') continue;
-          let updated = html as string;
-          for (const [key, customSrc] of Object.entries(bd.customImages as Record<string, string>)) {
-            if (!customSrc) continue;
-            updated = updated.replace(
-              new RegExp(`(<img[^>]*data-placeholder="${key}"[^>]*)src="[^"]*"`, 'gs'),
-              `$1src="${customSrc}"`
-            );
-            updated = updated.replace(
-              new RegExp(`(<img[^>]*)src="[^"]*"([^>]*data-placeholder="${key}")`, 'gs'),
-              `$1src="${customSrc}"$2`
-            );
-          }
-          (files as any)[filename] = updated;
-        }
-      }
-
-      // Fix domain references in ALL files — customFiles may have been generated
-      // with a different domain (urlSlug) than the actual deploy domain (siteName).
-      // This ensures canonical URLs, JSON-LD schemas, breadcrumbs, etc. are correct.
-      const correctBase = `https://${domain}.netlify.app`;
-      for (const [filename, content] of Object.entries(files)) {
-        if (typeof content !== 'string') continue;
-        // Replace any https://ANYTHING.netlify.app with the correct deploy domain
-        const fixed = (content as string).replace(
-          /https:\/\/[a-z0-9][-a-z0-9]*\.netlify\.app/gi,
-          correctBase
-        );
-        if (fixed !== content) {
-          (files as any)[filename] = fixed;
-        }
-      }
-
-      // Extract any embedded data-URL images to real files (keeps HTML lean for Netlify)
-      const extractedImages = new Map<string, string>(); // dataUrl → /images/custom-N.ext
-      let imgIndex = 0;
-      const processedFiles: Record<string, string> = {};
-      for (const [filename, rawContent] of Object.entries(files)) {
-        const processed = (rawContent as string).replace(
-          /data:image\/(jpeg|png|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+/g,
-          (match) => {
-            if (extractedImages.has(match)) return extractedImages.get(match)!;
-            const typeStr = match.match(/^data:image\/([^;]+);/)?.[1] ?? 'jpeg';
-            const ext = typeStr === 'svg+xml' ? 'svg' : typeStr === 'jpeg' ? 'jpg' : typeStr;
-            const imgPath = `/images/custom-${imgIndex++}.${ext}`;
-            extractedImages.set(match, imgPath);
-            return imgPath;
-          }
-        );
-        processedFiles[filename] = processed;
-      }
-
-      // Build ZIP with processed HTML + extracted image files
-      const zip = new JSZip();
-      for (const [filename, content] of Object.entries(processedFiles)) {
-        zip.file(filename, content);
-      }
-      for (const [dataUrl, imgPath] of extractedImages.entries()) {
-        const base64 = dataUrl.split(',')[1];
-        zip.file(imgPath.slice(1), Buffer.from(base64, 'base64')); // slice removes leading /
-      }
-      // Add favicon as a real file at the root
-      if (faviconFilename && faviconBinary) {
-        zip.file(faviconFilename, faviconBinary);
-      }
-      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
-
-      // Resolve or create Netlify site — filter by name to avoid fetching all sites
-      const { NetlifyAPI } = await import('netlify');
-      const netlify = new NetlifyAPI(netlifyApiKey);
-      let site: any;
-      try {
-        const sites = await netlify.listSites({ name: domain });
-        site = (sites as any[]).find((s: any) => s.name === domain);
-      } catch { /* will create */ }
-
-      if (!site) {
-        try {
-          site = await netlify.createSite({ body: { name: domain } });
-        } catch (error) {
-          throw new Error(getNetlifyErrorMessage(error, domain));
-        }
-      }
-
-      // Upload ZIP — no polling so we stay under the 60s limit
-      const uploadRes = await fetch(`https://api.netlify.com/api/v1/sites/${site.id}/deploys`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${netlifyApiKey}`, 'Content-Type': 'application/zip' },
-        body: new Uint8Array(zipBuffer) as any,
-      });
-      if (!uploadRes.ok) {
-        const msg = await uploadRes.text().catch(() => uploadRes.statusText);
-        throw new Error(`Netlify upload failed (${uploadRes.status}): ${msg}`);
-      }
-
-      const siteUrl = `https://${domain}.netlify.app`;
-
-      // Update DB with deployment info
-      await storage.updateWebsite(id, {
-        netlifyUrl: siteUrl,
-        netlifyDeploymentStatus: 'deployed',
-      });
-
-      // Ping Google and Bing to discover the new sitemap (fire-and-forget)
-      const sitemapUrl = encodeURIComponent(`${siteUrl}/sitemap.xml`);
-      Promise.all([
-        fetch(`https://www.google.com/ping?sitemap=${sitemapUrl}`).catch(() => { }),
-        fetch(`https://www.bing.com/ping?sitemap=${sitemapUrl}`).catch(() => { }),
-      ]).catch(() => { });
-
-      res.json({ url: siteUrl, siteName: domain });
+      // Fast path: deploy synchronously
+      const result = await performNetlifyDeploy(id, userId, netlifyApiKey, domain, publishTier);
+      return res.json({ url: result.url, siteName: result.siteName, status: 'deployed' });
     } catch (err: any) {
       console.error("WD deploy error:", err);
       res.status(500).json({ error: err.message || "Deployment failed" });

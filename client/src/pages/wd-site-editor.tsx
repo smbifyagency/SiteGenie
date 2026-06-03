@@ -17,7 +17,7 @@ import {
   ArrowLeft, Save, Rocket, Image as ImageIcon, RefreshCw,
   Loader2, ExternalLink, CheckCircle2, ChevronDown, ChevronUp,
   Globe, Phone, MapPin, FileText, Layers, Edit3, Sparkles, Wand2, Trash2,
-  Eye, X as XIcon, ImagePlus, PenSquare, Plus
+  Eye, X as XIcon, ImagePlus, PenSquare, Plus, UploadCloud
 } from "lucide-react";
 import { generateLocalServiceWebsite, enrichBusinessDataForCategory } from "../lib/local-service-engine";
 import { getCategoryConfig } from "../lib/local-service-categories";
@@ -110,6 +110,10 @@ interface WDSiteData {
   customHeadCode?: string;
   logoUrl?: string;
   faviconUrl?: string;
+  publishTier?: '1' | '2' | '3';
+  generationStatus?: 'idle' | 'generating' | 'deploying' | 'completed' | 'failed';
+  generationProgress?: number;
+  generationError?: string | null;
 }
 
 function buildAddressMapEmbedUrl(address?: string, city?: string, state?: string): string {
@@ -240,12 +244,41 @@ function getChecklistMetrics(data?: WDSiteData | null) {
 
 // All placeholder image slots in the WD template
 const WD_IMAGE_SLOTS = [
-  { key: "hero-bg",        label: "Hero Background",          page: "Homepage",         defaultSrc: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&q=80", hint: "Wide banner photo — water damage scene, flooded room, or your team at work" },
-  { key: "main-image",     label: "Team / Work Photo",        page: "Homepage",         defaultSrc: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&q=80", hint: "Your team, truck, or a restoration job in progress" },
-  { key: "about-image",    label: "About Us Photo",           page: "About",            defaultSrc: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80", hint: "Team photo, owner headshot, or your office/vehicles" },
-  { key: "service-image",  label: "Service Page Photo",       page: "Service Pages",    defaultSrc: "https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800&q=80", hint: "Water damage work, equipment, or drying process" },
-  { key: "location-image", label: "Location Page Photo",      page: "Location Pages",   defaultSrc: "https://images.unsplash.com/photo-1601760562234-9814eea6663a?w=800&q=80", hint: "Your truck or team in the local area" },
-  { key: "gallery-1",      label: "Gallery — Before Photo",   page: "Gallery",          defaultSrc: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=800&q=80", hint: "Before photo from an actual restoration job" },
+  {
+    key: "hero-bg",
+    label: "Hero Background (Homepage Banner)",
+    page: "Homepage",
+    defaultSrc: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&q=80",
+    hint: "Appears as the large background banner image at the top of the homepage."
+  },
+  {
+    key: "main-image",
+    label: "Team / Work Photo (Homepage Body)",
+    page: "Homepage",
+    defaultSrc: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&q=80",
+    hint: "Appears in the 'About Our Services' body section on the homepage."
+  },
+  {
+    key: "about-image",
+    label: "About Us Photo (Our Story Section)",
+    page: "About Us",
+    defaultSrc: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80",
+    hint: "Appears next to your business bio on the About page."
+  },
+  {
+    key: "service-image",
+    label: "Service Page Banner Photo",
+    page: "Service Pages",
+    defaultSrc: "https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800&q=80",
+    hint: "Standard representative banner image displayed on all service pages."
+  },
+  {
+    key: "location-image",
+    label: "Location Page Banner Photo",
+    page: "Location Pages",
+    defaultSrc: "https://images.unsplash.com/photo-1601760562234-9814eea6663a?w=800&q=80",
+    hint: "Standard representative banner image displayed on all city/area pages."
+  }
 ];
 
 // Sample data for each category — used only by the "Fill sample" button during testing.
@@ -363,6 +396,10 @@ function siteDataToWDData(data: WDSiteData): Record<string, any> {
     _aiTestimonials: (data as any)._aiTestimonials,
     _aiServiceDescs: (data as any)._aiServiceDescs,
     enableMatrixPages: (data as any).enableMatrixPages,
+    publishTier: data.publishTier || '3',
+    generationStatus: data.generationStatus || 'idle',
+    generationProgress: data.generationProgress ?? 0,
+    generationError: data.generationError || null,
     blogPosts: data.blogPosts || [],
     generateBlog: (data.blogPosts && data.blogPosts.length > 0) ? true : false,
   } as any;
@@ -1017,9 +1054,14 @@ export default function WDSiteEditor() {
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState<'idle' | 'generating' | 'deploying' | 'completed' | 'failed'>('idle');
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isAutoGeneratingBlogs, setIsAutoGeneratingBlogs] = useState(false);
   const [autoBlogProgress, setAutoBlogProgress] = useState({ current: 0, total: 0 });
   const [activeTab, setActiveTab] = useState("business");
+  const [isDraggingGallery, setIsDraggingGallery] = useState(false);
   const [previewPage, setPreviewPage] = useState("index.html");
   const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({});
   const [netlifyToken, setNetlifyToken] = useState("");
@@ -1151,6 +1193,55 @@ export default function WDSiteEditor() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
+  // ── Polling & Status Check ─────────────────────────────────────────
+  const startPollingGenerationStatus = useCallback(() => {
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+    
+    setGenerationStatus('generating');
+    setIsGeneratingAI(true);
+    
+    pollingIntervalRef.current = setInterval(async () => {
+      if (!websiteId) return;
+      try {
+        const res = await fetch(`/api/websites/${websiteId}/generation-status`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        setGenerationStatus(data.status || 'idle');
+        setGenerationProgress(data.progress || 0);
+        setGenerationError(data.error || null);
+        
+        if (data.status === 'completed') {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+          setIsGeneratingAI(false);
+          setGenerationStatus('completed');
+          toast({ title: "Content generation completed!", description: "Unique website copy generated successfully." });
+          // Reload website data from server
+          await loadWebsite();
+        } else if (data.status === 'failed') {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+          setIsGeneratingAI(false);
+          setGenerationStatus('failed');
+          toast({
+            title: "AI Generation Failed",
+            description: data.error || "An error occurred during content generation.",
+            variant: "destructive",
+          });
+        }
+      } catch (err) {
+        console.error("Error polling generation status in editor:", err);
+      }
+    }, 2000);
+  }, [websiteId, toast]);
+
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
   // ── Load website data ─────────────────────────────────────────────────
 
   useEffect(() => {
@@ -1220,6 +1311,10 @@ export default function WDSiteEditor() {
         _aiTestimonials: bd._aiTestimonials,
         _aiServiceDescs: bd._aiServiceDescs,
         enableMatrixPages: bd.enableMatrixPages,
+        publishTier: bd.publishTier || '3',
+        generationStatus: bd.generationStatus || 'idle',
+        generationProgress: bd.generationProgress ?? 0,
+        generationError: bd.generationError || null,
         netlifyUrl: data.netlifyUrl,
         deploymentStatus: data.netlifyDeploymentStatus,
       } as any;
@@ -1281,6 +1376,11 @@ export default function WDSiteEditor() {
         } catch (e) {
           console.error('Auto-generate preview failed:', e);
         }
+      }
+
+      // Auto-resume polling if generation is active
+      if (bd.generationStatus === 'generating' || bd.generationStatus === 'deploying') {
+        startPollingGenerationStatus();
       }
     } catch (err) {
       toast({ title: "Error", description: "Could not load website data.", variant: "destructive" });
@@ -1347,7 +1447,7 @@ export default function WDSiteEditor() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ aiProvider }),
+        body: JSON.stringify({ aiProvider, publishTier: siteData.publishTier || '3' }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -1362,34 +1462,16 @@ export default function WDSiteEditor() {
         } else {
           throw new Error(errData.error || `Server error ${res.status}`);
         }
+        setIsGeneratingAI(false);
         return;
       }
       const data = await res.json();
-      const content = data.content || {};
-      // Merge AI fields into siteData and rebuild preview
-      const next = {
-        ...siteData,
-        _aiIntroParas: content.introParas,
-        _aiFaqs: content.faqs,
-        _aiSeoBody: content.seoBody,
-        _aiProcessSteps: content.processSteps,
-        _aiWhyChooseUs: content.whyChooseUs,
-        _aiAboutContent: content.aboutContent,
-        _aiTestimonials: content.testimonials,
-        _aiServiceDescs: content.serviceDescriptions,
-      } as any;
-      setSiteData(next);
-      rebuildPreview(next);
-      setLastAIGenerationAt(new Date().toLocaleString());
-      toast({ title: "AI content generated!", description: "Preview updated with unique content." });
-
-      // Auto-generate 5 blog posts if none exist yet
-      if (!next.blogPosts || next.blogPosts.length === 0) {
-        autoGenerateBlogPosts(next);
+      if (data.status === 'generating') {
+        toast({ title: "Content generation started!", description: "AI content is writing in the background." });
+        startPollingGenerationStatus();
       }
     } catch (err) {
       toast({ title: "Generation failed", description: String(err), variant: "destructive" });
-    } finally {
       setIsGeneratingAI(false);
     }
   }
@@ -1942,6 +2024,16 @@ export default function WDSiteEditor() {
     });
   }
 
+  function clearAllGalleryPhotos() {
+    setSiteData(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, galleryImages: (prev.galleryImages || []).filter(i => i.type !== 'normal') };
+      rebuildPreview(next);
+      toast({ title: "Cleared all gallery photos" });
+      return next;
+    });
+  }
+
   function uploadGalleryPhoto(index: number, file: File) {
     const reader = new FileReader();
     reader.onload = e => {
@@ -1962,6 +2054,37 @@ export default function WDSiteEditor() {
       toast({ title: "Gallery photo updated" });
     };
     reader.readAsDataURL(file);
+  }
+
+  function uploadGalleryPhotosBulk(files: FileList) {
+    const current = siteDataRef.current || siteData;
+    if (!current) return;
+
+    const filesArray = Array.from(files);
+    if (filesArray.length === 0) return;
+
+    let loadedCount = 0;
+    const nextImages = [...(current.galleryImages || [])];
+
+    filesArray.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const src = e.target?.result as string;
+        nextImages.push({ src, alt: 'Gallery photo', type: 'normal' });
+        loadedCount++;
+
+        if (loadedCount === filesArray.length) {
+          const next = {
+            ...current,
+            galleryImages: nextImages.slice(0, 50),
+          };
+          setSiteData(next);
+          rebuildPreview(next);
+          toast({ title: `Successfully uploaded ${filesArray.length} gallery photos!` });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
   // ── Update site data fields ───────────────────────────────────────────
@@ -2451,6 +2574,132 @@ export default function WDSiteEditor() {
                 </div>
               </div>
 
+              {/* Branding & Page Images */}
+              <ContentSection title="Branding & Page Images">
+                <div className="space-y-4">
+                  {/* Logo */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-400">Logo (Header/Footer)</Label>
+                    <div className="flex items-center gap-3">
+                      {siteData.logoUrl ? (
+                        <div className="relative w-10 h-10 bg-gray-800 rounded flex items-center justify-center overflow-hidden border border-gray-700">
+                          <img src={siteData.logoUrl} alt="Logo" className="max-w-full max-h-full object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setSiteData(prev => prev ? { ...prev, logoUrl: undefined } as any : prev)}
+                            className="absolute -top-0.5 -right-0.5 bg-red-800 text-white rounded text-[10px] w-4 h-4 flex items-center justify-center leading-none"
+                            title="Remove logo"
+                          >✕</button>
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center border border-dashed border-gray-650 text-gray-500 text-[10px] text-center leading-tight">
+                          No logo
+                        </div>
+                      )}
+                      <label className="cursor-pointer flex-1">
+                        <div className="flex items-center justify-center gap-2 border border-dashed border-gray-600 hover:border-blue-500 hover:text-blue-400 rounded-md py-2 px-3 text-xs text-gray-400 transition-colors">
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          {siteData.logoUrl ? "Replace logo..." : "Upload logo (PNG/SVG)..."}
+                        </div>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = ev => {
+                            const url = ev.target?.result as string;
+                            setSiteData(prev => prev ? { ...prev, logoUrl: url } as any : prev);
+                            toast({ title: "Logo updated", description: "Save to apply." });
+                          };
+                          reader.readAsDataURL(file);
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Favicon */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-400">Favicon (Browser Tab Icon)</Label>
+                    <div className="flex items-center gap-3">
+                      {siteData.faviconUrl ? (
+                        <div className="relative w-10 h-10 bg-gray-800 rounded flex items-center justify-center overflow-hidden border border-gray-700">
+                          <img src={siteData.faviconUrl} alt="Favicon" className="max-w-full max-h-full object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setSiteData(prev => prev ? { ...prev, faviconUrl: undefined } as any : prev)}
+                            className="absolute -top-0.5 -right-0.5 bg-red-800 text-white rounded text-[10px] w-4 h-4 flex items-center justify-center leading-none"
+                            title="Remove favicon"
+                          >✕</button>
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 bg-gray-800 rounded flex items-center justify-center border border-dashed border-gray-650 text-gray-500 text-[10px] text-center leading-tight">
+                          No icon
+                        </div>
+                      )}
+                      <label className="cursor-pointer flex-1">
+                        <div className="flex items-center justify-center gap-2 border border-dashed border-gray-600 hover:border-blue-500 hover:text-blue-400 rounded-md py-2 px-3 text-xs text-gray-400 transition-colors">
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          {siteData.faviconUrl ? "Replace favicon..." : "Upload favicon (ICO/PNG)..."}
+                        </div>
+                        <input type="file" accept="image/*,.ico" className="hidden" onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = ev => {
+                            const url = ev.target?.result as string;
+                            setSiteData(prev => prev ? { ...prev, faviconUrl: url } as any : prev);
+                            toast({ title: "Favicon updated", description: "Save to apply." });
+                          };
+                          reader.readAsDataURL(file);
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Core Template Images */}
+                  <div className="space-y-3 border-t border-gray-700/60 pt-3">
+                    <p className="text-xs font-medium text-gray-400">Core Page Images</p>
+                    {WD_IMAGE_SLOTS.map(slot => {
+                      const customSrc = siteData?.customImages?.[slot.key];
+                      const displaySrc = customSrc || slot.defaultSrc;
+                      const isCustom = !!customSrc;
+                      return (
+                        <div key={slot.key} className="space-y-1 bg-gray-900/40 p-2.5 rounded-lg border border-gray-805">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[11px] font-semibold text-gray-300">{slot.label}</span>
+                            <span className="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded uppercase">{slot.page}</span>
+                          </div>
+                          <span className="text-[10px] text-gray-500 block leading-tight mb-1.5">{slot.hint}</span>
+                          
+                          <div className="flex items-center gap-2">
+                            <div className="w-12 h-8 rounded bg-gray-800 border border-gray-700 overflow-hidden shrink-0">
+                              <img src={displaySrc} alt={slot.label} className="w-full h-full object-cover" />
+                            </div>
+                            <label className="cursor-pointer flex-1">
+                              <div className="flex items-center justify-center gap-1.5 border border-dashed border-gray-650 hover:border-blue-500 hover:text-blue-400 rounded py-1.5 text-[10px] text-gray-400 transition-colors">
+                                <ImageIcon className="w-3 h-3" />
+                                {isCustom ? "Replace..." : "Upload..."}
+                              </div>
+                              <input type="file" accept="image/*" className="hidden"
+                                onChange={e => { if (e.target.files?.[0]) handleCustomImageUpload(slot.key, e.target.files[0]); }} />
+                            </label>
+                            {isCustom && (
+                              <button
+                                type="button"
+                                onClick={() => removeCustomImage(slot.key)}
+                                className="text-[10px] px-2 py-1.5 rounded bg-red-950/60 border border-red-900/40 text-red-400 hover:bg-red-900/30"
+                                title="Reset to default placeholder"
+                              >Reset</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </ContentSection>
+
               {/* Social Media */}
               <div className="rounded-lg border border-dashed border-gray-700 p-3 space-y-2">
                 <p className="text-xs font-medium text-gray-400">Social Media Links (optional)</p>
@@ -2568,6 +2817,24 @@ export default function WDSiteEditor() {
 
                 {apiStatus === "none" && (
                   <p className="text-xs text-yellow-400">No AI API key configured. Go to <strong>Settings → API Keys</strong> to add one.</p>
+                )}
+
+                {generationStatus === 'generating' && (
+                  <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-4 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-gray-300">
+                      <span className="flex items-center gap-1.5 font-medium text-[#7C3AED]">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        AI Generation in Progress
+                      </span>
+                      <span className="font-semibold text-white">{generationProgress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-[#7C3AED] transition-all duration-300" style={{ width: `${generationProgress}%` }} />
+                    </div>
+                    <p className="text-[11px] text-gray-400">
+                      Writing and optimization tasks are running in a rate-limited background queue. You can keep editing other fields in the meantime.
+                    </p>
+                  </div>
                 )}
 
                 {/* Status badges */}
@@ -3152,113 +3419,156 @@ export default function WDSiteEditor() {
                 Tip: You can also click any image directly in the preview on the right to replace it instantly.
               </p>
 
-              {/* ── Before/After Gallery Pairs ─────────────────────────── */}
-              <div className="border-t border-gray-700 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-sm text-gray-300">Before/After Comparisons</h3>
-                    <p className="text-xs text-gray-500">Drag the slider in the preview to compare. Up to 20 pairs.</p>
+              {/* ── Before/After Gallery Pairs (Advanced) ───────────────── */}
+              <ContentSection title="Before/After Slider (Advanced &amp; Optional)" defaultOpen={false}>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] text-gray-400">
+                      If left blank, the site automatically uses high-quality water damage restoration sliders.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={addBeforeAfterPair}
+                      disabled={(getGalleryPairs(siteData).length) >= 20}
+                      className="text-[10px] px-2 py-1 rounded bg-blue-900/60 border border-blue-700 text-blue-200 hover:bg-blue-800 disabled:opacity-40"
+                    >
+                      + Add Pair
+                    </button>
                   </div>
-                  <button
-                    onClick={addBeforeAfterPair}
-                    disabled={(getGalleryPairs(siteData).length) >= 20}
-                    className="text-xs px-2 py-1 rounded bg-blue-800 text-blue-200 hover:bg-blue-700 disabled:opacity-40"
-                  >+ Add Pair</button>
-                </div>
 
-                {getGalleryPairs(siteData).length === 0 && (
-                  <p className="text-xs text-gray-600 italic text-center py-3 border border-dashed border-gray-700 rounded-lg">
-                    No custom pairs yet — placeholder images will be used. Add a pair to replace them.
-                  </p>
-                )}
+                  {getGalleryPairs(siteData).length === 0 && (
+                    <p className="text-[11px] text-gray-500 italic text-center py-2.5 border border-dashed border-gray-750 rounded-lg">
+                      No custom pairs uploaded. Fallback placeholders will be used.
+                    </p>
+                  )}
 
-                {getGalleryPairs(siteData).map((pair, idx) => (
-                  <div key={pair.id} className="rounded-lg border border-gray-700 p-3 mb-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-gray-400">Pair {idx + 1}</span>
-                      <button onClick={() => removeBeforeAfterPair(pair.id)} className="text-xs text-red-400 hover:text-red-300">✕ Remove</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {/* Before */}
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">BEFORE</p>
-                        <div className="relative bg-gray-800 rounded aspect-video overflow-hidden">
-                          {pair.before?.src
-                            ? <img src={pair.before.src} alt="Before" className="w-full h-full object-cover" />
-                            : <div className="flex items-center justify-center h-full text-gray-600 text-xs">No image</div>
-                          }
-                        </div>
-                        <label className="cursor-pointer block mt-1">
-                          <div className="flex items-center justify-center gap-1 border border-dashed border-gray-600 rounded py-1.5 text-xs text-gray-400 hover:border-blue-500 hover:text-blue-400 transition-colors">
-                            <ImageIcon className="w-3 h-3" />{pair.before?.src ? "Replace" : "Upload"}
+                  {getGalleryPairs(siteData).map((pair, idx) => (
+                    <div key={pair.id} className="rounded-lg border border-gray-800 p-2.5 space-y-2 bg-gray-950/40">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-gray-400">Pair {idx + 1}</span>
+                        <button type="button" onClick={() => removeBeforeAfterPair(pair.id)} className="text-[10px] text-red-400 hover:text-red-300">✕ Remove</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Before */}
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-1">BEFORE</p>
+                          <div className="relative bg-gray-800 rounded aspect-video overflow-hidden">
+                            {pair.before?.src
+                              ? <img src={pair.before.src} alt="Before" className="w-full h-full object-cover" />
+                              : <div className="flex items-center justify-center h-full text-gray-600 text-[10px]">No image</div>
+                            }
                           </div>
-                          <input type="file" accept="image/*" className="hidden"
-                            onChange={e => { if (e.target.files?.[0]) uploadPairImage(pair.id, 'before', e.target.files[0]); e.target.value = ''; }} />
-                        </label>
-                      </div>
-                      {/* After */}
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">AFTER</p>
-                        <div className="relative bg-gray-800 rounded aspect-video overflow-hidden">
-                          {pair.after?.src
-                            ? <img src={pair.after.src} alt="After" className="w-full h-full object-cover" />
-                            : <div className="flex items-center justify-center h-full text-gray-600 text-xs">No image</div>
-                          }
+                          <label className="cursor-pointer block mt-1">
+                            <div className="flex items-center justify-center gap-1 border border-dashed border-gray-700 rounded py-1 text-[10px] text-gray-400 hover:border-blue-500 hover:text-blue-400 transition-colors">
+                              <ImageIcon className="w-3 h-3" />{pair.before?.src ? "Replace" : "Upload"}
+                            </div>
+                            <input type="file" accept="image/*" className="hidden"
+                              onChange={e => { if (e.target.files?.[0]) uploadPairImage(pair.id, 'before', e.target.files[0]); e.target.value = ''; }} />
+                          </label>
                         </div>
-                        <label className="cursor-pointer block mt-1">
-                          <div className="flex items-center justify-center gap-1 border border-dashed border-gray-600 rounded py-1.5 text-xs text-gray-400 hover:border-blue-500 hover:text-blue-400 transition-colors">
-                            <ImageIcon className="w-3 h-3" />{pair.after?.src ? "Replace" : "Upload"}
+                        {/* After */}
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-1">AFTER</p>
+                          <div className="relative bg-gray-800 rounded aspect-video overflow-hidden">
+                            {pair.after?.src
+                              ? <img src={pair.after.src} alt="After" className="w-full h-full object-cover" />
+                              : <div className="flex items-center justify-center h-full text-gray-600 text-[10px]">No image</div>
+                            }
                           </div>
-                          <input type="file" accept="image/*" className="hidden"
-                            onChange={e => { if (e.target.files?.[0]) uploadPairImage(pair.id, 'after', e.target.files[0]); e.target.value = ''; }} />
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* ── Gallery Photos ────────────────────────────────────────── */}
-              <div className="border-t border-gray-700 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-sm text-gray-300">Gallery Photos</h3>
-                    <p className="text-xs text-gray-500">General project photos shown in gallery grid. Up to 50 images.</p>
-                  </div>
-                  <button
-                    onClick={addGalleryPhoto}
-                    disabled={getGalleryNormal(siteData).length >= 50}
-                    className="text-xs px-2 py-1 rounded bg-blue-800 text-blue-200 hover:bg-blue-700 disabled:opacity-40"
-                  >+ Add Photo</button>
-                </div>
-
-                {getGalleryNormal(siteData).length === 0 && (
-                  <p className="text-xs text-gray-600 italic text-center py-3 border border-dashed border-gray-700 rounded-lg">
-                    No custom photos yet — placeholder images will be used.
-                  </p>
-                )}
-
-                <div className="grid grid-cols-2 gap-2">
-                  {getGalleryNormal(siteData).map((photo, idx) => (
-                    <div key={idx} className="rounded border border-gray-700 overflow-hidden">
-                      <div className="relative bg-gray-800 aspect-video">
-                        {photo.src
-                          ? <img src={photo.src} alt={`Gallery ${idx+1}`} className="w-full h-full object-cover" />
-                          : <div className="flex items-center justify-center h-full text-gray-600 text-xs">No image</div>
-                        }
-                        <button onClick={() => removeGalleryPhoto(idx)}
-                          className="absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded bg-red-900/80 text-red-300 hover:bg-red-800">✕</button>
-                      </div>
-                      <label className="cursor-pointer block">
-                        <div className="flex items-center justify-center gap-1 py-1.5 text-xs text-gray-400 hover:text-blue-400 transition-colors">
-                          <ImageIcon className="w-3 h-3" />{photo.src ? "Replace" : "Upload"}
+                          <label className="cursor-pointer block mt-1">
+                            <div className="flex items-center justify-center gap-1 border border-dashed border-gray-700 rounded py-1 text-[10px] text-gray-400 hover:border-blue-500 hover:text-blue-400 transition-colors">
+                              <ImageIcon className="w-3 h-3" />{pair.after?.src ? "Replace" : "Upload"}
+                            </div>
+                            <input type="file" accept="image/*" className="hidden"
+                              onChange={e => { if (e.target.files?.[0]) uploadPairImage(pair.id, 'after', e.target.files[0]); e.target.value = ''; }} />
+                          </label>
                         </div>
-                        <input type="file" accept="image/*" className="hidden"
-                          onChange={e => { if (e.target.files?.[0]) uploadGalleryPhoto(idx, e.target.files[0]); e.target.value = ''; }} />
-                      </label>
+                      </div>
                     </div>
                   ))}
                 </div>
+              </ContentSection>
+
+              {/* ── Gallery Photos ────────────────────────────────────────── */}
+              <div className="border-t border-gray-700 pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-sm text-gray-300">Gallery Photos</h3>
+                    <p className="text-[11px] text-gray-500">General project photos shown in gallery grid (max 50).</p>
+                  </div>
+                  {getGalleryNormal(siteData).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearAllGalleryPhotos}
+                      className="text-[10px] px-2 py-1 rounded bg-red-950/60 border border-red-900/40 text-red-400 hover:bg-red-900/40 transition-colors"
+                    >
+                      Clear All ({getGalleryNormal(siteData).length})
+                    </button>
+                  )}
+                </div>
+
+                {/* Bulk Upload Dropzone */}
+                <label
+                  onDragOver={e => { e.preventDefault(); setIsDraggingGallery(true); }}
+                  onDragLeave={() => setIsDraggingGallery(false)}
+                  onDrop={e => {
+                    e.preventDefault();
+                    setIsDraggingGallery(false);
+                    if (e.dataTransfer.files) {
+                      uploadGalleryPhotosBulk(e.dataTransfer.files);
+                    }
+                  }}
+                  className={`relative cursor-pointer flex flex-col items-center justify-center border border-dashed rounded-lg p-5 text-center transition-all ${
+                    isDraggingGallery
+                      ? "border-[#7C3AED] bg-[#7C3AED]/10 text-white"
+                      : "border-gray-700 bg-gray-800/40 hover:border-gray-500 hover:bg-gray-800/60 text-gray-400"
+                  }`}
+                >
+                  <UploadCloud className="w-8 h-8 mb-2 text-gray-500 animate-pulse" />
+                  <p className="text-xs font-semibold">Bulk Upload Gallery Photos</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Drag &amp; drop multiple images here, or click to browse</p>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      if (e.target.files) {
+                        uploadGalleryPhotosBulk(e.target.files);
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+
+                {getGalleryNormal(siteData).length === 0 ? (
+                  <p className="text-xs text-gray-600 italic text-center py-4 border border-dashed border-gray-800 rounded-lg">
+                    No custom photos yet — standard placeholder images will be used on the live site.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    {getGalleryNormal(siteData).map((photo, idx) => (
+                      <div key={idx} className="relative group aspect-square rounded bg-gray-850 border border-gray-800 overflow-hidden">
+                        {photo.src ? (
+                          <img src={photo.src} alt={`Gallery ${idx+1}`} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-200" />
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-gray-600 text-[10px]">Empty</div>
+                        )}
+                        {/* Hover Overlay with Delete Button */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => removeGalleryPhoto(idx)}
+                            className="bg-red-800 hover:bg-red-750 text-white rounded p-1 shadow text-[10px] flex items-center gap-1 font-medium transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -3686,6 +3996,8 @@ export default function WDSiteEditor() {
         tokenVerified={tokenValid === true}
         checklistCompletion={checklistMetrics}
         onReviewChecklist={() => setActiveTab("checklist")}
+        publishTier={siteData.publishTier || '3'}
+        onChangePublishTier={(tier) => updateField("publishTier", tier)}
         onBeforeDeploy={async () => {
           const currentSiteData = siteDataRef.current;
           if (!currentSiteData) {
@@ -3707,8 +4019,8 @@ export default function WDSiteEditor() {
 
 // ─── Helper: Collapsible Section ───────────────────────────────────────────
 
-function ContentSection({ title, children }: { title: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
+function ContentSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border border-gray-700 rounded-lg overflow-hidden">
       <button

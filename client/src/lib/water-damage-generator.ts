@@ -96,6 +96,8 @@ export interface WDBusinessData {
   whatsappNumber?: string;
   // Matrix pages: service × location cross-product
   enableMatrixPages?: boolean;
+  // Publishing tier (Stage 1, 2, or 3)
+  publishTier?: '1' | '2' | '3';
   // Gallery images (uploaded by user, hosted on Netlify after publish)
   galleryImages?: WDGalleryImage[];
   // Blog posts
@@ -547,6 +549,9 @@ function generateGoogleMap(data: WDBusinessData, focusCity?: string): string {
 
 function generateNav(data: WDBusinessData, currentPath: string = ''): string {
   const prefix = currentPath.includes('/') ? '../' : '';
+  const tier = data.publishTier || '3';
+  const showServicesLocations = tier === '2' || tier === '3';
+
   const serviceLinks = data.services
     .slice(0, 8)
     .map(s => `<li><a href="${prefix}services/${slugify(s)}-${slugify(data.city)}.html">${s}</a></li>`)
@@ -574,6 +579,7 @@ function generateNav(data: WDBusinessData, currentPath: string = ''): string {
       <nav class="main-nav" role="navigation" aria-label="Main navigation">
         <ul class="nav-list">
           <li><a href="${prefix}index.html">Home</a></li>
+          ${showServicesLocations ? `
           <li class="has-dropdown">
             <a href="#" aria-haspopup="true" aria-expanded="false">Services ▾</a>
             <ul class="dropdown" role="menu">
@@ -586,6 +592,7 @@ function generateNav(data: WDBusinessData, currentPath: string = ''): string {
               ${locationLinks}
             </ul>
           </li>
+          ` : ''}
           <li><a href="${prefix}about.html">About</a></li>
           <li><a href="${prefix}gallery.html">Gallery</a></li>
           <li><a href="${prefix}faq.html">FAQ</a></li>
@@ -625,6 +632,9 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
   const theme = resolveTheme(data);
   const accentColor = theme.accentColor || '#dc2626';
   const secondaryColor = theme.secondaryColor || '#0ea5e9';
+  const tier = data.publishTier || '3';
+  const showServicesLocations = tier === '2' || tier === '3';
+
   const serviceLinks = data.services
     .slice(0, 5)
     .map(s => `<li><a href="${prefix}services/${slugify(s)}-${slugify(data.city)}.html">${s}</a></li>`)
@@ -682,6 +692,7 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
         </div>
       </div>
 
+      ${showServicesLocations ? `
       <div class="footer-links">
         <h3>Our Services</h3>
         <ul>${serviceLinks}</ul>
@@ -691,6 +702,7 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
         <h3>Service Areas</h3>
         <ul>${locationLinks}</ul>
       </div>
+      ` : ''}
 
       <div class="footer-contact">
         <h3>Contact Us</h3>
@@ -2573,13 +2585,22 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
   const seoH2 = content?.seoFootnote?.h2 || LOREM_PLACEHOLDER.title;
   const seoBody = content?.seoFootnote?.body || data._seoBody || LOREM_PLACEHOLDER.paragraph;
 
-  const servicesCardsHTML = serviceCards.map(card => `
+  const tier = data.publishTier || '3';
+  const showServicesLocations = tier === '2' || tier === '3';
+
+  const servicesCardsHTML = serviceCards.map(card => {
+    const cardLink = showServicesLocations
+      ? `${prefix}${card.internalLink.slug}`
+      : `${prefix}contact.html`;
+    const anchorText = showServicesLocations ? card.internalLink.anchor : 'Learn More';
+    return `
       <article class="service-card" data-placeholder-section="service-${slugify(card.service)}">
         <div class="service-card-icon" aria-hidden="true">${iconToSVG(card.icon || 'tool', secondaryColor)}</div>
         <h3>${card.h3}</h3>
         <p>${card.description}</p>
-        <a href="${prefix}${card.internalLink.slug}" class="service-card-link">${card.internalLink.anchor} →</a>
-      </article>`).join('');
+        <a href="${cardLink}" class="service-card-link">${anchorText} →</a>
+      </article>`;
+  }).join('');
 
   const whyPointsHTML = whyPoints.map(pt => `
       <div class="why-us-item">
@@ -2750,6 +2771,7 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
   </section>
 
   <!-- ── Service Areas ─────────────────────────────────── -->
+  ${showServicesLocations ? `
   <section aria-labelledby="locations-heading" class="reveal">
     <div class="container">
       <h2 id="locations-heading">${locH2}</h2>
@@ -2759,6 +2781,7 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
       </div>
     </div>
   </section>
+  ` : ''}
 
   <!-- ── FAQ ───────────────────────────────────────────── -->
   <section id="faq" aria-labelledby="faq-heading" class="reveal">
@@ -2967,7 +2990,7 @@ export function generateServicePage(
       <p>${step.body}</p>
     </div>`).join('');
 
-  const benefitsHTML = benefitPoints.map(pt => `
+  const benefitsHTML = benefitPoints.map((pt: any) => `
     <div class="benefit-item">
       <h3>${pt.heading}</h3>
       <p>${pt.body}</p>
@@ -3222,7 +3245,7 @@ export function generateLocationPage(
   const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `${data.businessName} is ready to help ${city} homeowners and businesses with professional ${data.primaryKeyword.toLowerCase()}. Call now or submit a request and we will follow up promptly.`;
 
   // Build HTML sections
-  const introParagraphsHTML = introParas.map(p => `<p>${p}</p>`).join('');
+  const introParagraphsHTML = introParas.map((p: any) => `<p>${p}</p>`).join('');
 
   const serviceCardsHTML = serviceCards.map(card => `
     <article class="service-card">
@@ -3232,7 +3255,7 @@ export function generateLocationPage(
       <a href="${card.internalLink.slug}" class="service-card-link">${card.internalLink.anchor} →</a>
     </article>`).join('');
 
-  const whyLocalHTML = whyLocalPoints.map(pt => `
+  const whyLocalHTML = whyLocalPoints.map((pt: any) => `
     <div class="benefit-item">
       <h3>${pt.heading}</h3>
       <p>${pt.body}</p>
@@ -5236,6 +5259,8 @@ export function generateTermsPage(data: WDBusinessData, domain: string): string 
 export function generateSitemap(data: WDBusinessData, domain: string): string {
   const base = `https://${domain}.netlify.app`;
   const today = new Date().toISOString().split('T')[0];
+  const tier = data.publishTier || '3';
+  const showServicesLocations = tier === '2' || tier === '3';
 
   const hasBlog = data.blogPosts && data.blogPosts.length > 0;
   const staticPagesList = ['about', 'contact', 'faq', 'calculator', 'gallery', 'privacy', 'terms'];
@@ -5259,23 +5284,23 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
   </url>`)
     .join('\n');
 
-  const serviceUrls = data.services
+  const serviceUrls = showServicesLocations ? data.services
     .map(s => `  <url>
     <loc>${base}/services/${slugify(s)}-${slugify(data.city)}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>`)
-    .join('\n');
+    .join('\n') : '';
 
-  const locationUrls = data.serviceAreas
+  const locationUrls = showServicesLocations ? data.serviceAreas
     .map(l => `  <url>
     <loc>${base}/locations/${slugify(l)}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>`)
-    .join('\n');
+    .join('\n') : '';
 
   const blogPostUrls = (data.blogPosts || [])
     .map(post => `  <url>
@@ -5296,8 +5321,8 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
   </url>
 ${staticPages}
 ${calculatorUrls}
-${serviceUrls}
-${locationUrls}
+${serviceUrls ? '\n' + serviceUrls : ''}
+${locationUrls ? '\n' + locationUrls : ''}
 ${blogPostUrls}
 </urlset>`;
 }
@@ -5338,10 +5363,12 @@ Allow: /`;
 
 export function generateLLMsTxt(data: WDBusinessData, domain: string): string {
   const base = `https://${domain}.netlify.app`;
+  const tier = data.publishTier || '3';
+  const showServicesLocations = tier === '2' || tier === '3';
   const hasBlog = data.blogPosts && data.blogPosts.length > 0;
 
-  const servicesList = data.services.map(s => `- [${s}](${base}/services/${slugify(s)}-${slugify(data.city)})`).join('\n');
-  const areasList = data.serviceAreas.map(a => `- [${a}](${base}/locations/${slugify(a)})`).join('\n');
+  const servicesList = showServicesLocations ? data.services.map(s => `- [${s}](${base}/services/${slugify(s)}-${slugify(data.city)})`).join('\n') : '';
+  const areasList = showServicesLocations ? data.serviceAreas.map(a => `- [${a}](${base}/locations/${slugify(a)})`).join('\n') : '';
   const blogList = hasBlog
     ? data.blogPosts!.map(p => `- [${p.title}](${base}/blog/${slugify(p.slug || p.title)})`).join('\n')
     : '';
@@ -5364,12 +5391,7 @@ ${data.email ? `- Email: ${data.email}` : ''}
 - [Calculators](${base}/calculator)
 ${CALCULATORS.map(c => `- [${c.title} Calculator](${base}/calculators/${c.slug})`).join('\n')}
 ${hasBlog ? `- [Blog](${base}/blog)` : ''}
-
-## Services
-${servicesList}
-
-## Service Areas
-${areasList}
+${showServicesLocations ? `\n## Services\n${servicesList}\n\n## Service Areas\n${areasList}` : ''}
 ${hasBlog ? `\n## Blog Posts\n${blogList}` : ''}
 
 ## Sitemap
@@ -5383,6 +5405,8 @@ ${hasBlog ? `\n## Blog Posts\n${blogList}` : ''}
 export function generateHTMLSitemap(data: WDBusinessData, domain: string): string {
   const theme = resolveTheme(data);
   const base = `https://${domain}.netlify.app`;
+  const tier = data.publishTier || '3';
+  const showServicesLocations = tier === '2' || tier === '3';
   const hasBlog = data.blogPosts && data.blogPosts.length > 0;
   const fullTheme = resolveTheme(data);
   const fontUrl = FONT_URLS[fullTheme.fontFamily];
@@ -5459,6 +5483,7 @@ export function generateHTMLSitemap(data: WDBusinessData, domain: string): strin
       </ul>
     </div>
 
+    ${showServicesLocations ? `
     <div class="sitemap-section">
       <h2>Services</h2>
       <ul>
@@ -5472,6 +5497,7 @@ export function generateHTMLSitemap(data: WDBusinessData, domain: string): strin
             ${locationLinks}
       </ul>
     </div>
+    ` : ''}
 
     ${hasBlog ? `<div class="sitemap-section">
       <h2>Blog Posts</h2>
@@ -5521,20 +5547,24 @@ export function generateWaterDamageWebsite(
   files['privacy.html']    = generatePrivacyPage(data, domain);
   files['terms.html']      = generateTermsPage(data, domain);
 
-  // Service pages
-  for (const service of data.services) {
-    const filename = `services/${slugify(service)}-${slugify(data.city)}.html`;
-    files[filename] = generateServicePage(data, service, domain);
-  }
+  const tier = data.publishTier || '3';
 
-  // Location pages
-  for (const location of data.serviceAreas) {
-    const filename = `locations/${slugify(location)}.html`;
-    files[filename] = generateLocationPage(data, location, domain);
+  // Service pages
+  if (tier === '2' || tier === '3') {
+    for (const service of data.services) {
+      const filename = `services/${slugify(service)}-${slugify(data.city)}.html`;
+      files[filename] = generateServicePage(data, service, domain);
+    }
+
+    // Location pages
+    for (const location of data.serviceAreas) {
+      const filename = `locations/${slugify(location)}.html`;
+      files[filename] = generateLocationPage(data, location, domain);
+    }
   }
 
   // Matrix pages: service × location cross-product
-  if (data.enableMatrixPages) {
+  if (tier === '3' && data.enableMatrixPages) {
     for (const service of data.services) {
       for (const location of data.serviceAreas) {
         const filename = `matrix/${slugify(service)}-in-${slugify(location)}.html`;
