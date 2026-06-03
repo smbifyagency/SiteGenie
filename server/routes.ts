@@ -415,7 +415,7 @@ const normalizeBusinessDataForGeneration = (businessData: any) => {
       ...splitValues(normalized.services),
       stringValue(normalized.heroService),
     ].filter(Boolean)
-  ).slice(0, 20);
+  ).slice(0, 350);
 
   const normalizedLocations = uniqueValues(
     [
@@ -423,7 +423,7 @@ const normalizeBusinessDataForGeneration = (businessData: any) => {
       ...splitValues(normalized.serviceAreas),
       stringValue(normalized.heroLocation),
     ].filter(Boolean)
-  ).slice(0, 20);
+  ).slice(0, 350);
 
   if (normalizedServices.length > 0) {
     normalized.additionalServices = toCsv(normalizedServices);
@@ -592,6 +592,71 @@ const mergeWebsiteFilesWithCustomFiles = (
   return { mergedFiles, sanitizedCustomFiles: appliedCustomFiles };
 };
 
+// Helper function to retry promises with exponential backoff on rate limits (429)
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 5,
+  initialDelay = 2000,
+  factor = 2
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      attempt++;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isRateLimit =
+        error?.status === 429 ||
+        error?.statusCode === 429 ||
+        errorMessage.includes("429") ||
+        errorMessage.toLowerCase().includes("rate limit") ||
+        errorMessage.toLowerCase().includes("too many requests") ||
+        errorMessage.toLowerCase().includes("resourceexhausted") ||
+        errorMessage.toLowerCase().includes("quota exceeded");
+
+      if (attempt >= retries || !isRateLimit) {
+        throw error;
+      }
+
+      const delay = initialDelay * Math.pow(factor, attempt - 1);
+      console.warn(`[API Rate Limit] Attempt ${attempt} failed. Retrying in ${delay}ms... Error: ${errorMessage}`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// Helper to run promises with a concurrency limit
+async function pLimit<T>(
+  items: any[],
+  concurrency: number,
+  fn: (item: any) => Promise<T>
+): Promise<T[]> {
+  const results: T[] = [];
+  let index = 0;
+  const promises: Promise<void>[] = [];
+
+  async function worker() {
+    while (index < items.length) {
+      const currentIndex = index++;
+      const item = items[currentIndex];
+      try {
+        results[currentIndex] = await fn(item);
+      } catch (err) {
+        console.error(`Error in pLimit worker for item:`, item, err);
+        results[currentIndex] = null as any;
+      }
+    }
+  }
+
+  for (let i = 0; i < Math.min(concurrency, items.length); i++) {
+    promises.push(worker());
+  }
+
+  await Promise.all(promises);
+  return results;
+}
+
 async function generateStructuredJsonWithProvider(
   provider: AIProvider,
   apiKey: string,
@@ -601,34 +666,12 @@ async function generateStructuredJsonWithProvider(
   const maxTokens = options.maxTokens ?? 6000;
   const temperature = options.temperature ?? 0.65;
 
-  if (provider === "openai") {
-    const OpenAI = (await import("openai")).default;
-    const openai = new OpenAI({ apiKey });
-    const response = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        { role: "system", content: MASTER_SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
-      temperature,
-      max_tokens: maxTokens,
-    });
-
-    return parseModelJson(response.choices?.[0]?.message?.content || "");
-  }
-
-  if (provider === "openrouter") {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://replit.com",
-        "X-Title": "SiteGenie",
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4.1-mini",
+  return withRetry(async () => {
+    if (provider === "openai") {
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey });
+      const response = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
         messages: [
           { role: "system", content: MASTER_SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
@@ -636,28 +679,52 @@ async function generateStructuredJsonWithProvider(
         response_format: { type: "json_object" },
         temperature,
         max_tokens: maxTokens,
-      }),
-    });
+      });
 
-    if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status}`);
+      return parseModelJson(response.choices?.[0]?.message?.content || "");
     }
 
-    const data = await response.json();
-    return parseModelJson(data?.choices?.[0]?.message?.content || "");
-  }
+    if (provider === "openrouter") {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://replit.com",
+          "X-Title": "SiteGenie",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-4.1-mini",
+          messages: [
+            { role: "system", content: MASTER_SYSTEM_PROMPT },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      });
 
-  if (provider === "deepseek") {
-    const { generateStructuredJsonWithDeepSeek } = await import("./services/deepseek.js");
-    return generateStructuredJsonWithDeepSeek(MASTER_SYSTEM_PROMPT, userPrompt, apiKey, options);
-  }
+      if (!response.ok) {
+        throw new Error(`OpenRouter API error: ${response.status}`);
+      }
 
-  const { generateWithGemini } = await import("./services/gemini");
-  const content = await generateWithGemini(
-    `${MASTER_SYSTEM_PROMPT}\n\n${userPrompt}\n\nReturn only valid JSON with no markdown.`,
-    apiKey
-  );
-  return parseModelJson(content);
+      const data = await response.json();
+      return parseModelJson(data?.choices?.[0]?.message?.content || "");
+    }
+
+    if (provider === "deepseek") {
+      const { generateStructuredJsonWithDeepSeek } = await import("./services/deepseek.js");
+      return generateStructuredJsonWithDeepSeek(MASTER_SYSTEM_PROMPT, userPrompt, apiKey, options);
+    }
+
+    const { generateWithGemini } = await import("./services/gemini");
+    const content = await generateWithGemini(
+      `${MASTER_SYSTEM_PROMPT}\n\n${userPrompt}\n\nReturn only valid JSON with no markdown.`,
+      apiKey
+    );
+    return parseModelJson(content);
+  });
 }
 
 const toPromptContext = (
@@ -1318,19 +1385,22 @@ async function generateAIContentForDynamicPages(businessData: any, userId: strin
       normalizedBusinessData?.additionalServices ||
       normalizedBusinessData?.services ||
       normalizedBusinessData?.heroService
-    ).slice(0, 20);
+    ).slice(0, 350);
 
     if (additionalServices.length > 0) {
-      console.log(`Generating AI content for ${additionalServices.length} service pages sequentially...`);
-      for (const service of additionalServices) {
+      console.log(`Generating AI content for ${additionalServices.length} service pages with concurrency...`);
+      const serviceResults = await pLimit(additionalServices, 3, async (service) => {
         try {
           const content = await generateServicePageContentWithProvider(service, normalizedBusinessData, apiKey, provider);
-          aiGeneratedContent.serviceContent.push(content);
+          // Add a 500ms delay to distribute requests and be friendly to rate limits
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          return content;
         } catch (e) {
           console.error(`AI generation failed for service: ${service}`, e);
-          aiGeneratedContent.serviceContent.push(null);
+          return null;
         }
-      }
+      });
+      aiGeneratedContent.serviceContent = serviceResults;
       console.log(`Generated AI content for ${aiGeneratedContent.serviceContent.length} service pages`);
     }
 
@@ -1339,19 +1409,22 @@ async function generateAIContentForDynamicPages(businessData: any, userId: strin
       normalizedBusinessData?.additionalLocations ||
       normalizedBusinessData?.serviceAreas ||
       normalizedBusinessData?.heroLocation
-    ).slice(0, 20);
+    ).slice(0, 350);
 
     if (additionalLocations.length > 0) {
-      console.log(`Generating AI content for ${additionalLocations.length} location pages sequentially...`);
-      for (const location of additionalLocations) {
+      console.log(`Generating AI content for ${additionalLocations.length} location pages with concurrency...`);
+      const locationResults = await pLimit(additionalLocations, 3, async (location) => {
         try {
           const content = await generateLocationPageContentWithProvider(location, normalizedBusinessData, apiKey, provider);
-          aiGeneratedContent.locationContent.push(content);
+          // Add a 500ms delay to distribute requests and be friendly to rate limits
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          return content;
         } catch (e) {
           console.error(`AI generation failed for location: ${location}`, e);
-          aiGeneratedContent.locationContent.push(null);
+          return null;
         }
-      }
+      });
+      aiGeneratedContent.locationContent = locationResults;
       console.log(`Generated AI content for ${aiGeneratedContent.locationContent.length} location pages`);
     }
   } catch (aiError) {
