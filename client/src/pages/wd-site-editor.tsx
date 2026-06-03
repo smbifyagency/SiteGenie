@@ -2104,6 +2104,13 @@ export default function WDSiteEditor() {
     });
   }
 
+  // ── Reset preview page if no longer generated (e.g. tier changed) ────
+  useEffect(() => {
+    if (Object.keys(generatedFiles).length > 0 && previewPage !== 'index.html' && !generatedFiles[previewPage]) {
+      setPreviewPage('index.html');
+    }
+  }, [generatedFiles, previewPage]);
+
   // ── Preview blob URL for iframe (blob avoids data: URL size limits with large images) ──
 
   useEffect(() => {
@@ -3868,7 +3875,9 @@ export default function WDSiteEditor() {
                 <option value="contact.html">Contact</option>
                 <option value="faq.html">FAQ</option>
                 <option value="gallery.html">Gallery</option>
-                <option value="blog.html">Blog</option>
+                {(siteData.publishTier === '2' || siteData.publishTier === '3' || !siteData.publishTier) && (
+                  <option value="blog.html">Blog</option>
+                )}
                 <option value="calculator.html">Calculators</option>
               </optgroup>
               <optgroup label="Calculator Pages">
@@ -3879,7 +3888,7 @@ export default function WDSiteEditor() {
                 <option value="calculators/dehumidifier-sizing.html">Dehumidifier Sizing</option>
                 <option value="calculators/restore-vs-replace.html">Restore vs Replace</option>
               </optgroup>
-              {(Array.isArray(siteData.services) && siteData.services.length > 0) && (
+              {(siteData.publishTier === '2' || siteData.publishTier === '3' || !siteData.publishTier) && Array.isArray(siteData.services) && siteData.services.length > 0 && (
                 <optgroup label="Service Pages">
                   {siteData.services.map(s => {
                     const slug = `services/${s.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${(siteData.city || "").toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
@@ -3887,7 +3896,7 @@ export default function WDSiteEditor() {
                   })}
                 </optgroup>
               )}
-              {(Array.isArray(siteData.serviceAreas) && siteData.serviceAreas.length > 0) && (
+              {(siteData.publishTier === '2' || siteData.publishTier === '3' || !siteData.publishTier) && Array.isArray(siteData.serviceAreas) && siteData.serviceAreas.length > 0 && (
                 <optgroup label="Location Pages">
                   {siteData.serviceAreas.map(l => {
                     const slug = `locations/${l.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
@@ -3895,7 +3904,7 @@ export default function WDSiteEditor() {
                   })}
                 </optgroup>
               )}
-              {(Array.isArray(siteData.blogPosts) && siteData.blogPosts.length > 0) && (
+              {(siteData.publishTier === '2' || siteData.publishTier === '3' || !siteData.publishTier) && Array.isArray(siteData.blogPosts) && siteData.blogPosts.length > 0 && (
                 <optgroup label="Blog Posts">
                   {siteData.blogPosts.map(p => {
                     const slug = `blog/${(p.slug || p.title).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
@@ -3903,7 +3912,7 @@ export default function WDSiteEditor() {
                   })}
                 </optgroup>
               )}
-              {(siteData as any).enableMatrixPages && Array.isArray(siteData.services) && siteData.services.length > 0 && Array.isArray(siteData.serviceAreas) && siteData.serviceAreas.length > 0 && (
+              {(siteData.publishTier === '3' || !siteData.publishTier) && (siteData as any).enableMatrixPages && Array.isArray(siteData.services) && siteData.services.length > 0 && Array.isArray(siteData.serviceAreas) && siteData.serviceAreas.length > 0 && (
                 <optgroup label="Matrix Pages (Service × City)">
                   {siteData.services.flatMap(s =>
                     siteData.serviceAreas.map(l => {

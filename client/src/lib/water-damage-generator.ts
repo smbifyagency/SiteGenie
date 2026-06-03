@@ -634,7 +634,7 @@ function generateNav(data: WDBusinessData, currentPath: string = ''): string {
               <li><a href="${prefix}calculators/restore-vs-replace.html">Restore vs Replace</a></li>
             </ul>
           </li>
-          ${data.blogPosts && data.blogPosts.length > 0 ? `<li><a href="${prefix}blog.html">Blog</a></li>` : ''}}
+          ${(tier === '2' || tier === '3') ? `<li><a href="${prefix}blog.html">Blog</a></li>` : ''}
           <li><a href="${prefix}contact.html">Contact</a></li>
         </ul>
       </nav>
@@ -2548,31 +2548,33 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
   const { secondaryColor, accentColor } = resolveTheme(data);
 
   // Fallback content if AI content not yet generated
-  const h1 = content?.hero?.h1 || LOREM_PLACEHOLDER.title;
-  const heroSub = content?.hero?.subheadline || data._heroSubheading || LOREM_PLACEHOLDER.subtitle;
-  const introH2 = content?.intro?.h2 || data._introH2 || LOREM_PLACEHOLDER.title;
-  const introParas = content?.intro?.paragraphs || data._introParas || loremParagraphs(3);
+  const h1 = content?.hero?.h1 || `${data.primaryKeyword} in ${data.city}, ${data.state}`;
+  const heroSub = content?.hero?.subheadline || data._heroSubheading || `Professional ${data.primaryKeyword.toLowerCase()} services in ${data.city} and surrounding areas. Available 24/7 for emergency dispatch.`;
+  const introH2 = content?.intro?.h2 || data._introH2 || `About ${data.businessName}`;
+  const introParas = content?.intro?.paragraphs || data._introParas || [`Professional ${data.primaryKeyword.toLowerCase()} in ${data.city}, ${data.state} and surrounding areas. We provide fast response, licensed technicians, and upfront pricing.`];
 
-  const servH2 = content?.servicesSection?.h2 || data._servicesH2 || LOREM_PLACEHOLDER.title;
-  const servIntro = content?.servicesSection?.intro || data._servicesIntro || LOREM_PLACEHOLDER.paragraph;
+  const servH2 = content?.servicesSection?.h2 || data._servicesH2 || `Our Professional Services`;
+  const servIntro = content?.servicesSection?.intro || data._servicesIntro || `We offer a complete range of ${data.primaryKeyword.toLowerCase()} and cleanup services to homeowners and businesses throughout ${data.city}, ${data.state}.`;
   const serviceCards = content?.servicesSection?.cards?.length
     ? content.servicesSection.cards
-    : (data.services?.length ? data.services : ['Lorem ipsum', 'Dolor sit amet', 'Consectetur adipiscing']).map(s => ({
-        service: s,
-        icon: 'tool',
-        h3: LOREM_PLACEHOLDER.title,
-        description: LOREM_PLACEHOLDER.paragraph,
-        internalLink: { anchor: LOREM_PLACEHOLDER.title, slug: `services/${slugify(s)}-${slugify(data.city)}.html` },
-      }));
+    : (data.services?.length ? data.services : ['Water Damage Restoration', 'Mold Remediation', 'Fire Damage Restoration']).map(s => {
+        const aiServiceDesc = (data as any)._aiServiceDescs?.[s] || data.serviceContent?.[s]?.overviewSection?.body?.[0];
+        const description = aiServiceDesc || `${s} services in ${data.city}, ${data.state} by the professionals at ${data.businessName}. We deliver reliable, high-quality solutions to meet your needs.`;
+        return {
+          service: s,
+          icon: s.toLowerCase().includes('mold') ? 'alert' : (s.toLowerCase().includes('fire') ? 'zap' : 'tool'),
+          h3: s,
+          description: description,
+          internalLink: { anchor: s, slug: `services/${slugify(s)}-${slugify(data.city)}.html` },
+        };
+      });
 
-  const whyH2 = content?.whyUsSection?.h2 || LOREM_PLACEHOLDER.title;
+  const whyH2 = content?.whyUsSection?.h2 || `Why Choose ${data.businessName}`;
   const defaultWhyPoints = data._whyUsPoints || [
-    { icon: 'alert', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { icon: 'certified', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { icon: 'home', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { icon: 'zap', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { icon: 'search', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { icon: 'clipboard', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { icon: 'alert', heading: '24/7 Emergency Service', body: `We are available around the clock to respond to ${data.primaryKeyword.toLowerCase()} emergencies in ${data.city}.` },
+    { icon: 'certified', heading: 'Licensed & Certified', body: 'All work is performed by trained and certified restoration professionals.' },
+    { icon: 'home', heading: 'Locally Owned & Operated', body: `Proudly serving the ${data.city} community with honest, reliable service.` },
+    { icon: 'zap', heading: 'Fast Response Times', body: 'Our crews arrive quickly to extract water and begin drying before mold can form.' }
   ];  // AI-generated why-choose-us overrides category defaults
   const aiWhyUs = (data as any)._aiWhyChooseUs;
   const whyPoints = content?.whyUsSection?.points || (Array.isArray(aiWhyUs) && aiWhyUs.length > 0
@@ -2583,38 +2585,38 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
       }))
     : defaultWhyPoints);
 
-  const processH2 = content?.processSection?.h2 || data._processH2 || LOREM_PLACEHOLDER.title;
+  const processH2 = content?.processSection?.h2 || data._processH2 || `Our Working Process`;
   const processSteps = content?.processSection?.steps || data._processSteps || [
-    { step: 1, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { step: 2, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { step: 3, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { step: 4, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { step: 5, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { step: 6, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { step: 7, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { step: 1, heading: 'Emergency Contact', body: `Call ${data.phone} for immediate assistance. Our dispatcher confirms your details and dispatches a crew.` },
+    { step: 2, heading: 'On-Site Inspection', body: `We assess the damage, determine the class and category of water loss, and create a custom plan.` },
+    { step: 3, heading: 'Water Extraction', body: 'We use industrial pumps and extractors to remove standing water quickly, preventing further damage.' },
+    { step: 4, heading: 'Structural Drying', body: 'We position high-velocity air movers and low-grain dehumidifiers to dry wet walls, ceilings, and floors.' },
+    { step: 5, heading: 'Monitoring', body: 'We monitor moisture levels daily to verify that target dry standards are met.' },
+    { step: 6, heading: 'Sanitization & Cleanup', body: 'We clean and sanitize all affected areas with EPA-registered antimicrobials to prevent mold.' },
+    { step: 7, heading: 'Reconstruction', body: 'We repair or rebuild damaged walls, flooring, and ceilings to restore your property to pre-loss condition.' },
   ];
 
-  const locH2 = content?.locationsSection?.h2 || LOREM_PLACEHOLDER.title;
-  const locBody = content?.locationsSection?.body || data._locationsBody || LOREM_PLACEHOLDER.paragraph;
+  const locH2 = content?.locationsSection?.h2 || `Areas We Serve`;
+  const locBody = content?.locationsSection?.body || data._locationsBody || `We proudly serve homeowners and businesses throughout ${data.city}, ${data.state} and the surrounding communities.`;
 
   const locationLinks = content?.locationsSection?.locationLinks?.length
     ? content.locationsSection.locationLinks
-    : (data.serviceAreas?.length ? data.serviceAreas : ['Lorem ipsum', 'Dolor sit amet']).map(l => ({ city: l, anchor: LOREM_PLACEHOLDER.title, slug: `locations/${slugify(l)}.html` }));
+    : (data.serviceAreas?.length ? data.serviceAreas : [data.city]).map(l => ({ city: l, anchor: l, slug: `locations/${slugify(l)}.html` }));
 
-  const faqH2 = content?.faqSection?.h2 || data._faqH2 || LOREM_PLACEHOLDER.title;
+  const faqH2 = content?.faqSection?.h2 || data._faqH2 || `Frequently Asked Questions`;
   const faqs = content?.faqSection?.faqs || data._faqs || [
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraphAlt },
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraphAlt },
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
+    { question: `How fast can you respond in ${data.city}?`, answer: `We are available 24/7 and typically arrive on-site within 60 minutes for water damage emergencies.` },
+    { question: `Does insurance cover water damage restoration?`, answer: 'Most standard homeowners policies cover sudden and accidental water damage. We work directly with your insurer.' },
+    { question: `How long does the structural drying process take?`, answer: 'Most drying projects take between 3 and 5 days, depending on the materials and extent of saturation.' },
+    { question: `What should I do before the restoration crew arrives?`, answer: 'If safe, shut off the main water valve, turn off electricity to wet areas, and move valuable items out of the water.' },
+    { question: `Are your technicians certified?`, answer: 'Yes, our restoration technicians are IICRC-certified and fully trained in modern drying protocols.' }
   ];
-  const ctaH2 = content?.finalCTA?.h2 || data._ctaHeadline || LOREM_PLACEHOLDER.title;
-  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || LOREM_PLACEHOLDER.paragraph;
-  const ctaBtn = content?.finalCTA?.ctaButton || data._ctaButton || LOREM_PLACEHOLDER.title;
+  const ctaH2 = content?.finalCTA?.h2 || data._ctaHeadline || `Ready to Get Started?`;
+  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `Contact ${data.businessName} today for professional, certified services. Available 24/7 for emergencies.`;
+  const ctaBtn = content?.finalCTA?.ctaButton || data._ctaButton || `Call Now: ${data.phone}`;
 
-  const seoH2 = content?.seoFootnote?.h2 || LOREM_PLACEHOLDER.title;
-  const seoBody = content?.seoFootnote?.body || data._seoBody || LOREM_PLACEHOLDER.paragraph;
+  const seoH2 = content?.seoFootnote?.h2 || `Your Trusted Partner for ${data.primaryKeyword} in ${data.city}, ${data.state}`;
+  const seoBody = content?.seoFootnote?.body || data._seoBody || `We provide high-quality ${data.primaryKeyword.toLowerCase()} and structural drying services to protect your property. Contact us today.`;
 
   const tier = data.publishTier || '3';
   const showServicesLocations = tier === '2' || tier === '3';
@@ -2922,34 +2924,36 @@ export function generateServicePage(
   const prefix = '../';
   const { secondaryColor, accentColor } = resolveTheme(data);
 
-  const h1 = content?.hero?.h1 || LOREM_PLACEHOLDER.title;
-  const heroSub = content?.hero?.subheadline || LOREM_PLACEHOLDER.subtitle;
-  const trustBadges = content?.hero?.trustBadges || data._trustBadges || ['Lorem ipsum', 'Lorem ipsum', 'Lorem ipsum', 'Lorem ipsum'];
+  const h1 = content?.hero?.h1 || `${service} in ${data.city}, ${data.state}`;
+  const heroSub = content?.hero?.subheadline || `Professional ${service.toLowerCase()} services for homeowners and businesses in ${data.city} and surrounding areas. Call now for a free estimate.`;
+  const trustBadges = content?.hero?.trustBadges || data._trustBadges || ['Licensed & Insured', 'Free Estimates', 'Available 24/7', 'Certified Technicians'];
 
-  const overviewH2 = content?.overviewSection?.h2 || LOREM_PLACEHOLDER.title;
+  const overviewH2 = content?.overviewSection?.h2 || `Expert ${service} in ${data.city}`;
   // Use AI-generated service description if available for this service
   const aiServiceDesc = (data as any)._aiServiceDescs?.[service];
   const overviewParas = content?.overviewSection?.body || (aiServiceDesc ? [
     aiServiceDesc,
-    LOREM_PLACEHOLDER.paragraph,
-    LOREM_PLACEHOLDER.paragraphAlt,
+    `Our crew arrives fully equipped to handle ${service.toLowerCase()} quickly and professionally. We prioritize minimal disruption and thorough drying.`,
+    `We work with you and your insurance provider to ensure the cleanup and restoration process is documented correctly. Contact ${data.businessName} today.`
   ] : [
-    LOREM_PLACEHOLDER.paragraph,
-    LOREM_PLACEHOLDER.paragraphAlt,
-    LOREM_PLACEHOLDER.paragraph,
+    `When you need professional ${service.toLowerCase()} in ${data.city}, ${data.state}, the team at ${data.businessName} is ready to help. We provide prompt response, certified technicians, and upfront estimates before starting any work.`,
+    `Our process is designed to handle all aspects of ${service.toLowerCase()} from initial water extraction through structural drying and final cleanup. We use advanced moisture-detection tools to ensure no hidden moisture is left behind.`,
+    `We understand that water damage is stressful. That's why we keep you informed at every step of the process and work directly with all major insurance carriers when applicable.`
   ]);
 
-  const processH2 = content?.processSection?.h2 || LOREM_PLACEHOLDER.title;
-  const processIntro = content?.processSection?.intro || LOREM_PLACEHOLDER.paragraph;
+  const processH2 = content?.processSection?.h2 || `Our ${service} Process`;
+  const processIntro = content?.processSection?.intro || `We follow a detailed, step-by-step process to ensure your ${service.toLowerCase()} is completed to the highest standards.`;
   const processSteps = content?.processSection?.steps || data._processSteps || [
-    { step: 1, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { step: 2, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { step: 3, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { step: 4, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { step: 5, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { step: 1, heading: 'Emergency Contact', body: `Call ${data.phone} for immediate assistance. Our dispatcher confirms your details and dispatches a crew.` },
+    { step: 2, heading: 'On-Site Inspection', body: `We assess the damage, determine the class and category of water loss, and create a custom plan.` },
+    { step: 3, heading: 'Water Extraction', body: 'We use industrial pumps and extractors to remove standing water quickly, preventing further damage.' },
+    { step: 4, heading: 'Structural Drying', body: 'We position high-velocity air movers and low-grain dehumidifiers to dry wet walls, ceilings, and floors.' },
+    { step: 5, heading: 'Monitoring', body: 'We monitor moisture levels daily to verify that target dry standards are met.' },
+    { step: 6, heading: 'Sanitization & Cleanup', body: 'We clean and sanitize all affected areas with EPA-registered antimicrobials to prevent mold.' },
+    { step: 7, heading: 'Reconstruction', body: 'We repair or rebuild damaged walls, flooring, and ceilings to restore your property to pre-loss condition.' },
   ];
 
-  const benefitsH2 = content?.benefitsSection?.h2 || data._servicePageBenefitsH2 || LOREM_PLACEHOLDER.title;
+  const benefitsH2 = content?.benefitsSection?.h2 || data._servicePageBenefitsH2 || `Why Choose Us for ${service}`;
   const aiWhyChooseUsPoints = Array.isArray((data as any)._aiWhyChooseUs) ? (data as any)._aiWhyChooseUs : [];
   const benefitPoints = content?.benefitsSection?.points || (aiWhyChooseUsPoints.length > 0
     ? aiWhyChooseUsPoints.slice(0, 6).map((pt: any) => ({
@@ -2957,46 +2961,46 @@ export function generateServicePage(
         body: pt.body,
       }))
     : null) || data._servicePageBenefits || [
-    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { heading: 'Fast Response', body: `Our team is available 24/7 to respond to ${service.toLowerCase()} emergencies in ${data.city}.` },
+    { heading: 'Certified Technicians', body: 'All restoration work is carried out by trained and licensed professionals.' },
+    { heading: 'Insurance Direct Billing', body: 'We work with all major insurance carriers and provide detailed documentation for claims.' },
+    { heading: 'Advanced Equipment', body: 'We use industrial water extraction and structural drying equipment for the best results.' },
+    { heading: 'Upfront Pricing', body: 'Clear, itemized estimates with no hidden fees before we begin any work.' },
+    { heading: 'Complete Restoration', body: 'From initial water extraction to final reconstruction, we handle it all.' },
   ];
 
-  const warningsH2 = content?.warningSignsSection?.h2 || LOREM_PLACEHOLDER.title;
-  const warningsIntro = content?.warningSignsSection?.intro || LOREM_PLACEHOLDER.paragraph;
+  const warningsH2 = content?.warningSignsSection?.h2 || `Signs You Need Professional ${service}`;
+  const warningsIntro = content?.warningSignsSection?.intro || `If you notice any of these warning signs in your property, contact a professional immediately to prevent further structural damage or mold growth.`;
   const warningSigns = content?.warningSignsSection?.signs || [
-    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
-    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
-    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { sign: 'Visible Standing Water', body: 'Standing water can quickly seep into subflooring and drywall, causing structural weakness.' },
+    { sign: 'Musty Odors', body: 'A persistent musty smell is a strong indicator of hidden moisture accumulation and potential mold growth.' },
+    { sign: 'Peeling Paint or Wallpaper', body: 'Moisture inside wall cavities causes paint and wallpaper to bubble, crack, or peel away.' },
+    { sign: 'Discolored Drywall', body: 'Dark or yellowish stains on walls and ceilings indicate active water leaks or dampness.' },
+    { sign: 'Warped Flooring', body: 'Wood, laminate, or tile floors that buckle, warp, or lift are severely affected by underlying moisture.' },
+    { sign: 'Increased Humidity', body: 'Excessive indoor humidity or condensation on windows suggests unresolved moisture issues.' },
   ];
 
-  const locationClusterH2 = content?.locationClusterSection?.h2 || LOREM_PLACEHOLDER.title;
-  const locationClusterIntro = content?.locationClusterSection?.intro || LOREM_PLACEHOLDER.paragraph;
+  const locationClusterH2 = content?.locationClusterSection?.h2 || `Serving ${data.city} and Surrounding Areas`;
+  const locationClusterIntro = content?.locationClusterSection?.intro || `We provide prompt ${service.toLowerCase()} services to homeowners and businesses throughout the following communities:`;
   const locationCards = content?.locationClusterSection?.locationCards?.length
     ? content.locationClusterSection.locationCards
-    : (data.serviceAreas?.length ? data.serviceAreas : ['Lorem ipsum', 'Dolor sit amet']).map(loc => ({
+    : (data.serviceAreas?.length ? data.serviceAreas : [data.city]).map(loc => ({
         city: loc,
-        anchor: LOREM_PLACEHOLDER.title,
+        anchor: `${service} in ${loc}`,
         slug: `../locations/${slugify(loc)}.html`,
-        teaser: LOREM_PLACEHOLDER.paragraph,
+        teaser: `Professional ${service.toLowerCase()} services available for homes and businesses in ${loc}.`,
       }));
 
-  const faqH2 = content?.faqSection?.h2 || LOREM_PLACEHOLDER.title;
+  const faqH2 = content?.faqSection?.h2 || `Frequently Asked Questions About ${service}`;
   const faqs = content?.faqSection?.faqs || data._faqs || [
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraphAlt },
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraphAlt },
-    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
+    { question: `Do you provide ${service.toLowerCase()} near me in ${data.city}?`, answer: `Yes, ${data.businessName} serves all of ${data.city} and surrounding areas with professional ${service.toLowerCase()} services.` },
+    { question: `How long does the ${service.toLowerCase()} process take?`, answer: `Typically, drying and mitigation take 3 to 5 days. Reconstruction or repairs may take longer depending on the extent of the damage.` },
+    { question: `Does insurance cover ${service.toLowerCase()}?`, answer: `Most homeowner's policies cover sudden and accidental damage. We document everything to help you file a successful claim.` },
+    { question: `Are your technicians certified for ${service.toLowerCase()}?`, answer: `Yes, all our technicians are IICRC-certified and trained in the latest restoration and drying techniques.` },
+    { question: `What should I do first when I detect water damage?`, answer: `Shut off the main water source if safe, turn off power to the affected area, and call a professional restoration team immediately.` },
   ];
 
-  const crossH2 = content?.crossLinkSection?.h2 || LOREM_PLACEHOLDER.title;
+  const crossH2 = content?.crossLinkSection?.h2 || `Other Professional Services We Offer`;
   const crossLinks = content?.crossLinkSection?.links?.length
     ? content.crossLinkSection.links
     : data.services
@@ -3004,13 +3008,13 @@ export function generateServicePage(
         .slice(0, 4)
         .map(s => ({
           service: s,
-          anchor: LOREM_PLACEHOLDER.title,
+          anchor: s,
           slug: `../services/${slugify(s)}-${citySlug}.html`,
-          reason: LOREM_PLACEHOLDER.paragraph,
+          reason: (data as any)._aiServiceDescs?.[s] || `Professional ${s.toLowerCase()} services to safeguard your property and restore your space.`,
         }));
 
-  const ctaH2 = content?.finalCTA?.h2 || LOREM_PLACEHOLDER.title;
-  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || LOREM_PLACEHOLDER.paragraph;
+  const ctaH2 = content?.finalCTA?.h2 || `Need Professional ${service} in ${data.city}?`;
+  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `Contact ${data.businessName} today for a free on-site assessment and clear written estimate. Available 24/7 for emergencies.`;
 
   // Build HTML sections
   const overviewHTML = overviewParas.map(p => `<p>${p}</p>`).join('');
@@ -5340,10 +5344,11 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
   const today = new Date().toISOString().split('T')[0];
   const tier = data.publishTier || '3';
   const showServicesLocations = tier === '2' || tier === '3';
+  const showBlog = tier === '2' || tier === '3';
 
-  const sitemapBlogPosts = (data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data);
+  const sitemapBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
   const staticPagesList = ['about', 'contact', 'faq', 'calculator', 'gallery', 'privacy', 'terms'];
-  if (sitemapBlogPosts.length > 0) staticPagesList.push('blog');
+  if (showBlog && sitemapBlogPosts.length > 0) staticPagesList.push('blog');
 
   const staticPages = staticPagesList
     .map(page => `  <url>
@@ -5453,7 +5458,8 @@ export function generateLLMsTxt(data: WDBusinessData, domain: string): string {
   const base = getSiteUrl(data, domain);
   const tier = data.publishTier || '3';
   const showServicesLocations = tier === '2' || tier === '3';
-  const llmBlogPosts = (data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data);
+  const showBlog = tier === '2' || tier === '3';
+  const llmBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
   const hasBlog = llmBlogPosts.length > 0;
 
   const servicesList = showServicesLocations ? data.services.map(s => `- [${s}](${base}/services/${slugify(s)}-${slugify(data.city)})`).join('\n') : '';
@@ -5501,7 +5507,8 @@ export function generateHTMLSitemap(data: WDBusinessData, domain: string): strin
   const base = getSiteUrl(data, domain);
   const tier = data.publishTier || '3';
   const showServicesLocations = tier === '2' || tier === '3';
-  const htmlBlogPosts = (data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data);
+  const showBlog = tier === '2' || tier === '3';
+  const htmlBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
   const hasBlog = htmlBlogPosts.length > 0;
   const fullTheme = resolveTheme(data);
   const fontUrl = FONT_URLS[fullTheme.fontFamily];
@@ -5643,18 +5650,20 @@ export function generateWaterDamageWebsite(
     files[`calculators/${CALCULATORS[i].slug}.html`] = generateSingleCalculatorPage(data, i, domain);
   }
   files['gallery.html']    = generateGalleryPage(data, domain);
-  // Blog pages — always generate blog.html; individual posts if available
-  files['blog.html'] = generateBlogArchivePage(data, domain);
-  const displayPosts = data.blogPosts && data.blogPosts.length > 0 ? data.blogPosts : getDefaultBlogPosts(data);
-  for (const post of displayPosts) {
-    const filename = `blog/${slugify(post.slug || post.title)}.html`;
-    files[filename] = generateBlogPostPage(data, post, domain);
+  const tier = data.publishTier || '3';
+
+  // Blog pages — generate blog.html and individual posts only for Tier 2 and Tier 3
+  if (tier === '2' || tier === '3') {
+    files['blog.html'] = generateBlogArchivePage(data, domain);
+    const displayPosts = data.blogPosts && data.blogPosts.length > 0 ? data.blogPosts : getDefaultBlogPosts(data);
+    for (const post of displayPosts) {
+      const filename = `blog/${slugify(post.slug || post.title)}.html`;
+      files[filename] = generateBlogPostPage(data, post, domain);
+    }
   }
 
   files['privacy.html']    = generatePrivacyPage(data, domain);
   files['terms.html']      = generateTermsPage(data, domain);
-
-  const tier = data.publishTier || '3';
 
   // Service pages
   if (tier === '2' || tier === '3') {
