@@ -144,6 +144,20 @@ export interface WDGalleryImage {
   caption?: string;
 }
 
+const LOREM_PLACEHOLDER = {
+  title: 'Lorem ipsum dolor sit amet',
+  subtitle: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
+  paragraph:
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+  paragraphAlt:
+    'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
+};
+
+const loremParagraphs = (count: number): string[] =>
+  Array.from({ length: count }, (_, i) =>
+    i % 2 === 0 ? LOREM_PLACEHOLDER.paragraph : LOREM_PLACEHOLDER.paragraphAlt
+  );
+
 export interface WDBlogPost {
   slug: string;
   title: string;
@@ -2491,37 +2505,32 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
   const { secondaryColor, accentColor } = resolveTheme(data);
 
   // Fallback content if AI content not yet generated
-  const h1 = content?.hero?.h1 || `${data.primaryKeyword} in ${data.city}, ${data.state}`;
-  const heroSub = content?.hero?.subheadline || data._heroSubheading || `Trusted ${data.primaryKeyword.toLowerCase()} specialists serving ${data.city} and surrounding areas. We respond fast to protect your property.`;
-  const introH2 = content?.intro?.h2 || data._introH2 || `${kwBase(data.primaryKeyword)} Services in ${data.city}`;
-  const introParas = content?.intro?.paragraphs || data._introParas || [
-    `When a ${data.primaryKeyword.toLowerCase()} emergency hits your ${data.city} home or business, every minute matters. Damage spreads fast — affecting walls, floors, and structural materials before you realize the full scope. ${data.businessName} provides rapid-response ${data.primaryKeyword.toLowerCase()} to limit destruction and get your property back to normal.`,
-    `Our certified technicians arrive equipped with industrial-grade water extraction equipment, structural drying systems, and moisture detection tools. We handle everything from the initial assessment to the final walkthrough, keeping you informed at every step.`,
-    `${data.businessName} has built a reputation throughout ${data.city} for honest assessments, thorough work, and professional service. We work directly with most insurance companies and can help you document the damage for your claim from day one.`,
-  ];
+  const h1 = content?.hero?.h1 || LOREM_PLACEHOLDER.title;
+  const heroSub = content?.hero?.subheadline || data._heroSubheading || LOREM_PLACEHOLDER.subtitle;
+  const introH2 = content?.intro?.h2 || data._introH2 || LOREM_PLACEHOLDER.title;
+  const introParas = content?.intro?.paragraphs || data._introParas || loremParagraphs(3);
 
-  const servH2 = content?.servicesSection?.h2 || data._servicesH2 || `Our ${kwBase(data.primaryKeyword)} Services in ${data.city}`;
-  const servIntro = content?.servicesSection?.intro || data._servicesIntro || `We offer a full range of professional ${kwBase(data.primaryKeyword).toLowerCase()} services to homeowners and businesses throughout ${data.city}.`;
+  const servH2 = content?.servicesSection?.h2 || data._servicesH2 || LOREM_PLACEHOLDER.title;
+  const servIntro = content?.servicesSection?.intro || data._servicesIntro || LOREM_PLACEHOLDER.paragraph;
   const serviceCards = content?.servicesSection?.cards?.length
     ? content.servicesSection.cards
-    : data.services.map(s => ({
+    : (data.services?.length ? data.services : ['Lorem ipsum', 'Dolor sit amet', 'Consectetur adipiscing']).map(s => ({
         service: s,
         icon: 'tool',
-        h3: s,
-        description: `Professional ${kwBase(s).toLowerCase()} services for ${data.city} properties. Contact us for a free assessment.`,
-        internalLink: { anchor: `Learn about ${s}`, slug: `services/${slugify(s)}-${slugify(data.city)}.html` },
+        h3: LOREM_PLACEHOLDER.title,
+        description: LOREM_PLACEHOLDER.paragraph,
+        internalLink: { anchor: LOREM_PLACEHOLDER.title, slug: `services/${slugify(s)}-${slugify(data.city)}.html` },
       }));
 
-  const whyH2 = content?.whyUsSection?.h2 || `Why ${data.city} Chooses ${data.businessName}`;
+  const whyH2 = content?.whyUsSection?.h2 || LOREM_PLACEHOLDER.title;
   const defaultWhyPoints = data._whyUsPoints || [
-    { icon: 'alert', heading: '24/7 Emergency Response', body: `${data.primaryKeyword} emergencies don't follow business hours. Our ${data.city} team is available around the clock, every day of the year.` },
-    { icon: 'certified', heading: 'Certified Technicians', body: 'Our specialists hold industry certifications and follow best-practice protocols for every job.' },
-    { icon: 'home', heading: 'Insurance Claim Help', body: 'We work directly with your insurance adjuster and provide thorough documentation to support your claim.' },
-    { icon: 'zap', heading: 'Fast Response', body: `We dispatch quickly — because when you need ${data.primaryKeyword.toLowerCase()}, every minute counts.` },
-    { icon: 'search', heading: 'Thorough Assessment', body: 'We inspect fully and document everything so you understand exactly what needs to be done and why.' },
-    { icon: 'clipboard', heading: 'Transparent Pricing', body: 'No surprise charges. We provide written estimates and explain every step before work begins.' },
-  ];
-  // AI-generated why-choose-us overrides category defaults
+    { icon: 'alert', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { icon: 'certified', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { icon: 'home', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { icon: 'zap', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { icon: 'search', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { icon: 'clipboard', heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+  ];  // AI-generated why-choose-us overrides category defaults
   const aiWhyUs = (data as any)._aiWhyChooseUs;
   const whyPoints = content?.whyUsSection?.points || (Array.isArray(aiWhyUs) && aiWhyUs.length > 0
     ? aiWhyUs.map((pt: any, i: number) => ({
@@ -2531,39 +2540,38 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
       }))
     : defaultWhyPoints);
 
-  const processH2 = content?.processSection?.h2 || data._processH2 || `Our ${data.primaryKeyword} Process in ${data.city}`;
+  const processH2 = content?.processSection?.h2 || data._processH2 || LOREM_PLACEHOLDER.title;
   const processSteps = content?.processSection?.steps || data._processSteps || [
-    { step: 1, heading: 'Emergency Contact', body: `Call us anytime. Our ${data.city} dispatcher will assess your situation and dispatch a team immediately.` },
-    { step: 2, heading: 'Inspection & Assessment', body: 'Technicians identify the water source, categorize the damage, and document affected areas with photos and moisture readings.' },
-    { step: 3, heading: 'Water Extraction', body: 'Truck-mounted and portable extractors remove standing water from floors, carpets, and building cavities.' },
-    { step: 4, heading: 'Structural Drying', body: 'Industrial air movers and dehumidifiers dry structural materials to IICRC target moisture levels.' },
-    { step: 5, heading: 'Mold Prevention', body: 'Antimicrobial treatments are applied to inhibit mold growth in affected areas.' },
-    { step: 6, heading: 'Monitoring', body: 'We return daily to check moisture levels and adjust equipment until the structure is dry.' },
-    { step: 7, heading: 'Restoration', body: 'Once dry, we restore or repair damaged materials — drywall, flooring, cabinets — returning your property to pre-loss condition.' },
+    { step: 1, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { step: 2, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { step: 3, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { step: 4, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { step: 5, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { step: 6, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { step: 7, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
   ];
 
-  const locH2 = content?.locationsSection?.h2 || `Serving ${data.city} and Surrounding Communities`;
-  const locBody = content?.locationsSection?.body || data._locationsBody || `${data.businessName} provides professional ${kwBase(data.primaryKeyword).toLowerCase()} services across ${data.city} and the surrounding region. Our crews are strategically positioned to reach most areas quickly. Whether you are in the heart of ${data.city} or a neighboring suburb, we are your local ${data.primaryKeyword.toLowerCase()} team.`;
+  const locH2 = content?.locationsSection?.h2 || LOREM_PLACEHOLDER.title;
+  const locBody = content?.locationsSection?.body || data._locationsBody || LOREM_PLACEHOLDER.paragraph;
 
   const locationLinks = content?.locationsSection?.locationLinks?.length
     ? content.locationsSection.locationLinks
-    : data.serviceAreas.map(l => ({ city: l, anchor: l, slug: `locations/${slugify(l)}.html` }));
+    : (data.serviceAreas?.length ? data.serviceAreas : ['Lorem ipsum', 'Dolor sit amet']).map(l => ({ city: l, anchor: LOREM_PLACEHOLDER.title, slug: `locations/${slugify(l)}.html` }));
 
-  const faqH2 = content?.faqSection?.h2 || data._faqH2 || `Frequently Asked Questions About ${data.primaryKeyword} in ${data.city}`;
+  const faqH2 = content?.faqSection?.h2 || data._faqH2 || LOREM_PLACEHOLDER.title;
   const faqs = content?.faqSection?.faqs || data._faqs || [
-    { question: `How quickly can you respond in ${data.city}?`, answer: `Our ${data.city} team is available 24 hours a day, 7 days a week. We typically arrive quickly after your call, depending on your location.` },
-    { question: `What areas in ${data.city} do you serve?`, answer: `We serve all areas within ${data.city} as well as surrounding communities including ${data.serviceAreas.slice(0, 5).join(', ')}. Call us to confirm coverage in your specific neighborhood.` },
-    { question: `Are you licensed and insured?`, answer: `Yes. ${data.businessName} is fully licensed and insured. We follow all local regulations and industry standards on every job.` },
-    { question: `Do you offer free estimates?`, answer: `Yes. We provide free on-site assessments and written estimates before any work begins. There are no surprise charges.` },
-    { question: `What payment methods do you accept?`, answer: `We accept all major credit cards, cash, and checks. Financing options may be available — call us for details.` },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraphAlt },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraphAlt },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
   ];
+  const ctaH2 = content?.finalCTA?.h2 || data._ctaHeadline || LOREM_PLACEHOLDER.title;
+  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || LOREM_PLACEHOLDER.paragraph;
+  const ctaBtn = content?.finalCTA?.ctaButton || data._ctaButton || LOREM_PLACEHOLDER.title;
 
-  const ctaH2 = content?.finalCTA?.h2 || data._ctaHeadline || `Need ${data.primaryKeyword} in ${data.city}? Call Now`;
-  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `Don't wait. Contact ${data.businessName} now for immediate assistance. We are available 24/7 for emergency response throughout ${data.city}.`;
-  const ctaBtn = content?.finalCTA?.ctaButton || data._ctaButton || 'Call for Emergency Help';
-
-  const seoH2 = content?.seoFootnote?.h2 || `${data.primaryKeyword} - ${data.city}, ${data.state}`;
-  const seoBody = content?.seoFootnote?.body || data._seoBody || `${data.businessName} is ${data.city}'s trusted ${data.primaryKeyword.toLowerCase()} company. We provide full-service ${kwBase(data.primaryKeyword).toLowerCase()} solutions to homeowners and businesses throughout ${data.city} and the surrounding region. Our licensed, insured team delivers fast, professional results on every job.`;
+  const seoH2 = content?.seoFootnote?.h2 || LOREM_PLACEHOLDER.title;
+  const seoBody = content?.seoFootnote?.body || data._seoBody || LOREM_PLACEHOLDER.paragraph;
 
   const servicesCardsHTML = serviceCards.map(card => `
       <article class="service-card" data-placeholder-section="service-${slugify(card.service)}">
@@ -2860,34 +2868,34 @@ export function generateServicePage(
   const prefix = '../';
   const { secondaryColor, accentColor } = resolveTheme(data);
 
-  const h1 = content?.hero?.h1 || `${service} in ${data.city}, ${data.state}`;
-  const heroSub = content?.hero?.subheadline || `Professional ${kwBase(service).toLowerCase()} services for homeowners and businesses in ${data.city}. Fast response, certified technicians.`;
-  const trustBadges = content?.hero?.trustBadges || data._trustBadges || ['Licensed & Insured', '24/7 Available', 'Free Estimates', 'Upfront Pricing'];
+  const h1 = content?.hero?.h1 || LOREM_PLACEHOLDER.title;
+  const heroSub = content?.hero?.subheadline || LOREM_PLACEHOLDER.subtitle;
+  const trustBadges = content?.hero?.trustBadges || data._trustBadges || ['Lorem ipsum', 'Lorem ipsum', 'Lorem ipsum', 'Lorem ipsum'];
 
-  const overviewH2 = content?.overviewSection?.h2 || `Professional ${service} in ${data.city} — What to Expect`;
+  const overviewH2 = content?.overviewSection?.h2 || LOREM_PLACEHOLDER.title;
   // Use AI-generated service description if available for this service
   const aiServiceDesc = (data as any)._aiServiceDescs?.[service];
   const overviewParas = content?.overviewSection?.body || (aiServiceDesc ? [
     aiServiceDesc,
-    `Our ${data.city} technicians diagnose the full scope of the problem before any work begins, giving you a clear picture and an honest written estimate. We address root causes, not just visible symptoms, so the problem doesn't come back.`,
-    `${data.businessName} has built its reputation throughout ${data.city} on transparent pricing, quality workmanship, and results that last. When you need ${service.toLowerCase()} done right, one call is all it takes.`,
+    LOREM_PLACEHOLDER.paragraph,
+    LOREM_PLACEHOLDER.paragraphAlt,
   ] : [
-    `${service} in ${data.city} requires licensed professionals with the right tools, training, and local experience. Whether it's an emergency or a planned project, ${data.businessName} responds fast and handles the job completely — protecting your property and your investment.`,
-    `Our ${data.city} technicians diagnose the full scope of the problem before any work begins, giving you a clear picture and an honest written estimate. We address root causes, not just visible symptoms, so the problem doesn't come back.`,
-    `${data.businessName} has built its reputation throughout ${data.city} on transparent pricing, quality workmanship, and results that last. When you need ${service.toLowerCase()} done right, one call is all it takes.`,
+    LOREM_PLACEHOLDER.paragraph,
+    LOREM_PLACEHOLDER.paragraphAlt,
+    LOREM_PLACEHOLDER.paragraph,
   ]);
 
-  const processH2 = content?.processSection?.h2 || `Our ${service} Process in ${data.city}`;
-  const processIntro = content?.processSection?.intro || `Every ${service.toLowerCase()} project follows a systematic process to ensure thorough results.`;
+  const processH2 = content?.processSection?.h2 || LOREM_PLACEHOLDER.title;
+  const processIntro = content?.processSection?.intro || LOREM_PLACEHOLDER.paragraph;
   const processSteps = content?.processSection?.steps || data._processSteps || [
-    { step: 1, heading: 'Contact & Dispatch', body: `When you call ${data.phone}, our dispatcher immediately routes the nearest available ${data.city} crew to your location.` },
-    { step: 2, heading: 'Assessment', body: 'Our technicians inspect the situation thoroughly, document all findings, and explain exactly what needs to be done before any work begins.' },
-    { step: 3, heading: 'Upfront Estimate', body: 'You receive a clear written estimate with no hidden fees. We never start work without your approval.' },
-    { step: 4, heading: 'Professional Service', body: `We complete the ${service.toLowerCase()} work using quality materials and proven techniques, following all applicable codes and standards.` },
-    { step: 5, heading: 'Final Walkthrough', body: 'We inspect the completed work with you, answer any questions, and ensure you are fully satisfied before we leave.' },
+    { step: 1, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { step: 2, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { step: 3, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { step: 4, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { step: 5, heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
   ];
 
-  const benefitsH2 = content?.benefitsSection?.h2 || data._servicePageBenefitsH2 || `Why Hire ${data.businessName} for ${service} in ${data.city}`;
+  const benefitsH2 = content?.benefitsSection?.h2 || data._servicePageBenefitsH2 || LOREM_PLACEHOLDER.title;
   const aiWhyChooseUsPoints = Array.isArray((data as any)._aiWhyChooseUs) ? (data as any)._aiWhyChooseUs : [];
   const benefitPoints = content?.benefitsSection?.points || (aiWhyChooseUsPoints.length > 0
     ? aiWhyChooseUsPoints.slice(0, 6).map((pt: any) => ({
@@ -2895,46 +2903,46 @@ export function generateServicePage(
         body: pt.body,
       }))
     : null) || data._servicePageBenefits || [
-    { heading: `Licensed ${data.primaryKeyword} Professionals`, body: `Every technician is properly licensed and insured for ${service.toLowerCase()} work in ${data.state} — protecting you and your property on every job.` },
-    { heading: 'Correct First Time', body: `We diagnose the root cause and fix it properly, so you're not calling us back for the same problem. Quality workmanship means long-lasting results.` },
-    { heading: 'Upfront Written Estimates', body: `No surprise bills. You receive a clear, itemized written estimate before any work begins — and we never start without your approval.` },
-    { heading: 'Protects Property Value', body: `Professionally completed and documented ${service.toLowerCase()} protects your ${data.city} property value and provides records that matter for insurance and resale.` },
-    { heading: 'Faster Than DIY', body: `Our team arrives with the right tools and experience to complete ${service.toLowerCase()} faster and more thoroughly than DIY — with no risk of making the problem worse.` },
-    { heading: '100% Satisfaction Guarantee', body: `We stand behind every job. If something isn't right after we leave, call us and we'll make it right — no excuses.` },
+    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { heading: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
   ];
 
-  const warningsH2 = content?.warningSignsSection?.h2 || `Signs You Need ${service} in ${data.city} Right Away`;
-  const warningsIntro = content?.warningSignsSection?.intro || `Do not wait if you notice any of the following signs in your ${data.city} property. Early action saves time, money, and prevents bigger problems.`;
+  const warningsH2 = content?.warningSignsSection?.h2 || LOREM_PLACEHOLDER.title;
+  const warningsIntro = content?.warningSignsSection?.intro || LOREM_PLACEHOLDER.paragraph;
   const warningSigns = content?.warningSignsSection?.signs || [
-    { sign: 'Visible damage or deterioration', body: 'Any obvious damage should be addressed promptly to prevent it from worsening and becoming more expensive to fix.' },
-    { sign: 'Unusual odors or sounds', body: 'Strange odors or sounds often indicate a problem that is not immediately visible but needs professional attention.' },
-    { sign: 'Rising utility bills', body: 'An unexplained increase in energy or water bills can be a sign of an underlying problem that needs to be diagnosed.' },
-    { sign: 'Recurring issues', body: 'If the same problem keeps coming back, a professional assessment will identify the root cause and provide a lasting fix.' },
-    { sign: 'Property age', body: 'Older properties often have systems and materials that need professional inspection and updating to remain safe and efficient.' },
-    { sign: 'Post-storm or emergency event', body: 'After a major storm, flood, or fire event, a professional inspection helps identify damage that may not be immediately visible.' },
+    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
+    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraph },
+    { sign: LOREM_PLACEHOLDER.title, body: LOREM_PLACEHOLDER.paragraphAlt },
   ];
 
-  const locationClusterH2 = content?.locationClusterSection?.h2 || `${service} Near You — Areas We Serve`;
-  const locationClusterIntro = content?.locationClusterSection?.intro || `${data.businessName} provides ${service.toLowerCase()} throughout ${data.city} and the surrounding region.`;
+  const locationClusterH2 = content?.locationClusterSection?.h2 || LOREM_PLACEHOLDER.title;
+  const locationClusterIntro = content?.locationClusterSection?.intro || LOREM_PLACEHOLDER.paragraph;
   const locationCards = content?.locationClusterSection?.locationCards?.length
     ? content.locationClusterSection.locationCards
-    : data.serviceAreas.map(loc => ({
+    : (data.serviceAreas?.length ? data.serviceAreas : ['Lorem ipsum', 'Dolor sit amet']).map(loc => ({
         city: loc,
-        anchor: `${service} in ${loc}`,
+        anchor: LOREM_PLACEHOLDER.title,
         slug: `../locations/${slugify(loc)}.html`,
-        teaser: `Serving ${loc} homeowners and businesses with professional ${service.toLowerCase()}.`,
+        teaser: LOREM_PLACEHOLDER.paragraph,
       }));
 
-  const faqH2 = content?.faqSection?.h2 || `${service} in ${data.city} — Frequently Asked Questions`;
+  const faqH2 = content?.faqSection?.h2 || LOREM_PLACEHOLDER.title;
   const faqs = content?.faqSection?.faqs || data._faqs || [
-    { question: `How much does ${service.toLowerCase()} cost in ${data.city}?`, answer: `The cost of ${service.toLowerCase()} depends on the scope of the work needed. We provide free on-site assessments and written estimates before any work begins — no surprises. Call us for an accurate quote for your specific situation.` },
-    { question: `How long does ${service.toLowerCase()} take?`, answer: `Timelines vary depending on the size and complexity of the job. We will give you a realistic timeline during our initial assessment and keep you updated throughout the project.` },
-    { question: `Can I do ${service.toLowerCase()} myself?`, answer: `Some minor issues can be addressed by homeowners, but most ${service.toLowerCase()} work requires professional tools, training, and experience to be done safely and correctly. Improper work can lead to bigger problems and higher costs — professional service is almost always the better investment.` },
-    { question: `Will my insurance cover ${service.toLowerCase()} in ${data.city}?`, answer: `Coverage depends on your specific policy and the cause of the damage. We recommend contacting your insurance provider. We provide complete documentation to support your claim and can communicate with your adjuster if needed.` },
-    { question: `Are you licensed and insured for ${service.toLowerCase()} in ${data.state}?`, answer: `Yes. ${data.businessName} is fully licensed and insured. All work is performed by qualified professionals following applicable codes and industry standards.` },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraphAlt },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraphAlt },
+    { question: LOREM_PLACEHOLDER.title, answer: LOREM_PLACEHOLDER.paragraph },
   ];
 
-  const crossH2 = content?.crossLinkSection?.h2 || `Related ${kwBase(data.primaryKeyword)} Services`;
+  const crossH2 = content?.crossLinkSection?.h2 || LOREM_PLACEHOLDER.title;
   const crossLinks = content?.crossLinkSection?.links?.length
     ? content.crossLinkSection.links
     : data.services
@@ -2942,13 +2950,13 @@ export function generateServicePage(
         .slice(0, 4)
         .map(s => ({
           service: s,
-          anchor: s,
+          anchor: LOREM_PLACEHOLDER.title,
           slug: `../services/${slugify(s)}-${citySlug}.html`,
-          reason: `Often needed alongside ${service.toLowerCase()}`,
+          reason: LOREM_PLACEHOLDER.paragraph,
         }));
 
-  const ctaH2 = content?.finalCTA?.h2 || `Get Professional ${service} in ${data.city} Today`;
-  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `${data.businessName} is ready to respond to your ${service.toLowerCase()} needs in ${data.city}. Call now for immediate assistance or submit a request for non-emergency services.`;
+  const ctaH2 = content?.finalCTA?.h2 || LOREM_PLACEHOLDER.title;
+  const ctaBody = content?.finalCTA?.body || data._ctaSubtext || LOREM_PLACEHOLDER.paragraph;
 
   // Build HTML sections
   const overviewHTML = overviewParas.map(p => `<p>${p}</p>`).join('');

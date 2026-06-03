@@ -12,3 +12,4 @@ attached_assets/*.mp4
 .vercel
 .env*.local
 .env.production
+SMBify Rank.txt
