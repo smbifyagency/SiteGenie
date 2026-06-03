@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { useState, useRef } from "react";
 import {
   ArrowRight, ArrowLeft, Loader2, CheckCircle2,
-  Phone, MapPin, Wrench, Palette, ChevronRight, Upload, X
+  Phone, MapPin, Wrench, Palette, ChevronRight, Upload, X, ChevronDown, Sparkles
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CATEGORIES } from "@/lib/local-service-categories";
@@ -30,7 +30,7 @@ const COLOR_PALETTES = [
   { name: "Charcoal",     primary: "#111827", secondary: "#9ca3af" },
 ] as const;
 
-const STEPS = ["Category", "Business Info", "Services & Areas", "Brand & Colors", "Review & Create"];
+const STEPS = ["Select Category", "Customize Website"];
 
 export default function DashboardNewWebsite() {
   const [, setLocation] = useLocation();
@@ -38,6 +38,8 @@ export default function DashboardNewWebsite() {
   const [step, setStep] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [categoryId, setCategoryId] = useState("");
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [hasManuallyEditedAreas, setHasManuallyEditedAreas] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
@@ -63,13 +65,16 @@ export default function DashboardNewWebsite() {
 
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
-  // When user picks a category, pre-fill keyword + services + palette
   const pickCategory = (id: string) => {
     const cat = CATEGORIES.find(c => c.id === id);
     if (!cat) return;
     setCategoryId(id);
     setForm(f => ({
       ...f,
+      phone: f.phone || "(555) 123-4567",
+      address: f.address || "123 Main St",
+      state: f.state || "TX",
+      email: f.email || "info@yourdomain.com",
       primaryKeyword: cat.defaultPrimaryKeyword,
       primaryColor: cat.defaultPalette.primary,
       secondaryColor: cat.defaultPalette.secondary,
@@ -89,10 +94,41 @@ export default function DashboardNewWebsite() {
     reader.readAsDataURL(file);
   };
 
+  const handleCityChange = (val: string) => {
+    set("city", val);
+    if (!hasManuallyEditedAreas) {
+      const stateVal = form.state || "TX";
+      const areas = [
+        `${val}, ${stateVal}`,
+        `North ${val}, ${stateVal}`,
+        `South ${val}, ${stateVal}`,
+        `East ${val}, ${stateVal}`,
+        `West ${val}, ${stateVal}`
+      ].filter(x => x.trim() && x.trim() !== ",").join("\n");
+      set("serviceAreas", areas);
+    }
+  };
+
+  const handleStateChange = (val: string) => {
+    set("state", val);
+    if (!hasManuallyEditedAreas) {
+      const cityVal = form.city;
+      if (cityVal) {
+        const areas = [
+          `${cityVal}, ${val}`,
+          `North ${cityVal}, ${val}`,
+          `South ${cityVal}, ${val}`,
+          `East ${cityVal}, ${val}`,
+          `West ${cityVal}, ${val}`
+        ].filter(x => x.trim() && x.trim() !== ",").join("\n");
+        set("serviceAreas", areas);
+      }
+    }
+  };
+
   const canNext = () => {
     if (step === 0) return !!categoryId;
-    if (step === 1) return form.businessName.trim() && form.phone.trim() && form.city.trim() && form.state.trim();
-    if (step === 2) return form.services.length > 0 && form.serviceAreas.trim();
+    if (step === 1) return !!(form.businessName.trim() && form.city.trim() && form.state.trim());
     return true;
   };
 
@@ -119,6 +155,7 @@ export default function DashboardNewWebsite() {
       primaryColor: cat.defaultPalette.primary,
       secondaryColor: cat.defaultPalette.secondary,
     }));
+    setHasManuallyEditedAreas(true);
   };
 
   const handleGenerate = async () => {
@@ -164,12 +201,12 @@ export default function DashboardNewWebsite() {
   };
 
   return (
-    <div className="min-h-screen py-8 px-4">
+    <div className="min-h-screen py-8 px-4 text-white">
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => step > 0 ? setStep(s => s - 1) : setLocation("/dashboard")}
+          <button onClick={() => step > 0 ? setStep(0) : setLocation("/dashboard")}
             className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all">
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -218,240 +255,239 @@ export default function DashboardNewWebsite() {
           </div>
         )}
 
-        {/* ── Step 1: Business Info + Logo ─────────────────────────── */}
+        {/* ── Step 1: Customize Website (Consolidated Detail Screen) ── */}
         {step === 1 && (
-          <div className="space-y-5">
-            {/* Sample data button for quick testing */}
+          <div className="space-y-6">
+            {/* Selected Category Summary Card */}
+            <div className="flex items-center justify-between p-4 rounded-xl bg-[#7C3AED]/10 border border-[#7C3AED]/20">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{selectedCategory?.icon}</span>
+                <div>
+                  <p className="text-white font-semibold text-sm">{selectedCategory?.name}</p>
+                  <p className="text-gray-400 text-xs">{selectedCategory?.tagline}</p>
+                </div>
+              </div>
+              <button onClick={() => setStep(0)} className="text-xs text-[#7C3AED] hover:text-[#9333EA] hover:underline font-semibold flex items-center gap-1">
+                <X className="h-3.5 w-3.5" /> Change
+              </button>
+            </div>
+
+            {/* Quick Actions */}
             <div className="flex justify-end">
               <button
                 type="button"
                 onClick={fillSampleData}
-                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10 transition-colors"
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10 transition-colors flex items-center gap-1.5"
               >
-                Fill sample data
+                <Sparkles className="h-3 w-3 text-purple-400" />
+                Fill Sample Demo Data
               </button>
             </div>
 
-            {/* Logo upload */}
-            <div>
-              <Label className="text-gray-300 text-sm mb-2 block">Business Logo (optional)</Label>
-              <div className="flex items-center gap-4">
-                <div
-                  onClick={() => logoInputRef.current?.click()}
-                  className="w-20 h-20 rounded-xl border-2 border-dashed border-white/20 bg-white/5 hover:border-[#7C3AED]/50 hover:bg-[#7C3AED]/5 flex items-center justify-center cursor-pointer transition-all flex-shrink-0 overflow-hidden"
-                >
-                  {form.logoUrl
-                    ? <img src={form.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
-                    : <Upload className="h-6 w-6 text-gray-500" />
-                  }
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs text-gray-400">Upload your logo (PNG, SVG, JPG)</p>
-                  <p className="text-xs text-gray-600 mt-0.5">Appears in the header and footer of every page</p>
-                  {form.logoUrl && (
-                    <button onClick={() => set("logoUrl", "")} className="mt-1.5 text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
-                      <X className="h-3 w-3" /> Remove logo
-                    </button>
-                  )}
-                </div>
-                <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
-                  onChange={e => { if (e.target.files?.[0]) handleLogoUpload(e.target.files[0]); e.target.value = ''; }} />
+            {/* Core Basic Info */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-gray-300 text-sm mb-1.5 block">Business Name *</Label>
+                <Input value={form.businessName} onChange={e => set("businessName", e.target.value)}
+                  placeholder={`e.g., ${selectedCategory?.name === "Plumbing Services" ? "City Pro Plumbing" : "Rapid Dry Restoration"}`}
+                  className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
               </div>
-            </div>
 
-            <div>
-              <Label className="text-gray-300 text-sm mb-1.5 block">Business Name *</Label>
-              <Input value={form.businessName} onChange={e => set("businessName", e.target.value)}
-                placeholder={`e.g., ${selectedCategory?.name === "Plumbing Services" ? "City Pro Plumbing" : "Rapid Dry Restoration"}`}
-                className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
-            </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2">
+                  <Label className="text-gray-300 text-sm mb-1.5 block">City *</Label>
+                  <Input value={form.city} onChange={e => handleCityChange(e.target.value)}
+                    placeholder="Austin"
+                    className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
+                </div>
+                <div>
+                  <Label className="text-gray-300 text-sm mb-1.5 block">State *</Label>
+                  <Input value={form.state} onChange={e => handleStateChange(e.target.value)}
+                    placeholder="TX"
+                    className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
+                </div>
+              </div>
 
-            <div className="grid grid-cols-2 gap-4">
+              {/* Service Areas (Directly visible and editable) */}
               <div>
                 <Label className="text-gray-300 text-sm mb-1.5 block flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5" /> Phone *
+                  <MapPin className="h-3.5 w-3.5 text-[#7C3AED]" /> Target Service Areas (one per line)
                 </Label>
-                <div className="flex gap-2">
-                  <select value={form.countryCode} onChange={e => set("countryCode", e.target.value)}
-                    className="w-[100px] h-[40px] px-2 rounded-md bg-white/5 border border-white/10 text-white text-sm focus:border-[#7C3AED]/50 outline-none">
-                    <option value="+1" className="bg-gray-900">🇺🇸/🇨🇦 +1</option>
-                    <option value="+44" className="bg-gray-900">🇬🇧 +44</option>
-                    <option value="+61" className="bg-gray-900">🇦🇺 +61</option>
-                    <option value="+64" className="bg-gray-900">🇳🇿 +64</option>
-                    <option value="+27" className="bg-gray-900">🇿🇦 +27</option>
-                    <option value="+91" className="bg-gray-900">🇮🇳 +91</option>
-                  </select>
-                  <Input value={form.phone} onChange={e => set("phone", e.target.value)}
-                    placeholder="(555) 123-4567"
-                    className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
-                </div>
-              </div>
-              <div>
-                <Label className="text-gray-300 text-sm mb-1.5 block">Email</Label>
-                <Input value={form.email} onChange={e => set("email", e.target.value)}
-                  placeholder="info@business.com"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
+                <Textarea value={form.serviceAreas} onChange={e => { set("serviceAreas", e.target.value); setHasManuallyEditedAreas(true); }}
+                  placeholder={"Austin, TX\nRound Rock, TX\nCedar Park, TX\nGeorgetown, TX"}
+                  rows={5}
+                  className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 resize-none font-mono text-sm" />
+                <p className="text-xs text-gray-500 mt-1">Generated automatically from your City/State. Each area gets its own localized landing page.</p>
               </div>
             </div>
 
-            <div>
-              <Label className="text-gray-300 text-sm mb-1.5 block flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" /> Street Address
-              </Label>
-              <Input value={form.address} onChange={e => set("address", e.target.value)}
-                placeholder="123 Main St"
-                className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
-            </div>
+            {/* Collapsible Accordion: Advanced Settings */}
+            <div className="border border-white/10 rounded-xl bg-white/[0.01] overflow-hidden transition-all duration-300">
+              <button
+                type="button"
+                onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+                className="w-full flex items-center justify-between p-4 hover:bg-white/[0.03] transition-colors border-none outline-none focus:outline-none"
+              >
+                <span className="text-white font-semibold text-sm flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-[#7C3AED]" />
+                  Advanced Settings (Optional)
+                </span>
+                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${isAdvancedOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-gray-300 text-sm mb-1.5 block">City *</Label>
-                <Input value={form.city} onChange={e => set("city", e.target.value)}
-                  placeholder="Austin"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
-              </div>
-              <div>
-                <Label className="text-gray-300 text-sm mb-1.5 block">State *</Label>
-                <Input value={form.state} onChange={e => set("state", e.target.value)}
-                  placeholder="TX"
-                  className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-gray-300 text-sm mb-1.5 block">Primary Keyword *</Label>
-              <Input value={form.primaryKeyword} onChange={e => set("primaryKeyword", e.target.value)}
-                className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
-              <p className="text-xs text-gray-500 mt-1">Auto-filled from your category — change if needed</p>
-            </div>
-
-            <div>
-              <Label className="text-gray-300 text-sm mb-1.5 block">Additional Target Keywords</Label>
-              <Input value={form.targetKeywords} onChange={e => set("targetKeywords", e.target.value)}
-                placeholder="e.g., drain cleaning, burst pipe repair, emergency plumber"
-                className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
-              <p className="text-xs text-gray-500 mt-1">Comma-separated. Used for SEO meta tags and content variation.</p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 2: Services & Areas ──────────────────────────────── */}
-        {step === 2 && (
-          <div className="space-y-6">
-            <div>
-              <Label className="text-gray-300 text-sm mb-3 flex items-center gap-1.5">
-                <Wrench className="h-3.5 w-3.5 text-[#7C3AED]" /> Select Services * ({form.services.length} selected)
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {(selectedCategory?.defaultServices ?? []).map(s => (
-                  <button key={s} onClick={() => toggleService(s)}
-                    className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${
-                      form.services.includes(s)
-                        ? "bg-[#7C3AED]/15 text-[#7C3AED] border-[#7C3AED]/40"
-                        : "bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white"
-                    }`}>
-                    {form.services.includes(s) && <CheckCircle2 className="inline h-3.5 w-3.5 mr-1" />}
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label className="text-gray-300 text-sm mb-1.5 block flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-[#7C3AED]" /> Service Areas * (one per line)
-              </Label>
-              <Textarea value={form.serviceAreas} onChange={e => set("serviceAreas", e.target.value)}
-                placeholder={"Austin, TX\nRound Rock, TX\nCedar Park, TX\nGeorgetown, TX"}
-                rows={5}
-                className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 resize-none" />
-              <p className="text-xs text-gray-500 mt-1">Each city gets its own SEO location page. <strong className="text-[#7C3AED]">Format: City, State</strong></p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 3: Brand & Colors ────────────────────────────────── */}
-        {step === 3 && (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-[#7C3AED]/10 border border-[#7C3AED]/20">
-              <Palette className="h-5 w-5 text-[#7C3AED] shrink-0" />
-              <p className="text-sm text-gray-300">Pick your color theme. You can change this anytime in the editor.</p>
-            </div>
-
-            <div>
-              <Label className="text-gray-300 text-sm mb-3 flex items-center gap-1.5">
-                <Palette className="h-3.5 w-3.5 text-[#7C3AED]" /> Color Theme
-              </Label>
-              <div className="grid grid-cols-4 gap-2">
-                {COLOR_PALETTES.map(palette => {
-                  const isActive = form.primaryColor === palette.primary && form.secondaryColor === palette.secondary;
-                  return (
-                    <button key={palette.name} type="button"
-                      onClick={() => { set("primaryColor", palette.primary); set("secondaryColor", palette.secondary); }}
-                      className={`rounded-lg overflow-hidden text-left transition-transform hover:scale-105 focus:outline-none ${
-                        isActive ? "ring-2 ring-[#7C3AED] ring-offset-1 ring-offset-gray-900 shadow-lg" : "ring-1 ring-white/10"
-                      }`}>
-                      <div className="flex h-8">
-                        <div className="w-3/5" style={{ backgroundColor: palette.primary }} />
-                        <div className="w-2/5" style={{ backgroundColor: palette.secondary }} />
+              {isAdvancedOpen && (
+                <div className="p-4 border-t border-white/10 space-y-6 bg-black/20">
+                  
+                  {/* Logo Upload */}
+                  <div>
+                    <Label className="text-gray-300 text-sm mb-2 block">Business Logo</Label>
+                    <div className="flex items-center gap-4">
+                      <div
+                        onClick={() => logoInputRef.current?.click()}
+                        className="w-20 h-20 rounded-xl border-2 border-dashed border-white/20 bg-white/5 hover:border-[#7C3AED]/50 hover:bg-[#7C3AED]/5 flex items-center justify-center cursor-pointer transition-all flex-shrink-0 overflow-hidden"
+                      >
+                        {form.logoUrl
+                          ? <img src={form.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+                          : <Upload className="h-6 w-6 text-gray-500" />
+                        }
                       </div>
-                      <div className="bg-gray-800 px-1.5 py-1">
-                        <span className="text-[10px] text-gray-300 leading-none block truncate">{palette.name}</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400">Upload your logo (PNG, SVG, JPG)</p>
+                        <p className="text-xs text-gray-600 mt-0.5">Appears in the header and footer of every page</p>
+                        {form.logoUrl && (
+                          <button onClick={() => set("logoUrl", "")} className="mt-1.5 text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+                            <X className="h-3 w-3" /> Remove logo
+                          </button>
+                        )}
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                      <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
+                        onChange={e => { if (e.target.files?.[0]) handleLogoUpload(e.target.files[0]); e.target.value = ''; }} />
+                    </div>
+                  </div>
 
-            <div>
-              <Label className="text-gray-300 text-sm mb-1.5 block">Site URL Slug</Label>
-              <Input value={form.urlSlug} onChange={e => set("urlSlug", e.target.value)}
-                placeholder="my-plumbing-company"
-                className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50" />
-              <p className="text-xs text-gray-500 mt-1">Your Netlify URL will be: yourslug.netlify.app (auto-generated if left blank)</p>
-            </div>
+                  {/* Phone & Email */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-300 text-sm mb-1.5 block flex items-center gap-1.5">
+                        <Phone className="h-3.5 w-3.5" /> Phone Number
+                      </Label>
+                      <div className="flex gap-2">
+                        <select value={form.countryCode} onChange={e => set("countryCode", e.target.value)}
+                          className="w-[85px] h-[40px] px-2 rounded-md bg-white/5 border border-white/10 text-white text-xs focus:border-[#7C3AED]/50 outline-none">
+                          <option value="+1" className="bg-gray-900">🇺🇸 +1</option>
+                          <option value="+44" className="bg-gray-900">🇬🇧 +44</option>
+                          <option value="+61" className="bg-gray-900">🇦🇺 +61</option>
+                          <option value="+64" className="bg-gray-900">🇳🇿 +64</option>
+                        </select>
+                        <Input value={form.phone} onChange={e => set("phone", e.target.value)}
+                          placeholder="(555) 123-4567"
+                          className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-gray-300 text-sm mb-1.5 block">Contact Email</Label>
+                      <Input value={form.email} onChange={e => set("email", e.target.value)}
+                        placeholder="info@business.com"
+                        className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 text-sm" />
+                    </div>
+                  </div>
 
-            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 text-center">
-              <p className="text-sm text-gray-400">✓ AI keys, social links — all configurable in the editor after creation</p>
-            </div>
-          </div>
-        )}
+                  {/* Street Address */}
+                  <div>
+                    <Label className="text-gray-300 text-sm mb-1.5 block flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5" /> Street Address
+                    </Label>
+                    <Input value={form.address} onChange={e => set("address", e.target.value)}
+                      placeholder="123 Main St"
+                      className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 text-sm" />
+                  </div>
 
-        {/* ── Step 4: Review & Generate ─────────────────────────────── */}
-        {step === 4 && (
-          <div className="space-y-4">
-            <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
-              <h3 className="text-white font-semibold">Review Your Website</h3>
-              {[
-                { label: "Category", value: selectedCategory?.name ?? "—" },
-                { label: "Business", value: form.businessName },
-                { label: "Location", value: `${form.city}, ${form.state}` },
-                { label: "Phone", value: form.phone },
-                { label: "Primary Keyword", value: form.primaryKeyword },
-                { label: "Services", value: `${form.services.length} services selected` },
-                { label: "Areas", value: `${form.serviceAreas.split("\n").filter(Boolean).length} location pages` },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between text-sm">
-                  <span className="text-gray-400">{label}</span>
-                  <span className="text-white font-medium">{value}</span>
+                  {/* URL Slug */}
+                  <div>
+                    <Label className="text-gray-300 text-sm mb-1.5 block">Site URL Slug</Label>
+                    <Input value={form.urlSlug} onChange={e => set("urlSlug", e.target.value)}
+                      placeholder="my-local-company"
+                      className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 text-sm" />
+                    <p className="text-xs text-gray-500 mt-1">Leave blank to auto-generate: <code>yourslug.netlify.app</code></p>
+                  </div>
+
+                  {/* Services Checklist */}
+                  <div>
+                    <Label className="text-gray-300 text-sm mb-3 flex items-center gap-1.5">
+                      <Wrench className="h-3.5 w-3.5 text-[#7C3AED]" /> Choose Specific Services ({form.services.length} selected)
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {(selectedCategory?.defaultServices ?? []).map(s => (
+                        <button key={s} type="button" onClick={() => toggleService(s)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all border ${
+                            form.services.includes(s)
+                              ? "bg-[#7C3AED]/20 text-[#a78bfa] border-[#7C3AED]/50"
+                              : "bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white"
+                          }`}>
+                          {form.services.includes(s) && <CheckCircle2 className="inline h-3 w-3 mr-1" />}
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Color Palette Grid */}
+                  <div>
+                    <Label className="text-gray-300 text-sm mb-3 flex items-center gap-1.5">
+                      <Palette className="h-3.5 w-3.5 text-[#7C3AED]" /> Color Palette / Theme
+                    </Label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {COLOR_PALETTES.map(palette => {
+                        const isActive = form.primaryColor === palette.primary && form.secondaryColor === palette.secondary;
+                        return (
+                          <button key={palette.name} type="button"
+                            onClick={() => { set("primaryColor", palette.primary); set("secondaryColor", palette.secondary); }}
+                            className={`rounded-lg overflow-hidden text-left transition-transform hover:scale-105 focus:outline-none ${
+                              isActive ? "ring-2 ring-[#7C3AED] ring-offset-1 ring-offset-gray-900 shadow-lg" : "ring-1 ring-white/10"
+                            }`}>
+                            <div className="flex h-6">
+                              <div className="w-3/5" style={{ backgroundColor: palette.primary }} />
+                              <div className="w-2/5" style={{ backgroundColor: palette.secondary }} />
+                            </div>
+                            <div className="bg-gray-800 px-1 py-0.5">
+                              <span className="text-[9px] text-gray-300 leading-none block truncate">{palette.name}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* API Keys */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-300 text-sm mb-1.5 block">OpenAI API Key (optional)</Label>
+                      <Input type="password" value={form.openaiApiKey} onChange={e => set("openaiApiKey", e.target.value)}
+                        placeholder="sk-..."
+                        className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 text-xs font-mono" />
+                    </div>
+                    <div>
+                      <Label className="text-gray-300 text-sm mb-1.5 block">Gemini API Key (optional)</Label>
+                      <Input type="password" value={form.geminiApiKey} onChange={e => set("geminiApiKey", e.target.value)}
+                        placeholder="AIzaSy..."
+                        className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 text-xs font-mono" />
+                    </div>
+                  </div>
+
                 </div>
-              ))}
+              )}
             </div>
 
-            {form.logoUrl && (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/10">
-                <img src={form.logoUrl} alt="Logo" className="h-10 w-10 object-contain rounded" />
-                <p className="text-sm text-gray-300">Logo uploaded ✓</p>
-              </div>
-            )}
-
-            <div className="p-4 rounded-xl bg-[#7C3AED]/10 border border-[#7C3AED]/20">
-              <p className="text-sm text-[#7C3AED] font-medium mb-1">What gets generated:</p>
-              <ul className="text-xs text-gray-300 space-y-1">
-                <li>✓ Homepage + About, Contact, FAQ, Calculator, Gallery pages</li>
-                <li>✓ {form.services.length} Service pages (one per service)</li>
-                <li>✓ {form.serviceAreas.split("\n").filter(Boolean).length} Location pages (one per city)</li>
-                <li>✓ Sitemap, robots.txt, schema markup</li>
+            {/* Informational checklist block */}
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-1.5">
+              <p className="text-xs text-purple-400 font-semibold flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" /> What gets created instantly:
+              </p>
+              <ul className="text-[11px] text-gray-400 space-y-1 pl-4 list-disc">
+                <li>Homepage, Contact, About, FAQ, and Cost Estimator pages</li>
+                <li>{form.services.length} localized Service pages</li>
+                <li>{form.serviceAreas.split("\n").filter(Boolean).length} Target Location pages</li>
+                <li>XML / HTML Sitemaps, Robots.txt, Google-ready Schema, and LLM text indices</li>
               </ul>
             </div>
           </div>
@@ -460,23 +496,16 @@ export default function DashboardNewWebsite() {
         {/* Navigation */}
         <div className="flex justify-between mt-8 gap-4">
           {step > 0 && (
-            <Button variant="outline" onClick={() => setStep(s => s - 1)}
+            <Button variant="outline" onClick={() => setStep(0)}
               className="border-white/20 text-gray-300 bg-transparent hover:bg-white/5 flex-1">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Categories
             </Button>
           )}
-          {step < STEPS.length - 1 ? (
-            step > 0 && (
-              <Button onClick={() => setStep(s => s + 1)} disabled={!canNext()}
-                className="flex-1 bg-[#7C3AED] hover:bg-[#9333EA] text-black font-semibold disabled:opacity-40">
-                Next <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            )
-          ) : (
+          {step === 1 && (
             <Button onClick={handleGenerate} disabled={isGenerating || !canNext()}
               className="flex-1 bg-[#7C3AED] hover:bg-[#9333EA] text-black font-bold py-3">
               {isGenerating
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating Website...</>
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating Site...</>
                 : <>Create Website <ArrowRight className="ml-1 h-4 w-4" /></>
               }
             </Button>

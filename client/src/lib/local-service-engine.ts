@@ -97,8 +97,17 @@ export function generateLocalServiceWebsite(
 ): Record<string, string> {
   const config = getCategoryConfig(categoryId);
 
-  // Build why-us points from config
-  const whyUsPoints = createLoremWhyUsPoints();
+  // Build why-us points from config if rawData doesn't already have them
+  const icons = ['✨', '⚡', '✅', '🚀', '🛠️', '🔒'];
+  const whyUsPoints = Array.isArray(rawData._whyUsPoints) && rawData._whyUsPoints.length > 0
+    ? rawData._whyUsPoints
+    : (config.copy.whyUsPoints && config.copy.whyUsPoints.length > 0
+      ? config.copy.whyUsPoints.map((text, idx) => ({
+          icon: icons[idx % icons.length],
+          heading: text.split(' — ')[0] || text,
+          body: text
+        }))
+      : createLoremWhyUsPoints());
 
   // Merge category defaults into business data
   const enriched: WDBusinessData = {
@@ -136,10 +145,17 @@ export function generateLocalServiceWebsite(
 
   // Use AI-generated content when available (set by server deploy route),
   // otherwise fall back to the template copy from the category config.
-  d._introParas   = d._aiIntroParas   ?? createLoremParagraphs(2);
-  d._processSteps = d._aiProcessSteps ?? createLoremProcessSteps();
-  d._faqs         = d._aiFaqs         ?? createLoremFaqs();
-  d._seoBody      = d._aiSeoBody      ?? createLoremSeoBody();
+  d._introParas   = d._aiIntroParas   ?? (c.introParas && c.introParas.length > 0 ? c.introParas.map(p => interpolate(p, enriched)) : createLoremParagraphs(2));
+  d._processSteps = d._aiProcessSteps ?? (c.processSteps && c.processSteps.length > 0 ? c.processSteps.map(step => ({
+    step: step.step,
+    heading: interpolate(step.heading, enriched),
+    body: interpolate(step.body, enriched)
+  })) : createLoremProcessSteps());
+  d._faqs         = d._aiFaqs         ?? (c.faqs && c.faqs.length > 0 ? c.faqs.map(faq => ({
+    question: interpolate(faq.question, enriched),
+    answer: interpolate(faq.answer, enriched)
+  })) : createLoremFaqs());
+  d._seoBody      = d._aiSeoBody      ?? (c.seoBody ? interpolate(c.seoBody, enriched) : createLoremSeoBody());
 
   if (c.processH2) d._processH2 = c.processH2;
   if (c.faqH2)     d._faqH2     = c.faqH2;
@@ -163,7 +179,16 @@ export function enrichBusinessDataForCategory(
 ): Record<string, any> {
   const config = getCategoryConfig(categoryId);
 
-  const whyUsPoints = createLoremWhyUsPoints();
+  const icons = ['✨', '⚡', '✅', '🚀', '🛠️', '🔒'];
+  const whyUsPoints = Array.isArray(rawData._whyUsPoints) && rawData._whyUsPoints.length > 0
+    ? rawData._whyUsPoints
+    : (config.copy.whyUsPoints && config.copy.whyUsPoints.length > 0
+      ? config.copy.whyUsPoints.map((text, idx) => ({
+          icon: icons[idx % icons.length],
+          heading: text.split(' — ')[0] || text,
+          body: text
+        }))
+      : createLoremWhyUsPoints());
 
   const enriched: any = {
     primaryKeyword: config.defaultPrimaryKeyword,
@@ -190,10 +215,17 @@ export function enrichBusinessDataForCategory(
   if (c.whatsappMessage)        enriched._whatsappMessage        = c.whatsappMessage;
   if (c.servicePageBenefits)    enriched._servicePageBenefits    = c.servicePageBenefits;
 
-  enriched._introParas   = enriched._aiIntroParas   ?? createLoremParagraphs(2);
-  enriched._processSteps = enriched._aiProcessSteps ?? createLoremProcessSteps();
-  enriched._faqs         = enriched._aiFaqs         ?? createLoremFaqs();
-  enriched._seoBody      = enriched._aiSeoBody      ?? createLoremSeoBody();
+  enriched._introParas   = enriched._aiIntroParas   ?? (c.introParas && c.introParas.length > 0 ? c.introParas.map(p => interpolate(p, enriched)) : createLoremParagraphs(2));
+  enriched._processSteps = enriched._aiProcessSteps ?? (c.processSteps && c.processSteps.length > 0 ? c.processSteps.map(step => ({
+    step: step.step,
+    heading: interpolate(step.heading, enriched),
+    body: interpolate(step.body, enriched)
+  })) : createLoremProcessSteps());
+  enriched._faqs         = enriched._aiFaqs         ?? (c.faqs && c.faqs.length > 0 ? c.faqs.map(faq => ({
+    question: interpolate(faq.question, enriched),
+    answer: interpolate(faq.answer, enriched)
+  })) : createLoremFaqs());
+  enriched._seoBody      = enriched._aiSeoBody      ?? (c.seoBody ? interpolate(c.seoBody, enriched) : createLoremSeoBody());
 
   if (c.processH2) enriched._processH2 = c.processH2;
   if (c.faqH2)     enriched._faqH2     = c.faqH2;

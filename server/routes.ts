@@ -1308,6 +1308,7 @@ async function generateLocalServiceAIContent(
   const baseRules = `
 You are a seasoned local ${categoryName} copywriter specializing in humanized, conversion-focused content for local businesses.
 Writing style rules:
+- Aim for a 7th-to-8th-grade reading level. Explain any industry terms in simple, plain language for homeowners.
 - Write as if you are the business owner sitting across from a potential customer at their kitchen table in ${biz.primaryCity}. You have done this work for years. You know the common problems, the local conditions, and exactly what needs to happen.
 - Use contractions (we're, you'll, it's, don't). Americans talk this way. Your content should read the same way.
 - BANNED: Do not use these AI-sounding words or phrases: "comprehensive," "cutting-edge," "state-of-the-art," "leverage," "navigate," "landscape" (unless about actual land), "whether you're... or...," "don't hesitate," "look no further," "rest assured," "peace of mind," "second to none," "unparalleled," "delve," "elevate," "empower," "robust," "seamless."
@@ -1391,21 +1392,19 @@ Write process steps and unique reasons to choose us for:
 Return strict JSON (no markdown fences, no formatting backticks):
 {
   "processSteps": [
-    { "step": 1, "heading": "Initial Inspection", "body": "80-120 words description" },
-    { "step": 2, "heading": "Water Damage Mitigation", "body": "80-120 words description" },
-    { "step": 3, "heading": "Structural Drying", "body": "80-120 words description" },
-    { "step": 4, "heading": "Dehumidification", "body": "80-120 words description" },
-    { "step": 5, "heading": "Sanitization & Disinfection", "body": "80-120 words description" },
-    { "step": 6, "heading": "Monitoring & Testing", "body": "80-120 words description" },
-    { "step": 7, "heading": "Complete Restoration", "body": "80-120 words description" }
+    { "step": 1, "heading": "Initial Inspection & Diagnosis", "body": "80-120 words description specific to ${categoryName} processes" },
+    { "step": 2, "heading": "Problem Containment & Setup", "body": "80-120 words description of safety containment and prep work specific to ${categoryName}" },
+    { "step": 3, "heading": "Core ${categoryName} Service Delivery", "body": "80-120 words description of the primary repair, installation, or treatment" },
+    { "step": 4, "heading": "System Testing & Quality Checks", "body": "80-120 words description of validating performance and safety standards" },
+    { "step": 5, "heading": "Clean-Up & Final Walkthrough", "body": "80-120 words description of site restoration and customer review" }
   ],
   "whyChooseUs": [
-    { "heading": "Local Restoration Specialists", "body": "80-120 words unique reason" },
-    { "heading": "Certified Technicians", "body": "80-120 words unique reason" },
-    { "heading": "Fast Emergency Response", "body": "80-120 words unique reason" },
-    { "heading": "Direct Insurance Billing", "body": "80-120 words unique reason" },
-    { "heading": "Advanced Drying Equipment", "body": "80-120 words unique reason" },
-    { "heading": "Satisfaction Guaranteed", "body": "80-120 words unique reason" }
+    { "heading": "Local ${categoryName} Experts", "body": "80-120 words unique reason based on local reputation and knowledge" },
+    { "heading": "Certified & Licensed Technicians", "body": "80-120 words unique reason based on licensing, training, and IICRC/trade standards" },
+    { "heading": "Fast Emergency Response", "body": "80-120 words unique reason based on 24/7 availability or rapid scheduling" },
+    { "heading": "Upfront Honest Pricing", "body": "80-120 words unique reason based on free estimates or transparent rates" },
+    { "heading": "Advanced Tools & Methods", "body": "80-120 words unique reason based on modern industry equipment" },
+    { "heading": "Satisfaction Guaranteed", "body": "80-120 words unique reason based on warranties and workmanship guarantees" }
   ]
 }
 `;
