@@ -35,7 +35,6 @@ import {
   buildHomePagePrompt,
   buildLocationPagePrompt,
   buildServicePagePrompt,
-  buildLocalServiceContentPrompt,
   type PromptBusinessContext,
   type ServiceLink,
   type ServiceLocationLink,
@@ -1306,51 +1305,158 @@ async function generateLocalServiceAIContent(
     usp: bd.usp || bd.uniqueSellingPoint,
   };
 
-  const fullPrompt = buildLocalServiceContentPrompt(biz, categoryName, primaryKeyword);
-  const compactPrompt = fullPrompt
-    .replace('Total content must be at least 4000 words.', 'Total content should be at least 1800 words, prioritizing quality and strict valid JSON.')
-    .replace('4000 words', '1800 words');
+  const baseRules = `
+You are a seasoned local ${categoryName} copywriter specializing in humanized, conversion-focused content for local businesses.
+Writing style rules:
+- Write as if you are the business owner sitting across from a potential customer at their kitchen table in ${biz.primaryCity}. You have done this work for years. You know the common problems, the local conditions, and exactly what needs to happen.
+- Use contractions (we're, you'll, it's, don't). Americans talk this way. Your content should read the same way.
+- BANNED: Do not use these AI-sounding words or phrases: "comprehensive," "cutting-edge," "state-of-the-art," "leverage," "navigate," "landscape" (unless about actual land), "whether you're... or...," "don't hesitate," "look no further," "rest assured," "peace of mind," "second to none," "unparalleled," "delve," "elevate," "empower," "robust," "seamless."
+- Do NOT use slash constructions. Write "repair and replacement" not "repair/replacement." Write "homes and businesses" not "homes/businesses."
+- Vary sentence length. Mix short direct statements with longer explanatory sentences.
+- Include real-world scenarios homeowners actually deal with (a pipe bursting at 2am, discovering a leak after vacation, finding mold behind drywall during a remodel)
+- Reference local landmarks, neighborhoods, ZIP codes, nearby highways, and weather patterns when relevant
+- SEMANTIC ENTITIES: Include specific tool names, material names, industry certifications (IICRC, EPA, OSHA), equipment types, measurement units, building code references, and process terminology that Google expects on an authoritative ${categoryName} page
+- LSI KEYWORDS: Include at least 10-15 semantically related terms beyond the primary keyword. Think about what a thorough, expert page about ${primaryKeyword} would naturally mention.
+- HIGH INTENT KEYWORDS: Naturally work in phrases like: "cost of ${primaryKeyword} in ${biz.primaryCity}," "free ${primaryKeyword} estimate," "same day ${primaryKeyword}," "${primaryKeyword} near me," "emergency ${primaryKeyword} ${biz.primaryCity}"
+- EXTERNAL DOFOLLOW LINKS (MANDATORY): Embed at least 1-2 external dofollow links naturally within paragraph text. Link to real, authoritative sources relevant to ${biz.primaryCity} and the ${categoryName} industry — e.g., city official website, state licensing board, industry association (IICRC, EPA, FEMA). Format: <a href="https://real-url.com" target="_blank" rel="dofollow">descriptive anchor text</a>. Use only REAL, verifiable URLs. Never link to competitors.
+`;
 
-  console.log(`Generating AI content for local service site: ${biz.name} (${categoryName})`);
+  console.log(`Generating AI content for local service site in parallel splits: ${biz.name} (${categoryName})`);
 
   let lastError: unknown = null;
 
   for (const candidate of providerCandidates) {
-    const promptAttempts: Array<{ prompt: string; maxTokens: number; label: string }> = [
-      { prompt: fullPrompt, maxTokens: 4200, label: 'full' },
-      { prompt: compactPrompt, maxTokens: 3000, label: 'compact' },
-    ];
+    try {
+      const corePrompt = `
+${baseRules}
+Write core page copy (Intro paragraphs, About us section, and SEO footnote paragraph) for:
+- Business Name: ${biz.name}
+- Category: ${categoryName}
+- Location: ${biz.primaryCity}
+- Keywords: ${primaryKeyword}
 
-    for (const attempt of promptAttempts) {
-      try {
-        const result = await generateStructuredJsonWithProvider(candidate.provider, candidate.apiKey, attempt.prompt, {
-          maxTokens: attempt.maxTokens,
-          temperature: 0.7,
-        });
+Return strict JSON (no markdown fences, no formatting backticks):
+{
+  "introParas": [
+    "Paragraph 1 (110-160 words): homeowner pain points, why they trust ${biz.name} in ${biz.primaryCity}.",
+    "Paragraph 2 (110-160 words): service process, credentials, local city trust.",
+    "Paragraph 3 (110-160 words): specific equipment, methods, and expectations.",
+    "Paragraph 4 (90-130 words): urgent CTA."
+  ],
+  "aboutContent": "250-350 words about section from owner's personal perspective.",
+  "seoBody": "200-300 words SEO optimized paragraph linking services & locations."
+}
+`;
 
-        const out: LocalServiceAIContent = { providerUsed: candidate.provider };
-        if (Array.isArray(result.introParas) && result.introParas.length > 0) out.introParas = result.introParas;
-        if (Array.isArray(result.faqs) && result.faqs.length > 0) out.faqs = result.faqs;
-        if (typeof result.seoBody === 'string' && result.seoBody.trim()) out.seoBody = result.seoBody;
-        if (Array.isArray(result.processSteps) && result.processSteps.length > 0) out.processSteps = result.processSteps;
-        if (Array.isArray(result.whyChooseUs) && result.whyChooseUs.length > 0) out.whyChooseUs = result.whyChooseUs;
-        if (typeof result.aboutContent === 'string' && result.aboutContent.trim()) out.aboutContent = result.aboutContent;
-        if (Array.isArray(result.testimonials) && result.testimonials.length > 0) out.testimonials = result.testimonials;
-        if (result.serviceDescriptions && typeof result.serviceDescriptions === 'object') {
-          const { _instructions, ...descs } = result.serviceDescriptions;
-          if (Object.keys(descs).length > 0) out.serviceDescriptions = descs;
-        }
+      const trustPrompt = `
+${baseRules}
+Write trust factors (10 FAQs and 5 testimonials) for:
+- Business Name: ${biz.name}
+- Category: ${categoryName}
+- Location: ${biz.primaryCity}
+- Keywords: ${primaryKeyword}
 
-        if (!out.introParas && !out.faqs && !out.seoBody && !out.processSteps && !out.whyChooseUs && !out.aboutContent && !out.testimonials && !out.serviceDescriptions) {
-          throw new Error(`Provider ${candidate.provider} returned empty structured content`);
-        }
+Return strict JSON (no markdown fences, no formatting backticks):
+{
+  "faqs": [
+    { "question": "Specific question about ${primaryKeyword} in ${biz.primaryCity}?", "answer": "70-120 words answer." },
+    { "question": "Question about pricing/cost?", "answer": "70-120 words answer." },
+    { "question": "Question about licensing/qualifications?", "answer": "70-120 words answer." },
+    { "question": "Question about response time?", "answer": "70-120 words answer." },
+    { "question": "Question about what to expect?", "answer": "70-120 words answer." },
+    { "question": "Question about common problems?", "answer": "70-120 words answer." },
+    { "question": "Question about safety/guarantees?", "answer": "70-120 words answer." },
+    { "question": "Question about service area coverage?", "answer": "70-120 words answer." },
+    { "question": "Question about maintenance?", "answer": "70-120 words answer." },
+    { "question": "Question about choosing a provider?", "answer": "70-120 words answer." }
+  ],
+  "testimonials": [
+    { "name": "Sarah J.", "location": "${biz.primaryCity}", "rating": 5, "text": "60-100 words review." },
+    { "name": "Michael D.", "location": "Nearby area", "rating": 5, "text": "60-100 words review." },
+    { "name": "David K.", "location": "${biz.primaryCity}", "rating": 5, "text": "60-100 words review." },
+    { "name": "Emily W.", "location": "Nearby area", "rating": 5, "text": "60-100 words review." },
+    { "name": "Robert B.", "location": "${biz.primaryCity}", "rating": 5, "text": "60-100 words review." }
+  ]
+}
+`;
 
-        console.log(`AI content generated with ${candidate.provider} (${attempt.label}): introParas=${out.introParas?.length ?? 0}, faqs=${out.faqs?.length ?? 0}, whyChooseUs=${out.whyChooseUs?.length ?? 0}, testimonials=${out.testimonials?.length ?? 0}, serviceDescs=${out.serviceDescriptions ? Object.keys(out.serviceDescriptions).length : 0}`);
-        return out;
-      } catch (err) {
-        lastError = err;
-        console.error(`Local service AI generation failed with ${candidate.provider} (${attempt.label}). Trying next option...`, err);
+      const processPrompt = `
+${baseRules}
+Write process steps and unique reasons to choose us for:
+- Business Name: ${biz.name}
+- Category: ${categoryName}
+- Location: ${biz.primaryCity}
+- USP: ${biz.usp || "professional service"}
+
+Return strict JSON (no markdown fences, no formatting backticks):
+{
+  "processSteps": [
+    { "step": 1, "heading": "Initial Inspection", "body": "80-120 words description" },
+    { "step": 2, "heading": "Water Damage Mitigation", "body": "80-120 words description" },
+    { "step": 3, "heading": "Structural Drying", "body": "80-120 words description" },
+    { "step": 4, "heading": "Dehumidification", "body": "80-120 words description" },
+    { "step": 5, "heading": "Sanitization & Disinfection", "body": "80-120 words description" },
+    { "step": 6, "heading": "Monitoring & Testing", "body": "80-120 words description" },
+    { "step": 7, "heading": "Complete Restoration", "body": "80-120 words description" }
+  ],
+  "whyChooseUs": [
+    { "heading": "Local Restoration Specialists", "body": "80-120 words unique reason" },
+    { "heading": "Certified Technicians", "body": "80-120 words unique reason" },
+    { "heading": "Fast Emergency Response", "body": "80-120 words unique reason" },
+    { "heading": "Direct Insurance Billing", "body": "80-120 words unique reason" },
+    { "heading": "Advanced Drying Equipment", "body": "80-120 words unique reason" },
+    { "heading": "Satisfaction Guaranteed", "body": "80-120 words unique reason" }
+  ]
+}
+`;
+
+      const serviceList = biz.services.slice(0, 8);
+      const servicePrompt = `
+${baseRules}
+Write service descriptions for each of the following services:
+- Services: ${serviceList.join(", ")}
+- Business Name: ${biz.name}
+
+Return strict JSON (no markdown fences, no formatting backticks):
+{
+  "serviceDescriptions": {
+    ${serviceList.map(s => `"${s}": "100-150 words description of ${s} service, explaining what it includes and why we excel at it."`).join(",\n    ")}
+  }
+}
+`;
+
+      // Run AI generation requests in parallel to avoid Gateway Timeouts (under 26 seconds)
+      const [coreRes, trustRes, processRes, serviceRes] = await Promise.all([
+        generateStructuredJsonWithProvider(candidate.provider, candidate.apiKey, corePrompt, { maxTokens: 2500, temperature: 0.7 }),
+        generateStructuredJsonWithProvider(candidate.provider, candidate.apiKey, trustPrompt, { maxTokens: 2500, temperature: 0.7 }),
+        generateStructuredJsonWithProvider(candidate.provider, candidate.apiKey, processPrompt, { maxTokens: 2500, temperature: 0.7 }),
+        generateStructuredJsonWithProvider(candidate.provider, candidate.apiKey, servicePrompt, { maxTokens: 2500, temperature: 0.7 }),
+      ]);
+
+      const out: LocalServiceAIContent = { providerUsed: candidate.provider };
+      if (Array.isArray(coreRes.introParas) && coreRes.introParas.length > 0) out.introParas = coreRes.introParas;
+      if (typeof coreRes.aboutContent === 'string' && coreRes.aboutContent.trim()) out.aboutContent = coreRes.aboutContent;
+      if (typeof coreRes.seoBody === 'string' && coreRes.seoBody.trim()) out.seoBody = coreRes.seoBody;
+
+      if (Array.isArray(trustRes.faqs) && trustRes.faqs.length > 0) out.faqs = trustRes.faqs;
+      if (Array.isArray(trustRes.testimonials) && trustRes.testimonials.length > 0) out.testimonials = trustRes.testimonials;
+
+      if (Array.isArray(processRes.processSteps) && processRes.processSteps.length > 0) out.processSteps = processRes.processSteps;
+      if (Array.isArray(processRes.whyChooseUs) && processRes.whyChooseUs.length > 0) out.whyChooseUs = processRes.whyChooseUs;
+
+      if (serviceRes.serviceDescriptions && typeof serviceRes.serviceDescriptions === 'object') {
+        out.serviceDescriptions = serviceRes.serviceDescriptions;
       }
+
+      if (!out.introParas && !out.faqs && !out.seoBody && !out.processSteps && !out.whyChooseUs && !out.aboutContent && !out.testimonials && !out.serviceDescriptions) {
+        throw new Error(`Provider ${candidate.provider} returned empty structured content`);
+      }
+
+      console.log(`AI content generated successfully with parallel split prompts under ${candidate.provider}`);
+      return out;
+    } catch (err) {
+      lastError = err;
+      console.error(`Local service AI generation split failed with ${candidate.provider}. trying next...`, err);
     }
   }
 
