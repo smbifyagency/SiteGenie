@@ -1582,6 +1582,14 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
 
 .service-card-link:hover { gap: 0.5rem; text-decoration: none; }
 
+/* ── Intro Grid ────────────────────────────────── */
+.intro-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 3rem;
+  align-items: center;
+}
+
 /* ── Why Us ────────────────────────────────────── */
 .why-us-grid {
   display: grid;
@@ -2291,6 +2299,7 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   .hero-cta-card { max-width: 500px; }
   .footer-inner { grid-template-columns: 1fr 1fr; }
   .contact-grid { grid-template-columns: 1fr; }
+  .intro-grid { grid-template-columns: 1fr; gap: 2rem; }
 }
 
 @media (max-width: 768px) {
@@ -2545,7 +2554,7 @@ function htmlShell(params: {
 export function generateHomepage(data: WDBusinessData, domain: string): string {
   const content = data.homepageContent;
   const prefix = '';
-  const { secondaryColor, accentColor } = resolveTheme(data);
+  const { primaryColor, secondaryColor, accentColor } = resolveTheme(data);
 
   // Fallback content if AI content not yet generated
   const h1 = content?.hero?.h1 || `${data.primaryKeyword} in ${data.city}, ${data.state}`;
@@ -2748,9 +2757,24 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
 
   <!-- ── Intro ─────────────────────────────────────────── -->
   <section id="about" aria-labelledby="intro-heading" class="reveal">
-    <div class="container">
-      <h2 id="intro-heading">${introH2}</h2>
-      ${introParagraphsHTML}
+    <div class="container intro-grid">
+      <div>
+        <h2 id="intro-heading">${introH2}</h2>
+        ${introParagraphsHTML}
+      </div>
+      <div>
+        <img
+          src="${data.customImages?.['about-image'] || (data as any)._categoryImages?.['about-image'] || WD_PLACEHOLDER_IMAGES.team}"
+          alt="PLACEHOLDER: Replace with your team or office photo"
+          class="placeholder-img"
+          data-placeholder="about-image"
+          style="border-radius: 12px; object-fit: cover; max-height: 380px; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.04);"
+          loading="lazy"
+          width="600"
+          height="380"
+        >
+        <p class="img-caption" style="margin-top: 0.5rem; text-align: center;">${iconToSVG('camera', '#94a3b8')} Replace this placeholder with a photo of your team or office</p>
+      </div>
     </div>
   </section>
 
@@ -2786,20 +2810,63 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
     </div>
   </section>
 
-  <!-- ── Placeholder Image ─────────────────────────────── -->
-  <section style="padding: 0;" aria-hidden="true" class="reveal-scale">
-    <div class="container" style="padding-top: 2rem; padding-bottom: 2rem;">
-      <img
-        src="${data.customImages?.['main-image'] || (data as any)._categoryImages?.['main-image'] || WD_PLACEHOLDER_IMAGES.team}"
-        alt="PLACEHOLDER: Replace with your team or equipment photo"
-        class="placeholder-img"
-        data-placeholder="main-image"
-        style="max-height: 420px; object-fit: cover; border-radius: 16px;"
-        loading="lazy"
-        width="1200"
-        height="420"
-      >
-      <p class="img-caption">${iconToSVG('camera', '#94a3b8')} Replace this placeholder image with a real photo of your team or work</p>
+  <!-- ── Our Recent Projects Gallery Teaser ────────────── -->
+  <section aria-labelledby="gallery-teaser-heading" class="reveal" style="background: #f8fafc;">
+    <div class="container">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2.25rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <h2 id="gallery-teaser-heading" style="margin-bottom: 0.5rem;">Our Recent Projects</h2>
+          <p style="color: #64748b; margin: 0;">See real examples of our professional restoration and cleanup work in ${data.city}.</p>
+        </div>
+        <a href="gallery.html" class="btn-secondary" style="margin-top: 0;">View Full Gallery →</a>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
+        <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
+          <img
+            src="${data.customImages?.['gallery-normal-0'] || WD_PLACEHOLDER_IMAGES.flooding}"
+            alt="Water damage cleanup project"
+            style="width: 100%; height: 220px; object-fit: cover;"
+            data-placeholder="gallery-normal-0"
+            loading="lazy"
+            width="400"
+            height="220"
+          >
+          <div style="padding: 1.25rem;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: ${primaryColor};">Water Extraction &amp; Cleanup</h3>
+            <p style="font-size: 0.9rem; color: #475569; margin: 0; line-height: 1.5;">Emergency water removal, structural dehumidification, and damage assessment completed in ${data.city}.</p>
+          </div>
+        </div>
+        <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
+          <img
+            src="${data.customImages?.['gallery-normal-1'] || WD_PLACEHOLDER_IMAGES.equipment}"
+            alt="Structural drying project"
+            style="width: 100%; height: 220px; object-fit: cover;"
+            data-placeholder="gallery-normal-1"
+            loading="lazy"
+            width="400"
+            height="220"
+          >
+          <div style="padding: 1.25rem;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: ${primaryColor};">Rapid Structural Drying</h3>
+            <p style="font-size: 0.9rem; color: #475569; margin: 0; line-height: 1.5;">Industrial air movers and LGR dehumidifiers placed to extract moisture from framing and drywalls.</p>
+          </div>
+        </div>
+        <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
+          <img
+            src="${data.customImages?.['gallery-normal-2'] || WD_PLACEHOLDER_IMAGES.mold}"
+            alt="Mold remediation project"
+            style="width: 100%; height: 220px; object-fit: cover;"
+            data-placeholder="gallery-normal-2"
+            loading="lazy"
+            width="400"
+            height="220"
+          >
+          <div style="padding: 1.25rem;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: ${primaryColor};">Mold Containment &amp; Removal</h3>
+            <p style="font-size: 0.9rem; color: #475569; margin: 0; line-height: 1.5;">Detailed mold testing, containment barriers, HEPA vacuuming, and sanitization in subfloors.</p>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
