@@ -58,28 +58,7 @@ function generateLocalBusinessSchema(data: BusinessData, pageTitle?: string, pag
           "description": `Professional ${service.toLowerCase()} services in ${data.heroLocation}`
         }
       }))
-    },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.8",
-      "reviewCount": "150",
-      "bestRating": "5"
-    },
-    "review": [
-      {
-        "@type": "Review",
-        "author": {
-          "@type": "Person",
-          "name": "Satisfied Customer"
-        },
-        "reviewRating": {
-          "@type": "Rating",
-          "ratingValue": "5",
-          "bestRating": "5"
-        },
-        "reviewBody": `Excellent ${data.heroService.toLowerCase()} service from ${data.businessName}. Professional, reliable, and great results!`
-      }
-    ]
+    }
   };
 
   // Clean up undefined values
@@ -446,7 +425,6 @@ function generateHTML(data: BusinessData, template: Template): string {
                 <ul class="nav-menu">
                     <li><a href="#about">About</a></li>
                     <li><a href="#services">Services</a></li>
-                    <li><a href="#testimonials">Reviews</a></li>
                     <li><a href="#contact">Contact</a></li>
                 </ul>
             </div>
@@ -643,36 +621,6 @@ function generateHTML(data: BusinessData, template: Template): string {
         </div>
     </section>
 
-    <!-- Testimonials Section -->
-    <section class="testimonials" id="testimonials">
-        <div class="container">
-            <h2 class="section-title">What Our Customers Say</h2>
-            <div class="testimonials-grid">
-                ${generateTestimonials(data)}
-            </div>
-            <div class="testimonials-cta">
-                <p>Join our satisfied customers today!</p>
-                <div class="cta-group">
-                    <a href="tel:${data.countryCode || '+1'}${data.phone.replace(/\\D/g, '')}" class="cta-button cta-call large">
-                        <i class="fas fa-phone"></i>
-                        Call Now: ${data.phone}
-                    </a>
-                    ${data.ctaWhatsappNumber ? `
-                    <a href="https://wa.me/${data.ctaWhatsappNumber.replace(/[^0-9]/g, '')}" target="_blank" rel="noopener noreferrer" class="cta-button whatsapp large">
-                        <i class="fab fa-whatsapp"></i>
-                        WhatsApp
-                    </a>
-                    ` : ''}
-                    ${data.ctaCustomUrl && data.ctaCustomText ? `
-                    <a href="${data.ctaCustomUrl}" target="_blank" rel="noopener noreferrer" class="cta-button custom large">
-                        <i class="fas fa-external-link-alt"></i>
-                        ${data.ctaCustomText}
-                    </a>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
-    </section>
 
     <!-- FAQ Section -->
     <section class="faq">

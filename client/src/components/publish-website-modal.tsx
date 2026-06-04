@@ -118,7 +118,7 @@ export function PublishWebsiteModal({
   const [deployPhase, setDeployPhase] = useState("");
   const [resultUrl, setResultUrl] = useState("");
   const [resultSiteName, setResultSiteName] = useState("");
-  const [localTier, setLocalTier] = useState<'1' | '2' | '3'>('3');
+  const [localTier, setLocalTier] = useState<'1' | '2' | '3'>('1');
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const checklistNeedsAttention = (checklistCompletion?.percent ?? 100) < 100;
   const modalSteps = (checklistNeedsAttention
@@ -194,7 +194,7 @@ export function PublishWebsiteModal({
     setResultUrl("");
     setResultSiteName("");
     setIsDeploying(false);
-    setLocalTier(publishTier || '3');
+    setLocalTier(publishTier || '1');
 
     // Pre-fill slug
     if (isRedeploy && currentSiteName) {

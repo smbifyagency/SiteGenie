@@ -396,7 +396,7 @@ function siteDataToWDData(data: WDSiteData): Record<string, any> {
     _aiTestimonials: (data as any)._aiTestimonials,
     _aiServiceDescs: (data as any)._aiServiceDescs,
     enableMatrixPages: (data as any).enableMatrixPages,
-    publishTier: data.publishTier || '3',
+    publishTier: data.publishTier || '1',
     generationStatus: data.generationStatus || 'idle',
     generationProgress: data.generationProgress ?? 0,
     generationError: data.generationError || null,
@@ -1311,7 +1311,7 @@ export default function WDSiteEditor() {
         _aiTestimonials: bd._aiTestimonials,
         _aiServiceDescs: bd._aiServiceDescs,
         enableMatrixPages: bd.enableMatrixPages,
-        publishTier: bd.publishTier || '3',
+        publishTier: bd.publishTier || '1',
         generationStatus: bd.generationStatus || 'idle',
         generationProgress: bd.generationProgress ?? 0,
         generationError: bd.generationError || null,
@@ -1447,7 +1447,7 @@ export default function WDSiteEditor() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ aiProvider, publishTier: siteData.publishTier || '3' }),
+        body: JSON.stringify({ aiProvider, publishTier: siteData.publishTier || '1' }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -2790,6 +2790,42 @@ export default function WDSiteEditor() {
                   Template copy is shown as lorem ipsum placeholders until AI content is generated.
                 </p>
 
+                {/* Publish Scope (Tier) Selector */}
+                <div className="space-y-2 mb-3">
+                  <Label className="text-xs text-gray-400 font-medium">Publish Scope (Deployment Stage)</Label>
+                  <div className="flex flex-col gap-2">
+                    {[
+                      { id: '1', label: 'Core Pages Only', desc: 'Home, About, Contact, Gallery, FAQ. Dropdowns and subpages hidden.' },
+                      { id: '2', label: 'Complete Site', desc: 'Core + Service & Location pages.' },
+                      { id: '3', label: 'Matrix Pages', desc: 'Core + Service × Location pages.' }
+                    ].map(t => {
+                      const isSelected = (siteData.publishTier || '1') === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => updateField("publishTier", t.id)}
+                          className={`flex flex-col text-left p-2.5 rounded-lg border transition-all duration-200 ${
+                            isSelected
+                              ? 'border-[#7C3AED] bg-[#7C3AED]/10 text-white'
+                              : 'border-gray-800 bg-gray-900/60 hover:border-gray-700 text-gray-400 hover:text-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className="text-xs font-semibold">{t.label}</span>
+                            <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                              isSelected ? 'border-[#7C3AED] bg-[#7C3AED]' : 'border-gray-600'
+                            }`}>
+                              {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-gray-500 leading-normal mt-0.5">{t.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* AI Provider selector + Generate button */}
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
@@ -3875,7 +3911,7 @@ export default function WDSiteEditor() {
                 <option value="contact.html">Contact</option>
                 <option value="faq.html">FAQ</option>
                 <option value="gallery.html">Gallery</option>
-                {(siteData.publishTier === '2' || siteData.publishTier === '3' || !siteData.publishTier) && (
+                {(siteData.publishTier === '2' || siteData.publishTier === '3') && (
                   <option value="blog.html">Blog</option>
                 )}
                 <option value="calculator.html">Calculators</option>
@@ -3888,7 +3924,7 @@ export default function WDSiteEditor() {
                 <option value="calculators/dehumidifier-sizing.html">Dehumidifier Sizing</option>
                 <option value="calculators/restore-vs-replace.html">Restore vs Replace</option>
               </optgroup>
-              {(siteData.publishTier === '2' || siteData.publishTier === '3' || !siteData.publishTier) && Array.isArray(siteData.services) && siteData.services.length > 0 && (
+              {(siteData.publishTier === '2' || siteData.publishTier === '3') && Array.isArray(siteData.services) && siteData.services.length > 0 && (
                 <optgroup label="Service Pages">
                   {siteData.services.map(s => {
                     const slug = `services/${s.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${(siteData.city || "").toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
@@ -3896,7 +3932,7 @@ export default function WDSiteEditor() {
                   })}
                 </optgroup>
               )}
-              {(siteData.publishTier === '2' || siteData.publishTier === '3' || !siteData.publishTier) && Array.isArray(siteData.serviceAreas) && siteData.serviceAreas.length > 0 && (
+              {(siteData.publishTier === '2' || siteData.publishTier === '3') && Array.isArray(siteData.serviceAreas) && siteData.serviceAreas.length > 0 && (
                 <optgroup label="Location Pages">
                   {siteData.serviceAreas.map(l => {
                     const slug = `locations/${l.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
@@ -3904,7 +3940,7 @@ export default function WDSiteEditor() {
                   })}
                 </optgroup>
               )}
-              {(siteData.publishTier === '2' || siteData.publishTier === '3' || !siteData.publishTier) && Array.isArray(siteData.blogPosts) && siteData.blogPosts.length > 0 && (
+              {(siteData.publishTier === '2' || siteData.publishTier === '3') && Array.isArray(siteData.blogPosts) && siteData.blogPosts.length > 0 && (
                 <optgroup label="Blog Posts">
                   {siteData.blogPosts.map(p => {
                     const slug = `blog/${(p.slug || p.title).toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html`;
@@ -3912,7 +3948,7 @@ export default function WDSiteEditor() {
                   })}
                 </optgroup>
               )}
-              {(siteData.publishTier === '3' || !siteData.publishTier) && (siteData as any).enableMatrixPages && Array.isArray(siteData.services) && siteData.services.length > 0 && Array.isArray(siteData.serviceAreas) && siteData.serviceAreas.length > 0 && (
+              {siteData.publishTier === '3' && (siteData as any).enableMatrixPages && Array.isArray(siteData.services) && siteData.services.length > 0 && Array.isArray(siteData.serviceAreas) && siteData.serviceAreas.length > 0 && (
                 <optgroup label="Matrix Pages (Service × City)">
                   {siteData.services.flatMap(s =>
                     siteData.serviceAreas.map(l => {
@@ -4005,7 +4041,7 @@ export default function WDSiteEditor() {
         tokenVerified={tokenValid === true}
         checklistCompletion={checklistMetrics}
         onReviewChecklist={() => setActiveTab("checklist")}
-        publishTier={siteData.publishTier || '3'}
+        publishTier={siteData.publishTier || '1'}
         onChangePublishTier={(tier) => updateField("publishTier", tier)}
         onBeforeDeploy={async () => {
           const currentSiteData = siteDataRef.current;

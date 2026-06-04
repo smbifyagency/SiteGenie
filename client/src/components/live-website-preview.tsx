@@ -121,7 +121,7 @@ export function LiveWebsitePreview({ businessData, template, useDynamicGenerator
         blogOutputOption: businessData.blogOutputOption || "blog_integrated",
         blogPosts: businessData.blogPosts || [],
         blogCategories: businessData.blogCategories || [],
-        publishTier: businessData.publishTier || "3",
+        publishTier: businessData.publishTier || "1",
         generationStatus: businessData.generationStatus || "idle",
         generationProgress: businessData.generationProgress || 0,
       };

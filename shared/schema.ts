@@ -733,7 +733,7 @@ export const businessDataSchema = z.object({
   blogOutputOption: z.enum(["direct_download", "blog_integrated"]).optional().default("blog_integrated"),
 
   // Publish and Background Generation Tiers
-  publishTier: z.enum(["1", "2", "3"]).optional().default("3"),
+  publishTier: z.enum(["1", "2", "3"]).optional().default("1"),
   generationStatus: z.enum(["idle", "generating", "deploying", "completed", "failed"]).optional().default("idle"),
   generationProgress: z.number().optional().default(0),
   generationError: z.string().optional(),

@@ -1351,7 +1351,7 @@ Return strict JSON (no markdown fences, no formatting backticks):
 
       const trustPrompt = `
 ${baseRules}
-Write trust factors (10 FAQs and 5 testimonials) for:
+Write trust factors (10 FAQs) for:
 - Business Name: ${biz.name}
 - Category: ${categoryName}
 - Location: ${biz.primaryCity}
@@ -1370,13 +1370,6 @@ Return strict JSON (no markdown fences, no formatting backticks):
     { "question": "Question about service area coverage?", "answer": "70-120 words answer." },
     { "question": "Question about maintenance?", "answer": "70-120 words answer." },
     { "question": "Question about choosing a provider?", "answer": "70-120 words answer." }
-  ],
-  "testimonials": [
-    { "name": "Sarah J.", "location": "${biz.primaryCity}", "rating": 5, "text": "60-100 words review." },
-    { "name": "Michael D.", "location": "Nearby area", "rating": 5, "text": "60-100 words review." },
-    { "name": "David K.", "location": "${biz.primaryCity}", "rating": 5, "text": "60-100 words review." },
-    { "name": "Emily W.", "location": "Nearby area", "rating": 5, "text": "60-100 words review." },
-    { "name": "Robert B.", "location": "${biz.primaryCity}", "rating": 5, "text": "60-100 words review." }
   ]
 }
 `;
@@ -1438,7 +1431,7 @@ Return strict JSON (no markdown fences, no formatting backticks):
       if (typeof coreRes.seoBody === 'string' && coreRes.seoBody.trim()) out.seoBody = coreRes.seoBody;
 
       if (Array.isArray(trustRes.faqs) && trustRes.faqs.length > 0) out.faqs = trustRes.faqs;
-      if (Array.isArray(trustRes.testimonials) && trustRes.testimonials.length > 0) out.testimonials = trustRes.testimonials;
+      out.testimonials = [];
 
       if (Array.isArray(processRes.processSteps) && processRes.processSteps.length > 0) out.processSteps = processRes.processSteps;
       if (Array.isArray(processRes.whyChooseUs) && processRes.whyChooseUs.length > 0) out.whyChooseUs = processRes.whyChooseUs;
@@ -1447,7 +1440,7 @@ Return strict JSON (no markdown fences, no formatting backticks):
         out.serviceDescriptions = serviceRes.serviceDescriptions;
       }
 
-      if (!out.introParas && !out.faqs && !out.seoBody && !out.processSteps && !out.whyChooseUs && !out.aboutContent && !out.testimonials && !out.serviceDescriptions) {
+      if (!out.introParas && !out.faqs && !out.seoBody && !out.processSteps && !out.whyChooseUs && !out.aboutContent && !out.serviceDescriptions) {
         throw new Error(`Provider ${candidate.provider} returned empty structured content`);
       }
 
@@ -5556,34 +5549,18 @@ Total Websites: ${validatedData.businesses.length}
           }).flat()
         );
 
-        // Step 6: Testimonials
-        writeProgress("progress", 85, "Creating customer testimonials", 5);
-        const testimonialRaw = await generateStructuredJsonWithProvider(
-          provider,
-          apiKey,
-          buildTestimonialsPrompt(context),
-          {
-            maxTokens: 1800,
-            temperature: 0.75,
-          }
-        );
-
+        // Step 6: Testimonials (Bypassed - Reviews Removed)
+        writeProgress("progress", 85, "Finalizing database models", 5);
         const testimonialsData = {
-          testimonial1Name: stringValue(testimonialRaw?.testimonial1Name) || "Sarah Johnson",
-          testimonial1Text:
-            stringValue(testimonialRaw?.testimonial1Text) ||
-            `${context.finalBusinessName} handled our ${context.serviceType.toLowerCase()} quickly and professionally. The team was clear, on time, and the quality was excellent.`,
-          testimonial1Rating: 5,
-          testimonial2Name: stringValue(testimonialRaw?.testimonial2Name) || "Michael Davis",
-          testimonial2Text:
-            stringValue(testimonialRaw?.testimonial2Text) ||
-            `Great experience from first call to final walkthrough. They explained everything clearly and delivered exactly what we needed in ${context.location}.`,
-          testimonial2Rating: 5,
-          testimonial3Name: stringValue(testimonialRaw?.testimonial3Name) || "Jennifer Wilson",
-          testimonial3Text:
-            stringValue(testimonialRaw?.testimonial3Text) ||
-            `Honest pricing, fast scheduling, and reliable results. I would recommend ${context.finalBusinessName} to anyone looking for ${context.serviceType.toLowerCase()}.`,
-          testimonial3Rating: 5,
+          testimonial1Name: "",
+          testimonial1Text: "",
+          testimonial1Rating: 0,
+          testimonial2Name: "",
+          testimonial2Text: "",
+          testimonial2Rating: 0,
+          testimonial3Name: "",
+          testimonial3Text: "",
+          testimonial3Rating: 0,
         };
 
         // Step 7: Lead generation disclaimer and metadata polish
@@ -7756,7 +7733,7 @@ Generated on: ${new Date().toISOString()}`;
         bd.contentAiProvider = reqProvider;
       }
       
-      const publishTier = reqTier || bd.publishTier || '3';
+      const publishTier = reqTier || bd.publishTier || '1';
       bd.publishTier = publishTier;
       bd.generationStatus = 'generating';
       bd.generationProgress = 0;
@@ -7794,7 +7771,7 @@ Generated on: ${new Date().toISOString()}`;
         status: bd.generationStatus || 'idle',
         progress: bd.generationProgress ?? 0,
         error: bd.generationError || null,
-        publishTier: bd.publishTier || '3',
+        publishTier: bd.publishTier || '1',
       });
     } catch (err: any) {
       console.error("GET generation-status error:", err);
@@ -7828,7 +7805,7 @@ Generated on: ${new Date().toISOString()}`;
       }
 
       const bd = { ...((website.businessData || {}) as any) };
-      const publishTier = reqTier || bd.publishTier || '3';
+      const publishTier = reqTier || bd.publishTier || '1';
       bd.publishTier = publishTier;
       await storage.updateWebsite(id, { businessData: bd });
 

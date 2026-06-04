@@ -684,28 +684,7 @@ function generateLocalBusinessSchema(data: BusinessData, pageTitle?: string, pag
           "description": `Professional ${service.toLowerCase()} services in ${data.heroLocation}`
         }
       }))
-    },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": (consistentRating || generateRandomRating()).toString(),
-      "reviewCount": (consistentReviewCount || generateRandomReviewCount()).toString(),
-      "bestRating": "5"
-    },
-    "review": [
-      {
-        "@type": "Review",
-        "author": {
-          "@type": "Person",
-          "name": "Satisfied Customer"
-        },
-        "reviewRating": {
-          "@type": "Rating",
-          "ratingValue": "5",
-          "bestRating": "5"
-        },
-        "reviewBody": `Excellent ${data.heroService.toLowerCase()} service from ${data.businessName}. Professional, reliable, and great results!`
-      }
-    ]
+    }
   };
 
   // Clean up undefined values
@@ -1001,46 +980,6 @@ function generateWebPageSchema(data: BusinessData, pageTitle: string, pageDescri
 }
 
 
-// Generate Review schema for better SEO
-function generateReviewSchema(data: BusinessData, consistentRating?: number): string {
-  // Random reviewer names
-  const reviewerNames = [
-    "Michael Smith", "Sarah Johnson", "David Brown", "Jennifer Wilson",
-    "Robert Davis", "Lisa Anderson", "James Miller", "Patricia Taylor",
-    "Christopher Lee", "Maria Garcia", "Matthew Martinez", "Susan Rodriguez"
-  ];
-
-  const randomReviewer = reviewerNames[Math.floor(Math.random() * reviewerNames.length)];
-  const randomRating = consistentRating || generateRandomRating();
-
-  const reviewSchema = {
-    "@context": "https://schema.org",
-    "@type": "Review",
-    "itemReviewed": {
-      "@type": "LocalBusiness",
-      "name": data.businessName,
-      "address": {
-        "@type": "PostalAddress",
-        "streetAddress": data.address,
-        "addressLocality": data.heroLocation
-      },
-      "telephone": data.phone
-    },
-    "reviewRating": {
-      "@type": "Rating",
-      "ratingValue": randomRating.toString(),
-      "bestRating": "5"
-    },
-    "author": {
-      "@type": "Person",
-      "name": randomReviewer
-    },
-    "reviewBody": `Excellent ${data.category.toLowerCase()} service from ${data.businessName}. Professional, reliable, and outstanding results!`,
-    "datePublished": new Date().toISOString().split('T')[0]
-  };
-
-  return `<script type="application/ld+json">${JSON.stringify(reviewSchema, null, 2)}</script>`;
-}
 
 // Generate optimized meta tags for local SEO with enhanced indexing support
 function generateSEOMetaTags(data: BusinessData, pageTitle?: string, pageDescription?: string, pageType: string = 'home', domain?: string, pagePath?: string): string {
@@ -3827,7 +3766,6 @@ function generateNavigation(businessData: BusinessData, currentPage?: string): s
                 <ul class="nav-menu">
                     <li><a href="index.html" class="${currentPage === 'home' ? 'active' : ''}">Home</a></li>
                     <li><a href="#about">About</a></li>
-                    <li><a href="#testimonials">Reviews</a></li>
                     ${businessData.generateBlog ? `<li><a href="blog.html" class="${currentPage === 'blog' ? 'active' : ''}">Blog</a></li>` : ''}
                     <li><a href="#contact">Contact</a></li>`;
 
@@ -3947,7 +3885,7 @@ function generateMainHTML(data: BusinessData, template: Template, domain?: strin
     ${generateWebPageSchema(data, optimizedTitle, optimizedDescription, domain)}
     ${generateBreadcrumbSchema(data, 'home', domain)}
     ${generateFAQSchema(data)}
-    ${generateReviewSchema(data, consistentRating)}${injectTrackingCodes(siteSettings, 'head')}
+    ${injectTrackingCodes(siteSettings, 'head')}
 </head>
 <body>${injectTrackingCodes(siteSettings, 'body_start')}
     ${generateNavigation(data, 'home')}
@@ -4236,31 +4174,6 @@ ${data.phone}
 
     <!-- Service Areas Section Removed - Duplicate with Service Locations -->
     
-    <!-- Testimonials Section -->
-    <section class="testimonials" id="testimonials">
-        <div class="container">
-            <h2 class="section-title">What Our Customers Say</h2>
-            <p class="section-subtitle">Real experiences from satisfied customers in ${data.heroLocation}</p>
-            <div class="testimonials-grid">
-                ${generateProfessionalTestimonials(data)}
-            </div>
-            <div class="testimonials-rating">
-                <div class="overall-rating">
-                    <div class="rating-stars">
-                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
-                    </div>
-                    <span class="rating-number">${consistentRating}/5</span>
-                </div>
-                <p>Average rating from ${formattedCustomerCount} satisfied customers</p>
-            </div>
-            <div class="testimonials-cta">
-                <a href="tel:${data.countryCode || '+1'}${data.phone.replace(/\\D/g, '')}" class="cta-button cta-call large">
-                    <i class="fas fa-phone"></i>
-                    ${data.phone}
-                </a>
-            </div>
-        </div>
-    </section>
 
 
     <!-- Our Locations & Services Section -->
@@ -4903,37 +4816,6 @@ function generateLocationHTML(data: BusinessData, template: Template, locationNa
     </section>
 
 
-    <!-- Testimonials Section -->
-    <section class="testimonials" id="testimonials">
-        <div class="container">
-            <h2 class="section-title">What Our ${locationName} Customers Say</h2>
-            <div class="testimonials-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem; margin-top: 3rem;">
-                ${[1, 2, 3].map(i => `
-                <div class="testimonial-card" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); padding: 2.5rem 2rem; border-radius: 20px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08); border: 1px solid #e5e7eb; position: relative; transition: all 0.3s ease;">
-                    <div class="testimonial-rating" style="display: flex; gap: 0.25rem; margin-bottom: 1.5rem;">
-                        ${Array.from({ length: (data[`testimonial${i}Rating` as keyof BusinessData] as number) || 5 }, () => '<i class="fas fa-star" style="color: #fbbf24; font-size: 1rem;"></i>').join('')}
-                    </div>
-                    <blockquote class="testimonial-text" style="font-size: 1.1rem; line-height: 1.7; color: #374151; margin-bottom: 2rem; font-style: italic; position: relative;">
-                        "${data[`testimonial${i}Text` as keyof BusinessData] || `Excellent ${data.heroService.toLowerCase()} service in ${locationName}. Professional, reliable, and great results every time!`}"
-                    </blockquote>
-                    <div class="testimonial-author" style="display: flex; align-items: center; gap: 1rem;">
-                        <div class="author-avatar" style="width: 50px; height: 50px; background: linear-gradient(135deg, ${template.colors.primary}, ${template.colors.secondary}); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 1.2rem;">
-                            ${(data[`testimonial${i}Name` as keyof BusinessData] as string || 'Happy Customer').charAt(0)}
-                        </div>
-                        <div>
-                            <div class="author-name" style="font-weight: 600; color: #1f2937; margin-bottom: 0.25rem;">
-                                ${data[`testimonial${i}Name` as keyof BusinessData] || 'Happy Customer'}
-                            </div>
-                            <div class="author-title" style="font-size: 0.875rem; color: #6b7280;">
-                                Verified ${locationName} Customer
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                `).join('')}
-            </div>
-        </div>
-    </section>
 
     <!-- Contact Section -->
     <section class="contact" id="contact" style="padding: 5rem 0; background: linear-gradient(135deg, ${template.colors.primary}, ${template.colors.secondary});">
@@ -5347,37 +5229,6 @@ function generateServiceHTML(data: BusinessData, template: Template, serviceName
         </div>
     </section>
 
-    <!-- Testimonials Section -->
-    <section class="testimonials" id="testimonials">
-        <div class="container">
-            <h2 class="section-title">What Our ${serviceName} Customers Say</h2>
-            <div class="testimonials-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem; margin-top: 3rem;">
-                ${[1, 2, 3].map(i => `
-                <div class="testimonial-card" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); padding: 2.5rem 2rem; border-radius: 20px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08); border: 1px solid #e5e7eb; position: relative; transition: all 0.3s ease;">
-                    <div class="testimonial-rating" style="display: flex; gap: 0.25rem; margin-bottom: 1.5rem;">
-                        ${Array.from({ length: (data[`testimonial${i}Rating` as keyof BusinessData] as number) || 5 }, () => '<i class="fas fa-star" style="color: #fbbf24; font-size: 1rem;"></i>').join('')}
-                    </div>
-                    <blockquote class="testimonial-text" style="font-size: 1.1rem; line-height: 1.7; color: #374151; margin-bottom: 2rem; font-style: italic; position: relative;">
-                        "${data[`testimonial${i}Text` as keyof BusinessData] || `Excellent ${serviceName.toLowerCase()} service. Professional, reliable, and great results every time!`}"
-                    </blockquote>
-                    <div class="testimonial-author" style="display: flex; align-items: center; gap: 1rem;">
-                        <div class="author-avatar" style="width: 50px; height: 50px; background: linear-gradient(135deg, ${template.colors.primary}, ${template.colors.secondary}); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 1.2rem;">
-                            ${(data[`testimonial${i}Name` as keyof BusinessData] as string || 'Happy Customer').charAt(0)}
-                        </div>
-                        <div>
-                            <div class="author-name" style="font-weight: 600; color: #1f2937; margin-bottom: 0.25rem;">
-                                ${data[`testimonial${i}Name` as keyof BusinessData] || 'Happy Customer'}
-                            </div>
-                            <div class="author-title" style="font-size: 0.875rem; color: #6b7280;">
-                                Verified ${serviceName} Customer
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                `).join('')}
-            </div>
-        </div>
-    </section>
 
     <!-- Contact Section -->
     <section class="contact" id="contact" style="padding: 5rem 0; background: linear-gradient(135deg, ${template.colors.primary}, ${template.colors.secondary});">

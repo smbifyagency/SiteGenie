@@ -576,7 +576,7 @@ function generateGoogleMap(data: WDBusinessData, focusCity?: string): string {
 
 function generateNav(data: WDBusinessData, currentPath: string = ''): string {
   const prefix = currentPath.includes('/') ? '../' : '';
-  const tier = data.publishTier || '3';
+  const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
 
   const serviceLinks = data.services
@@ -659,7 +659,7 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
   const theme = resolveTheme(data);
   const accentColor = theme.accentColor || '#dc2626';
   const secondaryColor = theme.secondaryColor || '#0ea5e9';
-  const tier = data.publishTier || '3';
+  const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
 
   const serviceLinks = data.services
@@ -909,32 +909,6 @@ function generateServiceSchema(data: WDBusinessData, domain: string): string {
   return JSON.stringify(schema, null, 2);
 }
 
-function generateAggregateRatingSchema(data: WDBusinessData): string {
-  const seed = (data.businessName || '').length + (data.city || '').length;
-  const ratingValue = (4.7 + (seed % 3) * 0.1).toFixed(1);
-  const reviewCount = 47 + (seed % 80);
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "name": data.businessName,
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": ratingValue,
-      "reviewCount": reviewCount,
-      "bestRating": "5",
-      "worstRating": "1"
-    },
-    "review": [
-      {
-        "@type": "Review",
-        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
-        "author": { "@type": "Person", "name": "Satisfied Customer" },
-        "reviewBody": `Excellent ${data.primaryKeyword?.toLowerCase() || 'restoration'} service from ${data.businessName}. Highly recommended!`
-      }
-    ]
-  };
-  return JSON.stringify(schema, null, 2);
-}
 
 function generateBlogPostingSchema(data: WDBusinessData, post: { title: string; slug: string; excerpt: string; content?: string; date?: string; featuredImage?: string; category?: string; keywords?: string }, domain: string): string {
   const publishDate = getSafeBlogDate(post.date);
@@ -2627,7 +2601,7 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
   const seoH2 = content?.seoFootnote?.h2 || `Your Trusted Partner for ${data.primaryKeyword} in ${data.city}, ${data.state}`;
   const seoBody = content?.seoFootnote?.body || data._seoBody || `We provide high-quality ${data.primaryKeyword.toLowerCase()} and structural drying services to protect your property. Contact us today.`;
 
-  const tier = data.publishTier || '3';
+  const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
 
   const servicesCardsHTML = serviceCards.map(card => {
@@ -2901,33 +2875,6 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
     </div>
   </section>
 
-  ${(() => {
-    const testimonials = (data as any)._aiTestimonials;
-    if (!Array.isArray(testimonials) || testimonials.length === 0) return '';
-    const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
-    return `
-  <!-- ── Testimonials ──────────────────────────────────── -->
-  <section aria-labelledby="testimonials-heading" class="reveal">
-    <div class="container">
-      <h2 id="testimonials-heading" class="text-center">What Our Customers Say</h2>
-      <p class="section-intro" style="text-align:center;margin:0 auto 0.5rem;">Real feedback from homeowners who trusted ${data.businessName} for their ${data.primaryKeyword.toLowerCase()} needs.</p>
-      <div class="testimonials-grid stagger-children">
-        ${testimonials.map((t: any) => `
-        <div class="testimonial-card reveal">
-          <div class="testimonial-stars">${stars(t.rating || 5)}</div>
-          <p class="testimonial-text">"${t.text}"</p>
-          <div class="testimonial-author">
-            <div class="testimonial-avatar">${(t.name || 'A').charAt(0).toUpperCase()}</div>
-            <div>
-              <div class="testimonial-name">${t.name}</div>
-              ${t.location ? `<div class="testimonial-location">${t.location}</div>` : ''}
-            </div>
-          </div>
-        </div>`).join('')}
-      </div>
-    </div>
-  </section>`;
-  })()}
 
   <!-- ── CTA ───────────────────────────────────────────── -->
   <section class="cta-section" aria-labelledby="cta-heading">
@@ -2964,7 +2911,6 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
       generateLocalBusinessSchema(data, `${domain}.netlify.app`),
       generateOrganizationSchema(data, `${domain}.netlify.app`),
       generateServiceSchema(data, `${domain}.netlify.app`),
-      generateAggregateRatingSchema(data),
       generateWebSiteSchema(data, domain),
       generateFAQSchema(faqs),
     ],
@@ -5409,7 +5355,7 @@ export function generateTermsPage(data: WDBusinessData, domain: string): string 
 export function generateSitemap(data: WDBusinessData, domain: string): string {
   const base = getSiteUrl(data, domain);
   const today = new Date().toISOString().split('T')[0];
-  const tier = data.publishTier || '3';
+  const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
   const showBlog = tier === '2' || tier === '3';
 
@@ -5523,7 +5469,7 @@ Allow: /`;
 
 export function generateLLMsTxt(data: WDBusinessData, domain: string): string {
   const base = getSiteUrl(data, domain);
-  const tier = data.publishTier || '3';
+  const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
   const showBlog = tier === '2' || tier === '3';
   const llmBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
@@ -5572,7 +5518,7 @@ ${matrixList ? `\n## Combination Pages\n${matrixList}` : ''}
 export function generateHTMLSitemap(data: WDBusinessData, domain: string): string {
   const theme = resolveTheme(data);
   const base = getSiteUrl(data, domain);
-  const tier = data.publishTier || '3';
+  const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
   const showBlog = tier === '2' || tier === '3';
   const htmlBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
@@ -5717,7 +5663,7 @@ export function generateWaterDamageWebsite(
     files[`calculators/${CALCULATORS[i].slug}.html`] = generateSingleCalculatorPage(data, i, domain);
   }
   files['gallery.html']    = generateGalleryPage(data, domain);
-  const tier = data.publishTier || '3';
+  const tier = data.publishTier || '1';
 
   // Blog pages — generate blog.html and individual posts only for Tier 2 and Tier 3
   if (tier === '2' || tier === '3') {
