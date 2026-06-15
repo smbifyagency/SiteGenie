@@ -131,6 +131,7 @@ export function generateLocalServiceWebsite(
     _trustBadges: config.copy.trustBadges,
     _whyUsPoints: whyUsPoints,
     _schemaType: config.seo.schemaType,
+    _calculator: config.calculator,
   } as any;
 
   // Inject extended copy fields if defined in the category config
@@ -206,6 +207,7 @@ export function enrichBusinessDataForCategory(
     _trustBadges: config.copy.trustBadges,
     _whyUsPoints: whyUsPoints,
     _schemaType: config.seo.schemaType,
+    _calculator: config.calculator,
   };
 
   const c = config.copy;

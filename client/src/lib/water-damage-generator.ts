@@ -655,6 +655,7 @@ function generateNav(data: WDBusinessData, currentPath: string = ''): string {
 // ─── SHARED: Footer ────────────────────────────────────────────────────────
 
 function generateFooter(data: WDBusinessData, currentPath: string = ''): string {
+  data = sanitizeBusinessData(data);
   const prefix = currentPath.includes('/') ? '../' : '';
   const theme = resolveTheme(data);
   const accentColor = theme.accentColor || '#dc2626';
@@ -701,7 +702,15 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
     ).join('')}</div>`;
   })();
 
+  const showMap = currentPath !== 'contact.html';
+  const mapSection = showMap ? `
+  <section class="footer-map-section reveal" style="width: 100%; margin: 0; padding: 0;" aria-label="Our Location Map">
+    ${generateGoogleMap(data)}
+  </section>
+  ` : '';
+
   return `
+  ${mapSection}
   <footer class="site-footer" role="contentinfo">
     <div class="footer-inner">
       <div class="footer-brand">
@@ -1161,7 +1170,6 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   width: auto;
   display: block;
   object-fit: contain;
-  filter: brightness(0) invert(1);
   opacity: 0.9;
 }
 
@@ -2405,6 +2413,14 @@ document.querySelectorAll('.faq-question').forEach(btn => {
     el.style.transitionDelay = (i % 6) * 0.08 + 's';
     observer.observe(el);
   });
+  // Backup timeout to show elements in nested editor iframes where intersection observer might fail
+  setTimeout(() => {
+    elements.forEach(el => {
+      if (!el.classList.contains('visible')) {
+        el.classList.add('visible');
+      }
+    });
+  }, 800);
 })();
 
 // Sticky header scroll effect
@@ -2523,9 +2539,73 @@ function htmlShell(params: {
 </html>`;
 }
 
+function toTitleCase(str: string): string {
+  if (!str) return '';
+  return str
+    .split(/\s+/)
+    .map(word => word ? word.charAt(0).toUpperCase() + word.slice(1) : '')
+    .filter(Boolean)
+    .join(' ');
+}
+
+function sanitizeBusinessData(data: WDBusinessData): WDBusinessData {
+  if (!data) return data;
+  const clean = { ...data };
+
+  if (clean.primaryKeyword) {
+    clean.primaryKeyword = toTitleCase(clean.primaryKeyword);
+  }
+
+  if (Array.isArray(clean.services)) {
+    clean.services = clean.services.map(s => toTitleCase(s));
+  }
+
+  if (clean.city) {
+    clean.city = clean.city.trim().replace(/,+/g, ',').trim();
+    while (clean.city.endsWith(',')) {
+      clean.city = clean.city.slice(0, -1).trim();
+    }
+    if (clean.state) {
+      const stateClean = clean.state.trim();
+      const stateRegex = new RegExp(`,\\s*${stateClean}\\s*$`, 'i');
+      if (stateRegex.test(clean.city)) {
+        clean.city = clean.city.replace(stateRegex, '').trim();
+      }
+    }
+  }
+
+  if (clean.state) {
+    clean.state = clean.state.trim().replace(/,+/g, ',').trim();
+    while (clean.state.startsWith(',')) {
+      clean.state = clean.state.slice(1).trim();
+    }
+    while (clean.state.endsWith(',')) {
+      clean.state = clean.state.slice(0, -1).trim();
+    }
+  }
+
+  if (Array.isArray(clean.serviceAreas)) {
+    clean.serviceAreas = clean.serviceAreas.map(loc => {
+      let l = loc.trim().replace(/,+/g, ',').trim();
+      while (l.endsWith(',')) l = l.slice(0, -1).trim();
+      if (clean.state) {
+        const stateClean = clean.state.trim();
+        const stateRegex = new RegExp(`,\\s*${stateClean}\\s*$`, 'i');
+        if (stateRegex.test(l)) {
+          l = l.replace(stateRegex, '').trim();
+        }
+      }
+      return l;
+    });
+  }
+
+  return clean;
+}
+
 // ─── HOMEPAGE ──────────────────────────────────────────────────────────────
 
 export function generateHomepage(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const content = data.homepageContent;
   const prefix = '';
   const { primaryColor, secondaryColor, accentColor } = resolveTheme(data);
@@ -2587,13 +2667,21 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
     : (data.serviceAreas?.length ? data.serviceAreas : [data.city]).map(l => ({ city: l, anchor: l, slug: `locations/${slugify(l)}.html` }));
 
   const faqH2 = content?.faqSection?.h2 || data._faqH2 || `Frequently Asked Questions`;
-  const faqs = content?.faqSection?.faqs || data._faqs || [
-    { question: `How fast can you respond in ${data.city}?`, answer: `We are available 24/7 and typically arrive on-site within 60 minutes for water damage emergencies.` },
-    { question: `Does insurance cover water damage restoration?`, answer: 'Most standard homeowners policies cover sudden and accidental water damage. We work directly with your insurer.' },
-    { question: `How long does the structural drying process take?`, answer: 'Most drying projects take between 3 and 5 days, depending on the materials and extent of saturation.' },
-    { question: `What should I do before the restoration crew arrives?`, answer: 'If safe, shut off the main water valve, turn off electricity to wet areas, and move valuable items out of the water.' },
-    { question: `Are your technicians certified?`, answer: 'Yes, our restoration technicians are IICRC-certified and fully trained in modern drying protocols.' }
-  ];
+  const isRestoration = data._categoryId === 'water-damage' || data._categoryId === 'mold-remediation' || data._categoryId === 'fire-damage';
+  const defaultFaqs = isRestoration
+    ? [
+        { question: `How fast can you respond in ${data.city}?`, answer: `We are available 24/7 and typically arrive on-site within 60 minutes for water damage emergencies.` },
+        { question: `Does insurance cover water damage restoration?`, answer: 'Most standard homeowners policies cover sudden and accidental water damage. We work directly with your insurer.' },
+        { question: `How long does the structural drying process take?`, answer: 'Most drying projects take between 3 and 5 days, depending on the materials and extent of saturation.' },
+        { question: `What should I do before the restoration crew arrives?`, answer: 'If safe, shut off the main water valve, turn off electricity to wet areas, and move valuable items out of the water.' },
+        { question: `Are your technicians certified?`, answer: 'Yes, our restoration technicians are IICRC-certified and fully trained in modern drying protocols.' }
+      ]
+    : [
+        { question: `How can I schedule a service?`, answer: `You can call us directly at ${data.phone} or send us a message through our contact form. We will schedule a convenient time for your service.` },
+        { question: `Do you provide free estimates?`, answer: `Yes, we offer free on-site assessments and written estimates with no obligation.` },
+        { question: `Are you licensed and insured?`, answer: `Yes, we are fully licensed and insured to perform professional ${data.primaryKeyword.toLowerCase()} services in your area.` }
+      ];
+  const faqs = content?.faqSection?.faqs || data._faqs || defaultFaqs;
   const ctaH2 = content?.finalCTA?.h2 || data._ctaHeadline || `Ready to Get Started?`;
   const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `Contact ${data.businessName} today for professional, certified services. Available 24/7 for emergencies.`;
   const ctaBtn = content?.finalCTA?.ctaButton || data._ctaButton || `Call Now: ${data.phone}`;
@@ -2890,15 +2978,7 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
 
   ${contactSection}
 
-  <!-- ── Map ──────────────────────────────────────────── -->
-  <section class="content-section reveal" style="background:#f8fafc;" aria-labelledby="map-heading">
-    <div class="container">
-      <h2 id="map-heading" style="text-align:center;margin-bottom:1.5rem;">Find Us in ${data.city}</h2>
-      ${generateGoogleMap(data)}
-    </div>
-  </section>
-
-  ${generateFooter(data)}`;
+  ${generateFooter(data, '')}`;
 
   const canonicalUrl = `${getSiteUrl(data, domain)}/`;
 
@@ -2931,6 +3011,7 @@ export function generateServicePage(
   service: string,
   domain: string
 ): string {
+  data = sanitizeBusinessData(data);
   const slug = slugify(service);
   const citySlug = slugify(data.city);
   const content = data.serviceContent?.[service];
@@ -2944,15 +3025,33 @@ export function generateServicePage(
   const overviewH2 = content?.overviewSection?.h2 || `Expert ${service} in ${data.city}`;
   // Use AI-generated service description if available for this service
   const aiServiceDesc = (data as any)._aiServiceDescs?.[service];
-  const overviewParas = content?.overviewSection?.body || (aiServiceDesc ? [
-    aiServiceDesc,
-    `Our crew arrives fully equipped to handle ${service.toLowerCase()} quickly and professionally. We prioritize minimal disruption and thorough drying.`,
-    `We work with you and your insurance provider to ensure the cleanup and restoration process is documented correctly. Contact ${data.businessName} today.`
-  ] : [
-    `When you need professional ${service.toLowerCase()} in ${data.city}, ${data.state}, the team at ${data.businessName} is ready to help. We provide prompt response, certified technicians, and upfront estimates before starting any work.`,
-    `Our process is designed to handle all aspects of ${service.toLowerCase()} from initial water extraction through structural drying and final cleanup. We use advanced moisture-detection tools to ensure no hidden moisture is left behind.`,
-    `We understand that water damage is stressful. That's why we keep you informed at every step of the process and work directly with all major insurance carriers when applicable.`
-  ]);
+  const isWaterDamage = data._categoryId === 'water-damage';
+  
+  const defaultOverviewParas = isWaterDamage
+    ? [
+        `When you need professional ${service.toLowerCase()} in ${data.city}, ${data.state}, the team at ${data.businessName} is ready to help. We provide prompt response, certified technicians, and upfront estimates before starting any work.`,
+        `Our process is designed to handle all aspects of ${service.toLowerCase()} from initial water extraction through structural drying and final cleanup. We use advanced moisture-detection tools to ensure no hidden moisture is left behind.`,
+        `We understand that water damage is stressful. That's why we keep you informed at every step of the process and work directly with all major insurance carriers when applicable.`
+      ]
+    : [
+        `When you need professional ${service.toLowerCase()} in ${data.city}, ${data.state}, the team at ${data.businessName} is ready to help. We provide prompt response, qualified professionals, and upfront pricing before starting any work.`,
+        `Our team is dedicated to delivering high-quality ${service.toLowerCase()} services tailored to the specific needs of your property. We use the right tools and techniques to ensure the job is done safely, efficiently, and correctly the first time.`,
+        `We understand that completing your project on time and within budget is important. That's why we keep you informed at every step of the process and deliver reliable, hassle-free results.`
+      ];
+
+  const defaultOverviewParasWithDesc = isWaterDamage
+    ? [
+        aiServiceDesc,
+        `Our crew arrives fully equipped to handle ${service.toLowerCase()} quickly and professionally. We prioritize minimal disruption and thorough drying.`,
+        `We work with you to ensure the cleanup and restoration process is documented correctly. Contact ${data.businessName} today.`
+      ]
+    : [
+        aiServiceDesc,
+        `Our crew arrives fully equipped to handle your ${service.toLowerCase()} needs quickly and professionally. We prioritize safety, efficiency, and cleanliness on every job.`,
+        `We work closely with you to ensure your project is completed exactly to your specifications. Contact ${data.businessName} today to get started.`
+      ];
+
+  const overviewParas = content?.overviewSection?.body || (aiServiceDesc ? defaultOverviewParasWithDesc : defaultOverviewParas);
 
   const processH2 = content?.processSection?.h2 || `Our ${service} Process`;
   const processIntro = content?.processSection?.intro || `We follow a detailed, step-by-step process to ensure your ${service.toLowerCase()} is completed to the highest standards.`;
@@ -2993,6 +3092,8 @@ export function generateServicePage(
     { sign: 'Increased Humidity', body: 'Excessive indoor humidity or condensation on windows suggests unresolved moisture issues.' },
   ];
 
+  const showWarnings = data._categoryId === 'water-damage' || data._categoryId === 'mold-remediation' || data._categoryId === 'fire-damage';
+
   const locationClusterH2 = content?.locationClusterSection?.h2 || `Serving ${data.city} and Surrounding Areas`;
   const locationClusterIntro = content?.locationClusterSection?.intro || `We provide prompt ${service.toLowerCase()} services to homeowners and businesses throughout the following communities:`;
   const locationCards = content?.locationClusterSection?.locationCards?.length
@@ -3005,12 +3106,17 @@ export function generateServicePage(
       }));
 
   const faqH2 = content?.faqSection?.h2 || `Frequently Asked Questions About ${service}`;
+  const isRestoration = data._categoryId === 'water-damage' || data._categoryId === 'mold-remediation' || data._categoryId === 'fire-damage';
+  const certificationText = isRestoration 
+    ? `in accordance with <a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC S500 standards</a>` 
+    : `in accordance with industry standards`;
+
   const faqs = content?.faqSection?.faqs || data._faqs || [
     { question: `Do you provide ${service.toLowerCase()} near me in ${data.city}?`, answer: `Yes, ${data.businessName} serves all of ${data.city} and surrounding areas with professional ${service.toLowerCase()} services.` },
     { question: `How long does the ${service.toLowerCase()} process take?`, answer: `Typically, drying and mitigation take 3 to 5 days. Reconstruction or repairs may take longer depending on the extent of the damage.` },
     { question: `Does insurance cover ${service.toLowerCase()}?`, answer: `Most homeowner's policies cover sudden and accidental damage. We document everything to help you file a successful claim.` },
-    { question: `Are your technicians certified for ${service.toLowerCase()}?`, answer: `Yes, all our technicians are IICRC-certified and trained in the latest restoration and drying techniques.` },
-    { question: `What should I do first when I detect water damage?`, answer: `Shut off the main water source if safe, turn off power to the affected area, and call a professional restoration team immediately.` },
+    { question: `Are your technicians certified for ${service.toLowerCase()}?`, answer: `Yes, all our technicians are fully trained and qualified, and our work is performed ${certificationText}.` },
+    { question: `What should I do first?`, answer: `Contact us immediately. We will answer your questions and guide you through the process step-by-step.` }
   ];
 
   const crossH2 = content?.crossLinkSection?.h2 || `Other Professional Services We Offer`;
@@ -3139,6 +3245,7 @@ export function generateServicePage(
     </div>
   </section>
 
+  ${showWarnings ? `
   <!-- ── Warning Signs ─────────────────────────── -->
   <section class="content-section reveal" aria-labelledby="warnings-heading" style="background:#f8fafc;">
     <div class="container">
@@ -3149,6 +3256,7 @@ export function generateServicePage(
       </div>
     </div>
   </section>
+  ` : ''}
 
   <!-- ── Service Areas ─────────────────────────── -->
   <section class="content-section reveal" aria-labelledby="cluster-heading">
@@ -3225,6 +3333,16 @@ export function generateLocationPage(
   city: string,
   domain: string
 ): string {
+  data = sanitizeBusinessData(data);
+  city = city.trim().replace(/,+/g, ',').trim();
+  while (city.endsWith(',')) city = city.slice(0, -1).trim();
+  if (data.state) {
+    const stateClean = data.state.trim();
+    const stateRegex = new RegExp(`,\\s*${stateClean}\\s*$`, 'i');
+    if (stateRegex.test(city)) {
+      city = city.replace(stateRegex, '').trim();
+    }
+  }
   const citySlug = slugify(city);
   const content = data.locationContent?.[city];
   const prefix = '../';
@@ -3280,14 +3398,30 @@ export function generateLocationPage(
   const areasBody = content?.localAreaSection?.body || `${data.businessName} serves all neighborhoods and districts within ${city}. Our response coverage includes the greater ${city} area, surrounding communities, and neighboring ZIP codes. If you are unsure whether we cover your location, call us at ${data.phone} — we will give you an honest answer.`;
 
   const faqH2 = content?.faqSection?.h2 || `${data.primaryKeyword} in ${city} — Common Questions`;
-  const faqs = content?.faqSection?.faqs || data._faqs || [
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
+  let rawFaqs = content?.faqSection?.faqs || data._faqs || [
     { question: `How fast can you respond in ${city}?`, answer: `Our ${city} team is available around the clock. Response times depend on your location and current demand — we will give you an honest ETA when you call.` },
     { question: `Do you serve all of ${city}?`, answer: `Yes. We serve all areas within ${city} as well as surrounding communities. If you are unsure whether we cover your specific location, just call us and we will confirm immediately.` },
-    { question: `Does ${data.businessName} work with insurance companies?`, answer: `Yes. We work with all major insurance carriers. We provide complete documentation to support your claim, aligned with FEMA guidelines, and can communicate directly with your adjuster if you prefer.` },
+    ...(isRestoration ? [
+      { question: `Does ${data.businessName} work with insurance companies?`, answer: `Yes. We work with all major insurance carriers. We provide complete documentation to support your claim, aligned with FEMA guidelines, and can communicate directly with your adjuster if you prefer.` }
+    ] : [
+      { question: `What are your rates in ${city}?`, answer: `Pricing depends on the specific service and project size. We provide free, upfront, and transparent estimates before starting any work so you know exactly what to expect.` }
+    ]),
     { question: `How long will the job take in my ${city} property?`, answer: `Timelines depend on the scope of the work. We provide a realistic estimate during our initial assessment and keep you updated throughout the process.` },
     { question: `Do you provide free estimates in ${city}?`, answer: `Yes. We offer free on-site assessments with no obligation. A technician will inspect the situation and provide a written estimate before any work begins.` },
-    { question: `Are you licensed and insured in ${data.state}?`, answer: `Yes. ${data.businessName} is fully licensed and insured in ${data.state}. All work is performed by qualified professionals following applicable codes and industry standards, including those defined by the <a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC</a>.` },
+    { question: `Are you licensed and insured in ${data.state}?`, answer: `Yes. ${data.businessName} is fully licensed and insured in ${data.state}. All work is performed by qualified professionals following applicable codes and industry standards` + (isRestoration ? `, including those defined by the <a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC</a>.` : '.') },
   ];
+
+  // Replace references to home city with current city in FAQs
+  const faqs = rawFaqs.map(faq => {
+    let q = faq.question;
+    let a = faq.answer;
+    if (data.city && city && data.city !== city) {
+      q = q.replace(new RegExp(data.city, 'gi'), city);
+      a = a.replace(new RegExp(data.city, 'gi'), city);
+    }
+    return { question: q, answer: a };
+  });
 
   const ctaH2 = content?.finalCTA?.h2 || `Need ${data.primaryKeyword} in ${city}? Contact Us Now`;
   const ctaBody = content?.finalCTA?.body || data._ctaSubtext || `${data.businessName} is ready to help ${city} homeowners and businesses with professional ${data.primaryKeyword.toLowerCase()}. Call now or submit a request and we will follow up promptly.`;
@@ -3414,14 +3548,6 @@ export function generateLocationPage(
     </div>
   </section>
 
-  <!-- ── Map ─────────────────────────────────────── -->
-  <section class="content-section reveal" style="background:#f8fafc;" aria-labelledby="map-heading">
-    <div class="container">
-      <h2 id="map-heading" style="text-align:center;margin-bottom:1.5rem;">${data.primaryKeyword} in ${city} — Our Service Area</h2>
-      ${generateGoogleMap(data, city)}
-    </div>
-  </section>
-
   <!-- ── CTA ────────────────────────────────────── -->
   <section class="cta-section" aria-labelledby="cta-heading">
     <div class="container">
@@ -3466,11 +3592,23 @@ export function generateServiceLocationMatrixPage(
   city: string,
   domain: string
 ): string {
+  data = sanitizeBusinessData(data);
+  city = city.trim().replace(/,+/g, ',').trim();
+  while (city.endsWith(',')) city = city.slice(0, -1).trim();
+  if (data.state) {
+    const stateClean = data.state.trim();
+    const stateRegex = new RegExp(`,\\s*${stateClean}\\s*$`, 'i');
+    if (stateRegex.test(city)) {
+      city = city.replace(stateRegex, '').trim();
+    }
+  }
+
   const svcSlug = slugify(service);
   const citySlug = slugify(city);
   const { secondaryColor, accentColor } = resolveTheme(data);
   const prefix = '../';
   const canonicalUrl = `${getSiteUrl(data, domain)}/matrix/${svcSlug}-in-${citySlug}`;
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
 
   // Use AI service description if available
   const aiDesc = (data as any)._aiServiceDescs?.[service];
@@ -3485,7 +3623,9 @@ export function generateServiceLocationMatrixPage(
   ] : [
     `When you need ${service.toLowerCase()} in ${city}, you need a team that responds quickly and does the job right the first time. ${data.businessName} has been serving ${city} homeowners and businesses with professional ${service.toLowerCase()} — delivering honest assessments, upfront pricing, and certified work.`,
     `Our ${city} technicians are specifically trained in ${service.toLowerCase()} and understand the unique challenges that local properties face. Whether it's an emergency or a planned project, we handle it completely.`,
-    `${data.businessName} works with all major insurance carriers when applicable and provides complete documentation to support your claim. Call ${data.phone} for a free estimate.`,
+    isRestoration 
+      ? `${data.businessName} works with all major insurance carriers when applicable and provides complete documentation to support your claim. Call ${data.phone} for a free estimate.`
+      : `We deliver professional, reliable services tailored to your specific project needs. Call ${data.phone} for a free estimate.`,
   ];
 
   const processSteps: Array<{ step: number; heading: string; body: string }> = (data as any)._aiProcessSteps || [
@@ -3499,7 +3639,7 @@ export function generateServiceLocationMatrixPage(
   const faqs = [
     { question: `How much does ${service.toLowerCase()} cost in ${city}?`, answer: `Costs vary depending on the scope of work. ${data.businessName} provides free on-site assessments and detailed written estimates before any work begins. Call ${data.phone} for a no-obligation quote.` },
     { question: `How quickly can you get to ${city}?`, answer: `Our crews are positioned to serve ${city} and surrounding areas. We offer same-day service for most requests and rapid response for emergencies.` },
-    { question: `Is ${data.businessName} licensed for ${service.toLowerCase()} in ${data.state}?`, answer: `Yes. We are fully licensed and insured in ${data.state}. All technicians are trained and certified for ${service.toLowerCase()} work in accordance with <a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC standards</a>.` },
+    { question: `Is ${data.businessName} licensed for ${service.toLowerCase()} in ${data.state}?`, answer: `Yes. We are fully licensed and insured in ${data.state}. All technicians are trained and certified for ${service.toLowerCase()} work in accordance with ` + (isRestoration ? `<a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC standards</a>.` : `industry standards.`) },
     { question: `Do you offer free estimates for ${service.toLowerCase()} in ${city}?`, answer: `Absolutely. We provide free on-site assessments with no obligation. A technician will inspect the situation and give you a written estimate before any work begins.` },
   ];
 
@@ -3624,6 +3764,7 @@ export function generateServiceLocationMatrixPage(
 // ─── ABOUT PAGE ────────────────────────────────────────────────────────────
 
 export function generateAboutPage(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const theme = resolveTheme(data);
   const { secondaryColor, accentColor } = theme;
   const canonicalUrl = `${getSiteUrl(data, domain)}/about`;
@@ -3779,6 +3920,7 @@ ${data.businessName} serves all of ${data.city} and surrounding communities. We 
 // ─── CONTACT PAGE ──────────────────────────────────────────────────────────
 
 export function generateContactPage(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const theme = resolveTheme(data);
   const { secondaryColor, accentColor } = theme;
   const canonicalUrl = `${getSiteUrl(data, domain)}/contact`;
@@ -3914,7 +4056,7 @@ export function generateContactPage(data: WDBusinessData, domain: string): strin
     </div>
   </section>
 
-  ${generateFooter(data)}`;
+  ${generateFooter(data, 'contact.html')}`;
 
   return htmlShell({
     metaTitle: `Contact ${data.businessName} | ${data.primaryKeyword} ${data.city}`,
@@ -3933,65 +4075,80 @@ export function generateContactPage(data: WDBusinessData, domain: string): strin
 // ─── FAQ PAGE ──────────────────────────────────────────────────────────────
 
 export function generateFAQPage(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const theme = resolveTheme(data);
   const canonicalUrl = `${getSiteUrl(data, domain)}/faq`;
   const content = data.faqContent;
 
-  const defaultCategories = [
-    {
-      heading: 'Emergency Response',
-      faqs: [
-        { question: `How fast can you respond to water damage in ${data.city}?`, answer: `Our ${data.city} team is available 24 hours a day, 7 days a week. We typically arrive within 60 minutes of your call for most locations in our service area. When you call, we will give you an honest estimated arrival time based on current crew availability.` },
-        { question: 'What should I do while waiting for your crew to arrive?', answer: 'If it is safe to do so: shut off the water source if possible, turn off electricity in affected areas, move valuables and furniture off wet floors, and take photos of the damage for your insurance claim. Do not use a regular vacuum on standing water and avoid entering rooms where ceilings are sagging.' },
-        { question: 'Do you respond to water damage 24 hours a day?', answer: `Yes. Water damage does not follow business hours and neither do we. Our emergency dispatch is staffed around the clock, every day of the year including holidays. Call ${data.phone} at any time for immediate assistance in ${data.city} and surrounding areas.` },
-        { question: 'What counts as a water damage emergency?', answer: `Any active water intrusion, burst pipe, appliance flood, sewage backup, or storm-related flooding qualifies as an emergency requiring immediate response. Even a slow leak that has been ongoing warrants prompt professional assessment, as moisture accumulates in hidden areas and mold can begin within 24 to 48 hours (per <a href="https://www.epa.gov/mold" target="_blank" rel="dofollow">EPA Mold Guidelines</a>).` },
+  const isRestoration = data._categoryId === 'water-damage' || data._categoryId === 'mold-remediation' || data._categoryId === 'fire-damage';
+
+  const defaultCategories = isRestoration
+    ? [
+        {
+          heading: 'Emergency Response',
+          faqs: [
+            { question: `How fast can you respond to water damage in ${data.city}?`, answer: `Our ${data.city} team is available 24 hours a day, 7 days a week. We typically arrive within 60 minutes of your call for most locations in our service area. When you call, we will give you an honest estimated arrival time based on current crew availability.` },
+            { question: 'What should I do while waiting for your crew to arrive?', answer: 'If it is safe to do so: shut off the water source if possible, turn off electricity in affected areas, move valuables and furniture off wet floors, and take photos of the damage for your insurance claim. Do not use a regular vacuum on standing water and avoid entering rooms where ceilings are sagging.' },
+            { question: 'Do you respond to water damage 24 hours a day?', answer: `Yes. Water damage does not follow business hours and neither do we. Our emergency dispatch is staffed around the clock, every day of the year including holidays. Call ${data.phone} at any time for immediate assistance in ${data.city} and surrounding areas.` },
+            { question: 'What counts as a water damage emergency?', answer: `Any active water intrusion, burst pipe, appliance flood, sewage backup, or storm-related flooding qualifies as an emergency requiring immediate response. Even a slow leak that has been ongoing warrants prompt professional assessment, as moisture accumulates in hidden areas and mold can begin within 24 to 48 hours (per <a href="https://www.epa.gov/mold" target="_blank" rel="dofollow">EPA Mold Guidelines</a>).` },
+          ]
+        },
+        {
+          heading: 'The Restoration Process',
+          faqs: [
+            { question: 'What is the difference between water mitigation and restoration?', answer: 'Water mitigation covers all emergency actions taken to stop damage from getting worse — water extraction, structural drying, antimicrobial application, and content protection. Water restoration is the rebuild phase that follows: replacing drywall, flooring, cabinets, and other materials damaged beyond salvage. We handle both phases.' },
+            { question: 'How long does structural drying take?', answer: 'Most residential drying projects reach IICRC target moisture levels within 3 to 5 days. Larger losses, concrete subfloors, or heavily saturated wall systems may require additional time. We monitor moisture readings daily and will not remove equipment until levels are verified at or below acceptable thresholds.' },
+            { question: 'Do you use IICRC standards?', answer: `Yes. Every water damage restoration project we perform follows <a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC S500 standards</a>, which define best practices for water extraction, structural drying, and moisture documentation. Our technicians are IICRC-certified, which means they have been trained and tested on the science behind effective water damage restoration — not just the physical tasks.` },
+            { question: 'Will you move my furniture and belongings?', answer: 'Yes. Content manipulation is part of our standard service. We move furniture, area rugs, and personal items to protect them during the drying process. For significant losses, we can perform a structured pack-out of contents to a secure facility for drying and cleaning, then return them after restoration is complete.' },
+            { question: 'How do I know all the moisture has been removed?', answer: `We use calibrated moisture meters and thermal imaging cameras to locate and measure moisture in structural materials — including inside walls, under flooring, and above ceilings. You will receive a drying documentation report showing daily moisture readings from initial setup through final clearance, confirming the structure is dry per <a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC standards</a>.` },
+          ]
+        },
+        {
+          heading: 'Insurance and Claims',
+          faqs: [
+            { question: 'Will my homeowner\'s insurance cover water damage?', answer: 'Most standard homeowner\'s insurance policies cover sudden and accidental water damage — burst pipes, appliance failures, HVAC leaks, and roof leaks from storms. Gradual leaks, flooding from external sources, and maintenance-related damage are typically excluded. We recommend calling your insurance company to open a claim immediately after a water event, and we can work alongside your adjuster.' },
+            { question: 'Do you work directly with insurance companies?', answer: `Yes. We work with all major insurance carriers and communicate directly with adjusters on your behalf if you choose. We provide complete documentation — moisture logs, equipment records, photo reports, and scopes of work — formatted to meet adjuster requirements. Our goal is to make the claims process as smooth as possible for you.` },
+            { question: 'Do I need to get multiple estimates before starting work?', answer: 'Your insurance policy may or may not require multiple estimates — check with your adjuster. In emergency situations, most insurers understand that work must begin immediately to prevent further damage. We document everything thoroughly so the adjuster has full visibility into what was done and why, even if work began before the adjuster arrived on site.' },
+            { question: 'What if my insurance claim is denied?', answer: 'A denial is not always final. You have the right to appeal and to hire a public adjuster to represent your interests. We can provide our documentation to support your appeal. We also offer private-pay restoration services and can work with you on payment options if insurance coverage is limited or unavailable.' },
+          ]
+        },
+        {
+          heading: 'Mold and Health',
+          faqs: [
+            { question: 'Can mold grow after water damage?', answer: 'Yes. Mold spores are present in virtually every indoor environment. Given moisture, a food source (any organic material including drywall paper, wood framing, and carpet backing), and the right temperature, mold can begin to establish within 24 to 48 hours after a water event. This is why rapid response and thorough structural drying are critical — not cosmetic.' },
+            { question: 'How do you prevent mold after water damage?', answer: 'Preventing mold requires removing the moisture that mold needs to grow. We apply EPA-registered antimicrobial treatments to affected surfaces and use industrial drying equipment to bring structural materials to target moisture levels as quickly as possible. We also physically remove materials that cannot be dried to acceptable levels, such as heavily saturated drywall or flooring.' },
+            { question: 'Do I need a separate mold test after water damage?', answer: 'In most cases, if water damage is addressed promptly and thoroughly by a certified restorer, a post-remediation mold test is not necessary for standard insurance claims. However, if you have health concerns, visible mold growth, or a persistent musty odor after restoration, an air quality test by a certified industrial hygienist may be appropriate. We can refer you to qualified testing professionals.' },
+            { question: 'Is Category 3 water dangerous?', answer: 'Yes. Category 3 (black water) includes sewage backups, flooding from rivers or streams, and standing water that has been contaminated by pathogens. Contact with Category 3 water poses serious health risks. All materials that cannot be effectively disinfected must be removed and disposed of. Our technicians use full personal protective equipment when handling Category 3 losses.' },
+          ]
+        },
+        {
+          heading: 'Costs and Pricing',
+          faqs: [
+            { question: 'How much does water damage restoration cost?', answer: `Water damage restoration costs vary widely depending on the severity of the loss, the square footage affected, the category of water involved, and the extent of structural damage. Minor incidents involving a small area of clean water may cost a few hundred dollars. Larger losses involving multiple rooms, Category 2 or 3 water, or significant structural damage can run into the thousands. We provide free on-site assessments with written estimates before work begins.` },
+            { question: 'Do you charge for the initial assessment?', answer: `No. We provide free on-site assessments for water damage in ${data.city} and surrounding areas. A certified technician will inspect the affected areas, document the damage with moisture readings and photos, and provide a written estimate. There is no obligation to proceed with us after the assessment.` },
+            { question: 'What payment methods do you accept?', answer: 'We accept all major credit cards, checks, and bank transfers. For insurance claims, we can often bill the insurance company directly after your claim is approved. We are transparent about costs throughout the project and will notify you of any changes to the scope before proceeding with additional work.' },
+          ]
+        },
+        {
+          heading: 'After Restoration',
+          faqs: [
+            { question: 'Do you handle the full rebuild after drying?', answer: 'Yes. ${data.businessName} provides complete restoration services — from emergency extraction through final repairs. Once drying is complete, we can replace drywall, flooring, insulation, cabinets, trim, and paint to restore your property to pre-loss condition. You work with one company through the entire process.' },
+            { question: 'Will my home look the same after restoration?', answer: 'Our goal is always to return your property to pre-loss condition or better. For matching materials, we use the same or equivalent products to your existing finishes wherever possible. In some cases, discontinued products may require a partial update to an adjacent area for a consistent appearance — we discuss this with you before proceeding.' },
+            { question: 'How do I prevent water damage in the future?', answer: 'Regular home maintenance is your best defense. Key steps: inspect your roof and gutters annually, check washing machine and dishwasher hoses for cracks or bulging, maintain your water heater (most fail after 10 to 15 years), know where your main water shutoff is located, install water leak detectors near appliances and under sinks, and keep your sump pump tested and functioning if you have one.' },
+          ]
+        },
       ]
-    },
-    {
-      heading: 'The Restoration Process',
-      faqs: [
-        { question: 'What is the difference between water mitigation and restoration?', answer: 'Water mitigation covers all emergency actions taken to stop damage from getting worse — water extraction, structural drying, antimicrobial application, and content protection. Water restoration is the rebuild phase that follows: replacing drywall, flooring, cabinets, and other materials damaged beyond salvage. We handle both phases.' },
-        { question: 'How long does structural drying take?', answer: 'Most residential drying projects reach IICRC target moisture levels within 3 to 5 days. Larger losses, concrete subfloors, or heavily saturated wall systems may require additional time. We monitor moisture readings daily and will not remove equipment until levels are verified at or below acceptable thresholds.' },
-        { question: 'Do you use IICRC standards?', answer: `Yes. Every water damage restoration project we perform follows <a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC S500 standards</a>, which define best practices for water extraction, structural drying, and moisture documentation. Our technicians are IICRC-certified, which means they have been trained and tested on the science behind effective water damage restoration — not just the physical tasks.` },
-        { question: 'Will you move my furniture and belongings?', answer: 'Yes. Content manipulation is part of our standard service. We move furniture, area rugs, and personal items to protect them during the drying process. For significant losses, we can perform a structured pack-out of contents to a secure facility for drying and cleaning, then return them after restoration is complete.' },
-        { question: 'How do I know all the moisture has been removed?', answer: `We use calibrated moisture meters and thermal imaging cameras to locate and measure moisture in structural materials — including inside walls, under flooring, and above ceilings. You will receive a drying documentation report showing daily moisture readings from initial setup through final clearance, confirming the structure is dry per <a href="https://www.iicrc.org" target="_blank" rel="dofollow">IICRC standards</a>.` },
-      ]
-    },
-    {
-      heading: 'Insurance and Claims',
-      faqs: [
-        { question: 'Will my homeowner\'s insurance cover water damage?', answer: 'Most standard homeowner\'s insurance policies cover sudden and accidental water damage — burst pipes, appliance failures, HVAC leaks, and roof leaks from storms. Gradual leaks, flooding from external sources, and maintenance-related damage are typically excluded. We recommend calling your insurance company to open a claim immediately after a water event, and we can work alongside your adjuster.' },
-        { question: 'Do you work directly with insurance companies?', answer: `Yes. We work with all major insurance carriers and communicate directly with adjusters on your behalf if you choose. We provide complete documentation — moisture logs, equipment records, photo reports, and scopes of work — formatted to meet adjuster requirements. Our goal is to make the claims process as smooth as possible for you.` },
-        { question: 'Do I need to get multiple estimates before starting work?', answer: 'Your insurance policy may or may not require multiple estimates — check with your adjuster. In emergency situations, most insurers understand that work must begin immediately to prevent further damage. We document everything thoroughly so the adjuster has full visibility into what was done and why, even if work began before the adjuster arrived on site.' },
-        { question: 'What if my insurance claim is denied?', answer: 'A denial is not always final. You have the right to appeal and to hire a public adjuster to represent your interests. We can provide our documentation to support your appeal. We also offer private-pay restoration services and can work with you on payment options if insurance coverage is limited or unavailable.' },
-      ]
-    },
-    {
-      heading: 'Mold and Health',
-      faqs: [
-        { question: 'Can mold grow after water damage?', answer: 'Yes. Mold spores are present in virtually every indoor environment. Given moisture, a food source (any organic material including drywall paper, wood framing, and carpet backing), and the right temperature, mold can begin to establish within 24 to 48 hours after a water event. This is why rapid response and thorough structural drying are critical — not cosmetic.' },
-        { question: 'How do you prevent mold after water damage?', answer: 'Preventing mold requires removing the moisture that mold needs to grow. We apply EPA-registered antimicrobial treatments to affected surfaces and use industrial drying equipment to bring structural materials to target moisture levels as quickly as possible. We also physically remove materials that cannot be dried to acceptable levels, such as heavily saturated drywall or flooring.' },
-        { question: 'Do I need a separate mold test after water damage?', answer: 'In most cases, if water damage is addressed promptly and thoroughly by a certified restorer, a post-remediation mold test is not necessary for standard insurance claims. However, if you have health concerns, visible mold growth, or a persistent musty odor after restoration, an air quality test by a certified industrial hygienist may be appropriate. We can refer you to qualified testing professionals.' },
-        { question: 'Is Category 3 water dangerous?', answer: 'Yes. Category 3 (black water) includes sewage backups, flooding from rivers or streams, and standing water that has been contaminated by pathogens. Contact with Category 3 water poses serious health risks. All materials that cannot be effectively disinfected must be removed and disposed of. Our technicians use full personal protective equipment when handling Category 3 losses.' },
-      ]
-    },
-    {
-      heading: 'Costs and Pricing',
-      faqs: [
-        { question: 'How much does water damage restoration cost?', answer: `Water damage restoration costs vary widely depending on the severity of the loss, the square footage affected, the category of water involved, and the extent of structural damage. Minor incidents involving a small area of clean water may cost a few hundred dollars. Larger losses involving multiple rooms, Category 2 or 3 water, or significant structural damage can run into the thousands. We provide free on-site assessments with written estimates before work begins.` },
-        { question: 'Do you charge for the initial assessment?', answer: `No. We provide free on-site assessments for water damage in ${data.city} and surrounding areas. A certified technician will inspect the affected areas, document the damage with moisture readings and photos, and provide a written estimate. There is no obligation to proceed with us after the assessment.` },
-        { question: 'What payment methods do you accept?', answer: 'We accept all major credit cards, checks, and bank transfers. For insurance claims, we can often bill the insurance company directly after your claim is approved. We are transparent about costs throughout the project and will notify you of any changes to the scope before proceeding with additional work.' },
-      ]
-    },
-    {
-      heading: 'After Restoration',
-      faqs: [
-        { question: 'Do you handle the full rebuild after drying?', answer: 'Yes. ${data.businessName} provides complete restoration services — from emergency extraction through final repairs. Once drying is complete, we can replace drywall, flooring, insulation, cabinets, trim, and paint to restore your property to pre-loss condition. You work with one company through the entire process.' },
-        { question: 'Will my home look the same after restoration?', answer: 'Our goal is always to return your property to pre-loss condition or better. For matching materials, we use the same or equivalent products to your existing finishes wherever possible. In some cases, discontinued products may require a partial update to an adjacent area for a consistent appearance — we discuss this with you before proceeding.' },
-        { question: 'How do I prevent water damage in the future?', answer: 'Regular home maintenance is your best defense. Key steps: inspect your roof and gutters annually, check washing machine and dishwasher hoses for cracks or bulging, maintain your water heater (most fail after 10 to 15 years), know where your main water shutoff is located, install water leak detectors near appliances and under sinks, and keep your sump pump tested and functioning if you have one.' },
-      ]
-    },
-  ];
+    : [
+        {
+          heading: `${data.primaryKeyword} Frequently Asked Questions`,
+          faqs: Array.isArray(data._faqs) && data._faqs.length > 0
+            ? data._faqs
+            : [
+                { question: `What services do you offer in ${data.city}?`, answer: `${data.businessName} provides professional ${data.primaryKeyword.toLowerCase()} services in ${data.city} and surrounding areas.` },
+                { question: `How can I contact you?`, answer: `You can call us at ${data.phone} or send us a message through our Contact page. We are ready to assist you.` }
+              ]
+        }
+      ];
 
   const categories = content?.categories || defaultCategories;
   const h1 = content?.h1 || `${data.primaryKeyword} — Frequently Asked Questions`;
@@ -4075,99 +4232,304 @@ const CALCULATORS = [
 ];
 
 export function generateCalculatorPage(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const theme = resolveTheme(data);
   const canonicalUrl = `${getSiteUrl(data, domain)}/calculator`;
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
+  const calc = (data as any)._calculator;
 
-  const cardsHTML = CALCULATORS.map(c => `
-    <a href="calculators/${c.slug}.html" class="calc-card">
-      <div class="calc-card-icon">${iconToSVG(c.icon, theme.secondaryColor)}</div>
-      <h2 class="calc-card-title">${c.title}</h2>
-      <p class="calc-card-desc">${c.desc}</p>
-      <span class="calc-card-link">Open Calculator →</span>
-    </a>`).join('');
-
-  const body = `
-  ${generateNav(data)}
-
-  <div class="breadcrumb container">
-    <a href="index.html">Home</a>
-    <span>›</span>
-    <span aria-current="page">Calculators</span>
-  </div>
-
-  <section class="page-hero" role="banner">
-    <div class="container">
-      <h1>${data._calcPageH1 || 'Free ' + (data.primaryKeyword || 'Water Damage') + ' Calculators'}</h1>
-      <p>Estimate costs, drying time, mold risk, insurance payouts, and more. These tools give you a starting point — for exact figures, call us for a free on-site assessment.</p>
-    </div>
-  </section>
-
-  <section class="content-section">
-    <div class="container">
-      <div class="calc-cards-grid">
-        ${cardsHTML}
+  if (!isRestoration && calc && calc.enabled) {
+    const activeTabs = calc.tabs || [];
+    
+    // Tab buttons
+    const tabBtnsHTML = activeTabs.length > 1 ? `
+      <div class="calc-tabs" role="tablist">
+        ${activeTabs.map((tab: any, idx: number) => `
+          <button class="calc-tab-btn ${idx === 0 ? 'active' : ''}" role="tab" aria-selected="${idx === 0}" data-tab="${tab.id}">
+            ${tab.label}
+          </button>
+        `).join('')}
       </div>
+    ` : '';
+
+    // Tab forms
+    const tabContentsHTML = activeTabs.map((tab: any, tabIdx: number) => `
+      <div class="calc-tab-content ${tabIdx === 0 ? 'active' : ''}" id="tab-content-${tab.id}" data-tab="${tab.id}">
+        <form class="calc-form" id="form-${tab.id}" onsubmit="return false;">
+          <input type="hidden" name="baseMin" value="${tab.baseMin}">
+          <input type="hidden" name="baseMax" value="${tab.baseMax}">
+          
+          ${tab.fields.map((field: any) => `
+            <div class="form-group">
+              ${field.type === 'checkbox' ? `
+                <label class="checkbox-label">
+                  <input type="checkbox" name="${field.id}" data-adder="${field.adder || 0}">
+                  <span class="checkbox-text">${field.label}</span>
+                </label>
+              ` : `
+                <label for="${tab.id}-${field.id}">${field.label}</label>
+                ${field.type === 'select' ? `
+                  <select name="${field.id}" id="${tab.id}-${field.id}">
+                    ${field.options ? field.options.map((opt: any) => `
+                      <option value="${opt.value}">${opt.label}</option>
+                    `).join('') : ''}
+                  </select>
+                ` : `
+                  <input type="number" name="${field.id}" id="${tab.id}-${field.id}" min="1" value="1">
+                `}
+              `}
+            </div>
+          `).join('')}
+          
+          <div class="calc-result-box">
+            <div class="calc-result-title">${tab.resultLabel || 'Estimated Cost'}</div>
+            <div class="calc-result-value" id="result-${tab.id}">
+              $${tab.baseMin} - $${tab.baseMax}
+            </div>
+            <p class="calc-result-disclaimer">*This is a rough estimate. For an exact quote, request a free assessment.</p>
+          </div>
+        </form>
+      </div>
+    `).join('');
+
+    const body = `
+    ${generateNav(data)}
+
+    <div class="breadcrumb container">
+      <a href="index.html">Home</a>
+      <span>›</span>
+      <span aria-current="page">Calculators</span>
     </div>
-  </section>
 
-  <section style="background:#f8fafc;padding:3rem 0;">
-    <div class="container" style="text-align:center;">
-      <h2>Need an Accurate Assessment?</h2>
-      <p style="color:#475569;max-width:600px;margin:0 auto 1.5rem;">Calculators provide estimates only. For a precise assessment and written estimate, contact ${data.businessName}. Free on-site evaluations in ${data.city}.</p>
-      <a href="tel:${data.countryCode || '+1'}${data.phone.replace(/\D/g, '')}" class="btn-primary"><span class="btn-icon">${iconToSVG('phone', '#fff')}</span> Call ${data.phone}</a>
+    <section class="page-hero" role="banner">
+      <div class="container">
+        <h1>${calc.title || data.primaryKeyword + ' Cost Estimator'}</h1>
+        <p>Get a quick, upfront price estimate for your project. Choose options below to see estimated pricing ranges based on your needs.</p>
+      </div>
+    </section>
+
+    <section class="content-section">
+      <div class="container">
+        ${tabBtnsHTML}
+        ${tabContentsHTML}
+      </div>
+    </section>
+
+    <section style="background:#f8fafc;padding:3rem 0;">
+      <div class="container" style="text-align:center;">
+        <h2>Need an Accurate Assessment?</h2>
+        <p style="color:#475569;max-width:600px;margin:0 auto 1.5rem;">Estimators provide a starting range. For a precise and binding project quote, contact ${data.businessName}. Free on-site evaluations in ${data.city}.</p>
+        <a href="tel:${data.countryCode || '+1'}${data.phone.replace(/\D/g, '')}" class="btn-primary"><span class="btn-icon">${iconToSVG('phone', '#fff')}</span> Call ${data.phone}</a>
+      </div>
+    </section>
+
+    ${generateFooter(data)}`;
+
+    const calcJSFunctions = `
+      // Tab switching
+      const tabBtns = document.querySelectorAll('.calc-tab-btn');
+      const tabContents = document.querySelectorAll('.calc-tab-content');
+      
+      tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tabId = btn.getAttribute('data-tab');
+          
+          tabBtns.forEach(b => {
+            b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
+          });
+          tabContents.forEach(c => c.classList.remove('active'));
+          
+          btn.classList.add('active');
+          btn.setAttribute('aria-selected', 'true');
+          const activeContent = document.getElementById('tab-content-' + tabId);
+          if (activeContent) {
+            activeContent.classList.add('active');
+          }
+        });
+      });
+      
+      // Calculation engine
+      const forms = document.querySelectorAll('.calc-form');
+      
+      function calculateForm(form) {
+        const tabContent = form.closest('.calc-tab-content');
+        if (!tabContent) return;
+        const tabId = tabContent.getAttribute('data-tab');
+        const baseMin = parseFloat(form.querySelector('input[name="baseMin"]').value) || 0;
+        const baseMax = parseFloat(form.querySelector('input[name="baseMax"]').value) || 0;
+        
+        let min = baseMin;
+        let max = baseMax;
+        
+        // Select fields (multipliers)
+        form.querySelectorAll('select').forEach(select => {
+          const val = parseFloat(select.value) || 1.0;
+          min *= val;
+          max *= val;
+        });
+        
+        // Checkbox fields (adders)
+        form.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+          const adder = parseFloat(checkbox.getAttribute('data-adder')) || 0;
+          min += adder;
+          max += adder;
+        });
+        
+        // Number fields (multipliers)
+        form.querySelectorAll('input[type="number"]').forEach(numInput => {
+          const val = parseFloat(numInput.value) || 1.0;
+          min *= val;
+          max *= val;
+        });
+        
+        const resultEl = document.getElementById('result-' + tabId);
+        if (resultEl) {
+          const labelEl = resultEl.previousElementSibling;
+          const isTime = labelEl && (labelEl.textContent.toLowerCase().includes('time') || labelEl.textContent.toLowerCase().includes('day'));
+          if (isTime) {
+            resultEl.textContent = Math.round(min) + ' - ' + Math.round(max) + ' Days';
+          } else {
+            resultEl.textContent = '$' + Math.round(min).toLocaleString() + ' - $' + Math.round(max).toLocaleString();
+          }
+        }
+      }
+      
+      forms.forEach(form => {
+        form.addEventListener('input', () => calculateForm(form));
+        form.addEventListener('change', () => calculateForm(form));
+        calculateForm(form);
+      });
+    `;
+
+    const calcCSS = `
+    .calc-tabs { display: flex; justify-content: center; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem; }
+    .calc-tab-btn { background: none; border: none; font-family: inherit; font-size: 1.1rem; font-weight: 600; color: #64748b; padding: 0.5rem 1rem; cursor: pointer; border-radius: 6px; transition: all 0.2s; }
+    .calc-tab-btn.active { color: ${theme.primaryColor}; background: ${theme.primaryColor}10; }
+    .calc-tab-btn:hover:not(.active) { color: #334155; background: #f1f5f9; }
+    .calc-tab-content { display: none; }
+    .calc-tab-content.active { display: block; animation: calcFadeIn 0.3s ease-in-out; }
+    @keyframes calcFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .calc-form { max-width: 600px; margin: 0 auto; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 2.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+    .form-group { margin-bottom: 1.5rem; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 0.5rem; color: #334155; }
+    .form-group select, .form-group input[type="number"] { width: 100%; padding: 0.75rem; border-radius: 8px; border: 1.5px solid #cbd5e1; font-family: inherit; font-size: 1rem; color: #1e293b; outline: none; transition: border-color 0.2s; }
+    .form-group select:focus, .form-group input[type="number"]:focus { border-color: ${theme.primaryColor}; }
+    .checkbox-label { display: flex; align-items: center; gap: 0.75rem; cursor: pointer; }
+    .checkbox-label input[type="checkbox"] { width: 1.2rem; height: 1.2rem; accent-color: ${theme.primaryColor}; cursor: pointer; }
+    .checkbox-text { font-weight: 600; color: #334155; }
+    .calc-result-box { margin-top: 2.5rem; background: linear-gradient(135deg, ${theme.primaryColor}08, ${theme.secondaryColor}0c); border: 1px solid ${theme.primaryColor}15; border-radius: 12px; padding: 2rem; text-align: center; }
+    .calc-result-title { font-size: 0.95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.5rem; }
+    .calc-result-value { font-size: 2.25rem; font-weight: 800; color: ${theme.primaryColor}; margin-bottom: 0.5rem; }
+    .calc-result-disclaimer { font-size: 0.8rem; color: #64748b; }
+    `;
+
+    return htmlShell({
+      metaTitle: `${calc.title || data.primaryKeyword + ' Cost Estimator'} | ${data.businessName}`,
+      metaDescription: `Get an instant price estimate for ${data.primaryKeyword.toLowerCase()} in ${data.city}, ${data.state} with our online estimator tool.`,
+      canonicalUrl,
+      theme,
+      googleAnalyticsId: data.googleAnalyticsId || undefined,
+      faviconUrl: data.faviconUrl || undefined,
+      customHeadCode: data.customHeadCode || undefined,
+      schemaBlocks: [generateLocalBusinessSchema(data, `${domain}.netlify.app`)],
+      bodyContent: body,
+      extraJs: calcJSFunctions,
+      extraCSS: calcCSS,
+    });
+  } else {
+    // Generate standard water damage calculators (the existing code)
+    const cardsHTML = CALCULATORS.map(c => `
+      <a href="calculators/${c.slug}.html" class="calc-card">
+        <div class="calc-card-icon">${iconToSVG(c.icon, theme.secondaryColor)}</div>
+        <h2 class="calc-card-title">${c.title}</h2>
+        <p class="calc-card-desc">${c.desc}</p>
+        <span class="calc-card-link">Open Calculator →</span>
+      </a>`).join('');
+
+    const body = `
+    ${generateNav(data)}
+
+    <div class="breadcrumb container">
+      <a href="index.html">Home</a>
+      <span>›</span>
+      <span aria-current="page">Calculators</span>
     </div>
-  </section>
 
-  ${generateFooter(data)}`;
+    <section class="page-hero" role="banner">
+      <div class="container">
+        <h1>${data._calcPageH1 || 'Free ' + (data.primaryKeyword || 'Water Damage') + ' Calculators'}</h1>
+        <p>Estimate costs, drying time, mold risk, insurance payouts, and more. These tools give you a starting point — for exact figures, call us for a free on-site assessment.</p>
+      </div>
+    </section>
 
-  return htmlShell({
-    metaTitle: `Free ${data.primaryKeyword || 'Water Damage'} Calculators | ${data.businessName}`,
-    metaDescription: `Free ${data.primaryKeyword?.toLowerCase() || 'water damage'} calculators for ${data.city} homeowners — cost estimator, drying time, mold risk, insurance, dehumidifier sizing, and more.`,
-    canonicalUrl,
-    theme,
-    googleAnalyticsId: data.googleAnalyticsId || undefined,
-    faviconUrl: data.faviconUrl || undefined,
-    customHeadCode: data.customHeadCode || undefined,
-    schemaBlocks: [generateLocalBusinessSchema(data, `${domain}.netlify.app`)],
-    bodyContent: body,
-    extraCSS: `
-.calc-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-.calc-card {
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 2rem 1.75rem;
-  text-decoration: none;
-  color: inherit;
-  transition: transform .2s, box-shadow .2s, border-color .2s;
-  box-shadow: 0 1px 4px rgba(0,0,0,.04);
-}
-.calc-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0,0,0,.1);
-  border-color: ${theme.primaryColor};
-}
-.calc-card-icon { margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, ${theme.primaryColor}12, ${theme.secondaryColor}15); }
-.calc-card-icon svg { width: 28px; height: 28px; }
-.calc-card-title { font-size: 1.2rem; font-weight: 700; color: ${theme.primaryColor}; margin: 0 0 .5rem; }
-.calc-card-desc { color: #475569; font-size: .9rem; line-height: 1.6; flex: 1; }
-.calc-card-link {
-  display: inline-block;
-  margin-top: 1rem;
-  font-size: .85rem;
-  font-weight: 700;
-  color: ${theme.secondaryColor};
-}
-@media (max-width: 640px) {
-  .calc-cards-grid { grid-template-columns: 1fr; }
-}`,
-  });
+    <section class="content-section">
+      <div class="container">
+        <div class="calc-cards-grid">
+          ${cardsHTML}
+        </div>
+      </div>
+    </section>
+
+    <section style="background:#f8fafc;padding:3rem 0;">
+      <div class="container" style="text-align:center;">
+        <h2>Need an Accurate Assessment?</h2>
+        <p style="color:#475569;max-width:600px;margin:0 auto 1.5rem;">Calculators provide estimates only. For a precise assessment and written estimate, contact ${data.businessName}. Free on-site evaluations in ${data.city}.</p>
+        <a href="tel:${data.countryCode || '+1'}${data.phone.replace(/\D/g, '')}" class="btn-primary"><span class="btn-icon">${iconToSVG('phone', '#fff')}</span> Call ${data.phone}</a>
+      </div>
+    </section>
+
+    ${generateFooter(data)}`;
+
+    return htmlShell({
+      metaTitle: `Free ${data.primaryKeyword || 'Water Damage'} Calculators | ${data.businessName}`,
+      metaDescription: `Free ${data.primaryKeyword?.toLowerCase() || 'water damage'} calculators for ${data.city} homeowners — cost estimator, drying time, mold risk, insurance, dehumidifier sizing, and more.`,
+      canonicalUrl,
+      theme,
+      googleAnalyticsId: data.googleAnalyticsId || undefined,
+      faviconUrl: data.faviconUrl || undefined,
+      customHeadCode: data.customHeadCode || undefined,
+      schemaBlocks: [generateLocalBusinessSchema(data, `${domain}.netlify.app`)],
+      bodyContent: body,
+      extraCSS: `
+  .calc-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+  .calc-card {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 2rem 1.75rem;
+    text-decoration: none;
+    color: inherit;
+    transition: transform .2s, box-shadow .2s, border-color .2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+  .calc-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.1);
+    border-color: ${theme.primaryColor};
+  }
+  .calc-card-icon { margin-bottom: 1rem; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, ${theme.primaryColor}12, ${theme.secondaryColor}15); }
+  .calc-card-icon svg { width: 28px; height: 28px; }
+  .calc-card-title { font-size: 1.2rem; font-weight: 700; color: ${theme.primaryColor}; margin: 0 0 .5rem; }
+  .calc-card-desc { color: #475569; font-size: .9rem; line-height: 1.6; flex: 1; }
+  .calc-card-link {
+    display: inline-block;
+    margin-top: 1rem;
+    font-size: .85rem;
+    font-weight: 700;
+    color: ${theme.secondaryColor};
+  }
+  @media (max-width: 640px) {
+    .calc-cards-grid { grid-template-columns: 1fr; }
+  }`,
+    });
+  }
 }
 
 // Individual calculator page generator
@@ -4618,7 +4980,9 @@ function generateSingleCalculatorPage(data: WDBusinessData, calcIndex: number, d
 // ─── GALLERY PAGE ──────────────────────────────────────────────────────────
 
 export function generateGalleryPage(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const canonicalUrl = `${getSiteUrl(data, domain)}/gallery`;
+  const showBeforeAfter = !(data as any).hideBeforeAfter;
 
   const images = data.galleryImages || [];
   const beforeAfterPairs: Array<{ before: WDGalleryImage; after: WDGalleryImage }> = [];
@@ -4693,7 +5057,7 @@ export function generateGalleryPage(data: WDBusinessData, domain: string): strin
       ${img.caption ? `<p class="img-caption">${img.caption}</p>` : ''}
     </div>`).join('');
 
-  const galleryJS = `
+  const galleryJS = showBeforeAfter ? `
 // Before/After Slider
 document.querySelectorAll('.ba-slider').forEach(slider => {
   const before = slider.querySelector('.ba-before');
@@ -4721,6 +5085,21 @@ document.querySelectorAll('.ba-slider').forEach(slider => {
   slider.addEventListener('click', e => setPos(e.clientX));
 });
 
+// Lightbox
+function openLightbox(img) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lb-img').src = img.src;
+  document.getElementById('lb-img').alt = img.alt;
+  lb.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const lb = document.getElementById('lightbox');
+  if (lb) {
+    lb.addEventListener('click', () => { lb.style.display = 'none'; document.body.style.overflow = ''; });
+  }
+});
+` : `
 // Lightbox
 function openLightbox(img) {
   const lb = document.getElementById('lightbox');
@@ -4780,15 +5159,17 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
   </section>
 
+  ${showBeforeAfter ? `
   <section class="content-section">
     <div class="container">
       <h2>Before &amp; After Comparisons</h2>
-      <p class="section-intro">Drag the slider to compare before and after restoration. <em>Replace placeholder images with real project photos in the editor.</em></p>
+      <p class="section-intro">Drag the slider to compare before and after. <em>Replace placeholder images with real project photos in the editor.</em></p>
       <div class="ba-grid">
         ${beforeAfterHTML}
       </div>
     </div>
   </section>
+  ` : ''}
 
   <section class="content-section" style="background:#f8fafc;">
     <div class="container">
@@ -4803,7 +5184,7 @@ document.addEventListener('DOMContentLoaded', () => {
   <section class="cta-section" aria-labelledby="cta-heading">
     <div class="container">
       <h2 id="cta-heading">Need ${data.primaryKeyword} in ${data.city}?</h2>
-      <p>Our certified team is ready to respond 24/7. Call now or request a free assessment.</p>
+      <p>Our team is ready to respond. Call now or request a free assessment.</p>
       <div class="cta-actions">
         <a href="tel:${data.countryCode || '+1'}${data.phone.replace(/\D/g, '')}" class="btn-primary"><span class="btn-icon">${iconToSVG('phone', '#fff')}</span> Call ${data.phone}</a>
         <a href="contact.html" class="btn-secondary">Get Free Estimate</a>
@@ -5178,10 +5559,12 @@ export function generateBlogPostPage(data: WDBusinessData, post: WDBlogPost, dom
 // ─── PRIVACY POLICY PAGE ───────────────────────────────────────────────────
 
 export function generatePrivacyPage(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const theme = resolveTheme(data);
   const canonicalUrl = `${getSiteUrl(data, domain)}/privacy`;
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const year = new Date().getFullYear();
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
 
   const body = `
   ${generateNav(data)}
@@ -5202,7 +5585,7 @@ export function generatePrivacyPage(data: WDBusinessData, domain: string): strin
       <p style="color:#475569;">We may collect the following types of information:</p>
       <ul style="color:#475569;padding-left:1.5rem;margin-bottom:1rem;list-style:disc;">
         <li style="margin-bottom:.5rem;"><strong>Contact information</strong> — name, phone number, email address, and property address when you contact us for services or submit a form.</li>
-        <li style="margin-bottom:.5rem;"><strong>Property information</strong> — details about your property and the nature of damage you describe.</li>
+        <li style="margin-bottom:.5rem;"><strong>Property/Project information</strong> — details about your property and the nature of the ${isRestoration ? 'damage' : 'project'} you describe.</li>
         <li style="margin-bottom:.5rem;"><strong>Usage data</strong> — pages visited, time spent on the site, referral source, and browser type (collected anonymously via analytics).</li>
         <li style="margin-bottom:.5rem;"><strong>Communications</strong> — records of calls, emails, and messages exchanged with our team.</li>
       </ul>
@@ -5210,18 +5593,20 @@ export function generatePrivacyPage(data: WDBusinessData, domain: string): strin
       <h2>How We Use Your Information</h2>
       <p style="color:#475569;">We use your information to:</p>
       <ul style="color:#475569;padding-left:1.5rem;margin-bottom:1rem;list-style:disc;">
-        <li style="margin-bottom:.5rem;">Respond to service inquiries and dispatch emergency response crews</li>
+        <li style="margin-bottom:.5rem;">Respond to service inquiries and dispatch ${isRestoration ? 'emergency response crews' : 'our team'}</li>
         <li style="margin-bottom:.5rem;">Provide ${data.primaryKeyword.toLowerCase()} and related services</li>
         <li style="margin-bottom:.5rem;">Communicate about your project and follow up after completion</li>
         <li style="margin-bottom:.5rem;">Improve our website and customer experience</li>
-        <li style="margin-bottom:.5rem;">Comply with legal and insurance documentation requirements</li>
+        <li style="margin-bottom:.5rem;">Comply with legal ${isRestoration ? 'and insurance ' : ''}documentation requirements</li>
       </ul>
 
       <h2>Information Sharing</h2>
       <p style="color:#475569;">We do not sell your personal information to third parties. We may share information with:</p>
       <ul style="color:#475569;padding-left:1.5rem;margin-bottom:1rem;list-style:disc;">
+        ${isRestoration ? `
         <li style="margin-bottom:.5rem;"><strong>Insurance companies</strong> — when processing claims on your behalf with your authorization</li>
-        <li style="margin-bottom:.5rem;"><strong>Service partners</strong> — subcontractors and suppliers involved in your restoration project, limited to what is necessary</li>
+        ` : ''}
+        <li style="margin-bottom:.5rem;"><strong>Service partners</strong> — subcontractors and suppliers involved in your ${isRestoration ? 'restoration ' : ''}project, limited to what is necessary</li>
         <li style="margin-bottom:.5rem;"><strong>Legal requirements</strong> — when required by law, court order, or government authority</li>
       </ul>
 
@@ -5253,7 +5638,7 @@ export function generatePrivacyPage(data: WDBusinessData, domain: string): strin
     </div>
   </section>
 
-  ${generateFooter(data)}`;
+  ${generateFooter(data)}`;;
 
   return htmlShell({
     metaTitle: `Privacy Policy | ${data.businessName}`,
@@ -5272,10 +5657,12 @@ export function generatePrivacyPage(data: WDBusinessData, domain: string): strin
 // ─── TERMS OF SERVICE PAGE ─────────────────────────────────────────────────
 
 export function generateTermsPage(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const theme = resolveTheme(data);
   const canonicalUrl = `${getSiteUrl(data, domain)}/terms`;
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const year = new Date().getFullYear();
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
 
   const body = `
   ${generateNav(data)}
@@ -5296,22 +5683,27 @@ export function generateTermsPage(data: WDBusinessData, domain: string): string 
       <p style="color:#475569;">${data.businessName} provides ${data.primaryKeyword.toLowerCase()} and related professional services in ${data.city}, ${data.state} and surrounding areas. All services are performed by licensed and insured technicians following industry standards.</p>
 
       <h2>Estimates and Scope of Work</h2>
-      <p style="color:#475569;">Written estimates are provided prior to work commencement. Estimates are based on visible and measurable conditions at the time of assessment. Hidden or concealed damage discovered during the restoration process may require a revised scope of work and updated pricing. We will notify you before proceeding with any work beyond the original estimate.</p>
+      <p style="color:#475569;">Written estimates are provided prior to work commencement. Estimates are based on visible and measurable conditions at the time of assessment. Hidden or concealed damage discovered during the ${isRestoration ? 'restoration' : 'work'} process may require a revised scope of work and updated pricing. We will notify you before proceeding with any work beyond the original estimate.</p>
 
+      ${isRestoration ? `
       <h2>Emergency Services</h2>
       <p style="color:#475569;">In emergency situations involving active water intrusion, we may begin mitigation work (water extraction, equipment placement) to prevent further damage. A written authorization and estimate will be provided as soon as practicable after emergency services commence.</p>
 
       <h2>Insurance Claims</h2>
       <p style="color:#475569;">When work is to be billed through insurance, you are responsible for authorizing the claim and cooperating with your insurance company. ${data.businessName} provides full documentation to support your claim but cannot guarantee claim approval or the amount your insurance company will pay. You are ultimately responsible for payment of services rendered.</p>
+      ` : `
+      <h2>Service Calls & Appointments</h2>
+      <p style="color:#475569;">For service requests and scheduled appointments, we make every effort to respond promptly. Travel fees or assessment rates may apply, which will be disclosed prior to scheduling.</p>
+      `}
 
       <h2>Payment</h2>
-      <p style="color:#475569;">Payment is due upon completion of each phase of work unless otherwise agreed in writing. For insurance claims, we may accept assignment of benefits with your authorization. Interest may accrue on overdue balances. We reserve the right to place a lien on the property for unpaid services in accordance with applicable state law.</p>
+      <p style="color:#475569;">Payment is due upon completion of each phase of work unless otherwise agreed in writing. ${isRestoration ? 'For insurance claims, we may accept assignment of benefits with your authorization. ' : ''}Interest may accrue on overdue balances. We reserve the right to place a lien on the property for unpaid services in accordance with applicable state law.</p>
 
       <h2>Liability</h2>
       <p style="color:#475569;">${data.businessName} carries general liability insurance. Our liability for services rendered is limited to the value of the services provided. We are not responsible for pre-existing conditions, hidden defects, or damage that was not accessible or visible at the time of our assessment. We are not liable for indirect, incidental, or consequential damages.</p>
 
       <h2>Warranty</h2>
-      <p style="color:#475569;">We warrant that services will be performed in a professional and workmanlike manner in accordance with IICRC standards. Written warranties on specific restoration work will be provided separately when applicable. This warranty does not cover damage from subsequent water events, acts of nature, or conditions outside our control.</p>
+      <p style="color:#475569;">We warrant that services will be performed in a professional and workmanlike manner in accordance with ${isRestoration ? 'IICRC standards. Written warranties on specific restoration work' : 'industry standards. Written warranties on specific work'} will be provided separately when applicable. This warranty does not cover damage from subsequent events, acts of nature, or conditions outside our control.</p>
 
       <h2>Website Use</h2>
       <p style="color:#475569;">The content on this website is provided for informational purposes only. Calculators and estimates on this site are general guidelines and do not constitute professional assessments. We make no representations about the accuracy or completeness of website content. Use of this website is at your own risk.</p>
@@ -5334,7 +5726,7 @@ export function generateTermsPage(data: WDBusinessData, domain: string): string 
     </div>
   </section>
 
-  ${generateFooter(data)}`;
+  ${generateFooter(data)}`;;
 
   return htmlShell({
     metaTitle: `Terms of Service | ${data.businessName}`,
@@ -5353,6 +5745,7 @@ export function generateTermsPage(data: WDBusinessData, domain: string): string 
 // ─── SITEMAP ───────────────────────────────────────────────────────────────
 
 export function generateSitemap(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const base = getSiteUrl(data, domain);
   const today = new Date().toISOString().split('T')[0];
   const tier = data.publishTier || '1';
@@ -5372,14 +5765,15 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
   </url>`)
     .join('\n');
 
-  const calculatorUrls = CALCULATORS
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
+  const calculatorUrls = isRestoration ? CALCULATORS
     .map(c => `  <url>
     <loc>${base}/calculators/${c.slug}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>`)
-    .join('\n');
+    .join('\n') : '';
 
   const serviceUrls = showServicesLocations ? data.services
     .map(s => `  <url>
@@ -5426,8 +5820,7 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
     <priority>1.0</priority>
   </url>
 ${staticPages}
-${calculatorUrls}
-${serviceUrls ? '\n' + serviceUrls : ''}
+${calculatorUrls ? calculatorUrls + '\n' : ''}${serviceUrls ? '\n' + serviceUrls : ''}
 ${locationUrls ? '\n' + locationUrls : ''}
 ${blogPostUrls ? '\n' + blogPostUrls : ''}
 ${matrixUrls ? '\n' + matrixUrls : ''}
@@ -5468,12 +5861,14 @@ Allow: /`;
 // ─── LLMS.TXT ──────────────────────────────────────────────────────────────
 
 export function generateLLMsTxt(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const base = getSiteUrl(data, domain);
   const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
   const showBlog = tier === '2' || tier === '3';
   const llmBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
   const hasBlog = llmBlogPosts.length > 0;
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
 
   const servicesList = showServicesLocations ? data.services.map(s => `- [${s}](${base}/services/${slugify(s)}-${slugify(data.city)})`).join('\n') : '';
   const areasList = showServicesLocations ? data.serviceAreas.map(a => `- [${a}](${base}/locations/${slugify(a)})`).join('\n') : '';
@@ -5485,9 +5880,13 @@ export function generateLLMsTxt(data: WDBusinessData, domain: string): string {
     data.serviceAreas.map(l => `- [${s} in ${l}](${base}/matrix/${slugify(s)}-in-${slugify(l)})`)
   ).join('\n') : '';
 
+  const individualCalcsList = isRestoration
+    ? CALCULATORS.map(c => `- [${c.title} Calculator](${base}/calculators/${c.slug})`).join('\n')
+    : '';
+
   return `# ${data.businessName}
 
-> ${data._metaDescription || `Professional ${data.services[0] || 'restoration'} services in ${data.city}, ${data.state}. Available 24/7 for emergency response.`}
+> ${data._metaDescription || `Professional ${data.services[0] || 'restoration'} services in ${data.city}, ${data.state}.`}
 
 ## Contact
 - Phone: ${data.phone}
@@ -5501,8 +5900,7 @@ ${data.email ? `- Email: ${data.email}` : ''}
 - [FAQ](${base}/faq)
 - [Gallery](${base}/gallery)
 - [Calculators](${base}/calculator)
-${CALCULATORS.map(c => `- [${c.title} Calculator](${base}/calculators/${c.slug})`).join('\n')}
-${hasBlog ? `- [Blog](${base}/blog)` : ''}
+${individualCalcsList ? individualCalcsList + '\n' : ''}${hasBlog ? `- [Blog](${base}/blog)` : ''}
 ${showServicesLocations ? `\n## Services\n${servicesList}\n\n## Service Areas\n${areasList}` : ''}
 ${hasBlog ? `\n## Blog Posts\n${blogList}` : ''}
 ${matrixList ? `\n## Combination Pages\n${matrixList}` : ''}
@@ -5516,6 +5914,7 @@ ${matrixList ? `\n## Combination Pages\n${matrixList}` : ''}
 // ─── HTML SITEMAP ──────────────────────────────────────────────────────────
 
 export function generateHTMLSitemap(data: WDBusinessData, domain: string): string {
+  data = sanitizeBusinessData(data);
   const theme = resolveTheme(data);
   const base = getSiteUrl(data, domain);
   const tier = data.publishTier || '1';
@@ -5525,6 +5924,7 @@ export function generateHTMLSitemap(data: WDBusinessData, domain: string): strin
   const hasBlog = htmlBlogPosts.length > 0;
   const fullTheme = resolveTheme(data);
   const fontUrl = FONT_URLS[fullTheme.fontFamily];
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
   const fontLink = fontUrl
     ? `<link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -5595,12 +5995,14 @@ export function generateHTMLSitemap(data: WDBusinessData, domain: string): strin
       </ul>
     </div>
 
+    ${isRestoration ? `
     <div class="sitemap-section">
       <h2>Calculators</h2>
       <ul>
         ${CALCULATORS.map(c => `<li><a href="calculators/${c.slug}">${c.title}</a></li>`).join('\n        ')}
       </ul>
     </div>
+    ` : ''}
 
     ${showServicesLocations ? `
     <div class="sitemap-section">
@@ -5658,9 +6060,12 @@ export function generateWaterDamageWebsite(
   files['faq.html']        = generateFAQPage(data, domain);
   files['calculator.html'] = generateCalculatorPage(data, domain);
 
-  // Individual calculator pages
-  for (let i = 0; i < CALCULATORS.length; i++) {
-    files[`calculators/${CALCULATORS[i].slug}.html`] = generateSingleCalculatorPage(data, i, domain);
+  // Individual calculator pages - only for restoration categories
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
+  if (isRestoration) {
+    for (let i = 0; i < CALCULATORS.length; i++) {
+      files[`calculators/${CALCULATORS[i].slug}.html`] = generateSingleCalculatorPage(data, i, domain);
+    }
   }
   files['gallery.html']    = generateGalleryPage(data, domain);
   const tier = data.publishTier || '1';

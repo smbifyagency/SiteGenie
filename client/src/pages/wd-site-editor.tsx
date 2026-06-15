@@ -396,6 +396,7 @@ function siteDataToWDData(data: WDSiteData): Record<string, any> {
     _aiTestimonials: (data as any)._aiTestimonials,
     _aiServiceDescs: (data as any)._aiServiceDescs,
     enableMatrixPages: (data as any).enableMatrixPages,
+    hideBeforeAfter: (data as any).hideBeforeAfter,
     publishTier: data.publishTier || '1',
     generationStatus: data.generationStatus || 'idle',
     generationProgress: data.generationProgress ?? 0,
@@ -1311,6 +1312,7 @@ export default function WDSiteEditor() {
         _aiTestimonials: bd._aiTestimonials,
         _aiServiceDescs: bd._aiServiceDescs,
         enableMatrixPages: bd.enableMatrixPages,
+        hideBeforeAfter: bd.hideBeforeAfter,
         publishTier: bd.publishTier || '1',
         generationStatus: bd.generationStatus || 'idle',
         generationProgress: bd.generationProgress ?? 0,
@@ -3461,6 +3463,24 @@ export default function WDSiteEditor() {
               <p className="text-xs text-gray-500 italic">
                 Tip: You can also click any image directly in the preview on the right to replace it instantly.
               </p>
+
+              {/* ── Hide Before/After Toggle ── */}
+              <div className="rounded-lg border border-gray-700 p-3 flex items-center justify-between bg-gray-800/20">
+                <div>
+                  <p className="text-xs font-medium text-gray-300">Hide Before/After Sliders</p>
+                  <p className="text-[10px] text-gray-500">Hide the before/after slider section entirely from the Gallery page</p>
+                </div>
+                <button
+                  onClick={() => updateField("hideBeforeAfter", !(siteData as any).hideBeforeAfter)}
+                  className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
+                    (siteData as any).hideBeforeAfter ? 'bg-[#7C3AED]' : 'bg-gray-700'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                    (siteData as any).hideBeforeAfter ? 'translate-x-5' : ''
+                  }`} />
+                </button>
+              </div>
 
               {/* ── Before/After Gallery Pairs (Advanced) ───────────────── */}
               <ContentSection title="Before/After Slider (Advanced &amp; Optional)" defaultOpen={false}>

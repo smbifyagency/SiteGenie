@@ -59,8 +59,6 @@ export default function DashboardNewWebsite() {
     primaryColor: "#1e3a5f",
     secondaryColor: "#0ea5e9",
     accentColor: "#dc2626",
-    openaiApiKey: "",
-    geminiApiKey: "",
   });
 
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
@@ -184,13 +182,6 @@ export default function DashboardNewWebsite() {
       });
       const created = await createRes.json();
       if (!createRes.ok) throw new Error(created.message || "Failed to create");
-
-      if (form.openaiApiKey) {
-        fetch("/api/settings/openai", { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ apiKey: form.openaiApiKey, isActive: true }) }).catch(() => {});
-      }
-      if (form.geminiApiKey) {
-        fetch("/api/settings/gemini", { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ apiKey: form.geminiApiKey, isActive: true }) }).catch(() => {});
-      }
 
       toast({ title: "Website Created!", description: "Opening the editor..." });
       setLocation(`/dashboard/wd-editor/${created.id}`);
@@ -458,21 +449,7 @@ export default function DashboardNewWebsite() {
                     </div>
                   </div>
 
-                  {/* API Keys */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-gray-300 text-sm mb-1.5 block">OpenAI API Key (optional)</Label>
-                      <Input type="password" value={form.openaiApiKey} onChange={e => set("openaiApiKey", e.target.value)}
-                        placeholder="sk-..."
-                        className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 text-xs font-mono" />
-                    </div>
-                    <div>
-                      <Label className="text-gray-300 text-sm mb-1.5 block">Gemini API Key (optional)</Label>
-                      <Input type="password" value={form.geminiApiKey} onChange={e => set("geminiApiKey", e.target.value)}
-                        placeholder="AIzaSy..."
-                        className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 text-xs font-mono" />
-                    </div>
-                  </div>
+
 
                 </div>
               )}
