@@ -342,7 +342,11 @@ export function PublishWebsiteModal({
 
   // ── Deploy ────────────────────────────────────────────────────────
   async function handlePublish() {
-    if (!slug || slugAvailable !== true) return;
+    console.log("[PublishWebsiteModal] handlePublish clicked.", { slug, slugAvailable, localTier });
+    if (!slug || slugAvailable !== true) {
+      console.warn("[PublishWebsiteModal] Cannot publish: slug is empty or not available.");
+      return;
+    }
 
     setStep("deploying");
     setIsDeploying(true);
@@ -351,12 +355,15 @@ export function PublishWebsiteModal({
 
     try {
       // Phase 1: Save latest content
+      console.log("[PublishWebsiteModal] Calling onBeforeDeploy...");
       await onBeforeDeploy?.();
+      console.log("[PublishWebsiteModal] onBeforeDeploy completed.");
 
       setDeployProgress(15);
       setDeployPhase("Initiating deployment...");
 
       // Phase 2: Deploy via the WD endpoint
+      console.log("[PublishWebsiteModal] Sending deploy-wd POST request...");
       const res = await fetch(`/api/websites/${websiteId}/deploy-wd`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -368,12 +375,15 @@ export function PublishWebsiteModal({
         }),
       });
 
+      console.log("[PublishWebsiteModal] deploy-wd response status:", res.status);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        console.error("[PublishWebsiteModal] deploy-wd error response data:", errData);
         throw new Error(errData.error || errData.message || `Server error ${res.status}`);
       }
 
       const data = await res.json();
+      console.log("[PublishWebsiteModal] deploy-wd response data:", data);
       
       if (data.status === 'generating') {
         setDeployProgress(15);
@@ -390,9 +400,11 @@ export function PublishWebsiteModal({
         setIsDeploying(false);
       }
     } catch (err) {
+      console.error("[PublishWebsiteModal] Exception caught in handlePublish:", err);
       toast({
         title: "Deployment Failed",
         description: err instanceof Error ? err.message : String(err),
+
         variant: "destructive",
       });
       setStep("url-search");

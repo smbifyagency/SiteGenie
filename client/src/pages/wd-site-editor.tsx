@@ -1108,7 +1108,10 @@ export default function WDSiteEditor() {
     data: WDSiteData,
     options?: { includeCustomFiles?: boolean }
   ) {
-    if (!websiteId) return;
+    if (!websiteId) {
+      console.warn("[persistCurrentWebsiteState] No websiteId provided.");
+      return;
+    }
 
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -1121,12 +1124,14 @@ export default function WDSiteEditor() {
 
     if (options?.includeCustomFiles) {
       const domain = data.urlSlug || ((data.businessName || 'my-site').toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+      console.log("[persistCurrentWebsiteState] Generating custom files for domain:", domain);
       const latestFiles = generateLocalServiceWebsite(categoryId, siteDataToWDData(data), domain);
       payload.customFiles = Object.keys(visualEditorOverrides).length > 0
         ? { ...latestFiles, ...visualEditorOverrides }
         : latestFiles;
     }
 
+    console.log("[persistCurrentWebsiteState] Sending PUT request to save website...");
     const res = await fetch(`/api/websites/${websiteId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1134,11 +1139,14 @@ export default function WDSiteEditor() {
       body: JSON.stringify(payload),
     });
 
+    console.log("[persistCurrentWebsiteState] Save response status:", res.status);
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
+      console.error("[persistCurrentWebsiteState] Save error details:", errData);
       throw new Error(errData.message || errData.error || "Failed to save website");
     }
 
+    console.log("[persistCurrentWebsiteState] Website saved successfully.");
     setAutoSaveStatus("saved");
     setTimeout(() => setAutoSaveStatus("idle"), 2000);
   }
