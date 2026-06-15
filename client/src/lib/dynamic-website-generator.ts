@@ -222,6 +222,19 @@ function getCategorySpecificTerms(category: string): {
     };
   }
 
+  // Dumpster Rental & Waste Management
+  if (cat.includes('dumpster') || cat.includes('waste') || cat.includes('roll-off')) {
+    return {
+      urgentTerm: 'same-day delivery',
+      availabilityTerm: 'flexible rental periods',
+      processTerm: 'service assessment',
+      deliveryTerm: 'prompt drop-off & pickup',
+      maintenanceTerm: 'rental extensions',
+      projectTerm: 'cleanout project',
+      consultationTerm: 'Get a Free Quote'
+    };
+  }
+
   // Default for technical/trade services
   return {
     urgentTerm: 'emergency service',
@@ -2148,6 +2161,11 @@ function getCategoryImage(category: string, type: 'team' | 'equipment' | 'result
       team: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
       equipment: "https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
       results: "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80"
+    },
+    "Dumpster Rental": {
+      team: "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+      equipment: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+      results: "https://images.unsplash.com/photo-1618090584126-129cd1f3fbaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80"
     }
   };
 
@@ -2173,7 +2191,8 @@ function getCategoryIcon(category: string): string {
     "Marketing Agency": "fas fa-chart-line",
     "Legal Services (e.g., Family Law, Immigration, DUI Defense)": "fas fa-balance-scale",
     "Real Estate Agents": "fas fa-key",
-    "Financial Advisors & Tax Prep": "fas fa-calculator"
+    "Financial Advisors & Tax Prep": "fas fa-calculator",
+    "Dumpster Rental": "fas fa-dumpster"
   };
 
   return categoryIcons[category] || "fas fa-tools";

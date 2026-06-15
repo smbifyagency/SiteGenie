@@ -2299,6 +2299,130 @@ const junkRemovalConfig: CategoryConfig = {
   },
 };
 
+// ─── Dumpster Rental ─────────────────────────────────────────────────────────
+
+const dumpsterRentalConfig: CategoryConfig = {
+  id: 'dumpster-rental',
+  name: 'Dumpster Rental',
+  icon: '🗑️',
+  tagline: 'Reliable Roll-Off Dumpster Rentals',
+  isEmergency: false,
+  defaultPrimaryKeyword: 'dumpster rental',
+  defaultPalette: { primary: '#2563eb', secondary: '#1d4ed8' },
+  defaultServices: [
+    '10-Yard Dumpster Rental',
+    '15-Yard Dumpster Rental',
+    '20-Yard Dumpster Rental',
+    '30-Yard Dumpster Rental',
+    '40-Yard Dumpster Rental',
+    'Roll-Off Dumpster Rental',
+    'Commercial Dumpster Rental',
+    'Residential Dumpster Rental',
+    'Construction Dumpster Rental',
+    'Concrete & Dirt Dumpsters',
+    'Yard Waste Dumpster Rental',
+  ],
+  copy: {
+    heroTagline: 'Affordable, Reliable Roll-Off Dumpsters',
+    heroSubheading: 'Professional dumpster rentals for construction, home cleanouts, renovation, and commercial projects in {{city}}. Upfront pricing, flexible rental periods, and prompt delivery & pickup.',
+    ctaHeadline: 'Reserve Your Dumpster Today',
+    ctaSubtext: 'Same-day and next-day delivery options. Clear, all-inclusive pricing with no hidden delivery fees.',
+    ctaButton: 'Get a Free Quote',
+    trustBadges: [
+      'Upfront, All-Inclusive Flat Rates',
+      'Flexible Rental Periods',
+      'Same-Day/Next-Day Delivery',
+      'Locally Owned & Operated',
+    ],
+    whyUsPoints: [
+      'Flexible rental periods customized to your project timeline',
+      'Upfront flat-rate pricing with delivery, pickup, and disposal included',
+      'Multiple dumpster sizes (10 to 40 yards) for any size job',
+      'Same-day and next-day delivery available throughout {{city}}',
+      'Safe driveway placement with protective boards provided',
+      'Eco-friendly sorting and disposal practices',
+    ],
+    schemaDescription: 'Affordable roll-off dumpster rentals in {{city}}, {{state}}. Choose from 10, 15, 20, 30, and 40-yard dumpsters for home cleanouts, construction debris, yard waste, and commercial cleanup.',
+    schemaOfferCatalogName: 'Dumpster Rental Services',
+    footerEmergencyText: 'Roll-off dumpster rental delivery and pickup available throughout {{city}} and surrounding areas.',
+    whatsappMessage: 'Hi, I would like to get a quote for a dumpster rental in {{city}}.',
+    introParas: [
+      'Whether you are cleaning out your garage, remodeling your kitchen, or managing a large-scale construction site, having the right dumpster makes all the difference. Our dumpster rental service in {{city}} provides a hassle-free solution to dispose of construction debris, household junk, yard waste, and commercial trash.',
+      '{{businessName}} offers clean, reliable roll-off dumpsters in a range of sizes throughout {{city}}, {{state}} with prompt drop-off and pickup, flexible terms, and transparent, flat-rate pricing. Get in touch today to find the perfect dumpster size for your next project.',
+    ],
+    processH2: 'Our Easy Dumpster Rental Process in {{city}}',
+    processSteps: [
+      { step: 1, heading: 'Choose Your Dumpster Size', body: 'Select from our 10, 15, 20, 30, or 40-yard dumpsters depending on your project scope and weight requirements.' },
+      { step: 2, heading: 'Get a Flat-Rate Quote', body: 'We provide an all-inclusive, upfront flat-rate price that covers delivery, pickup, rental period, and weight allowance. No hidden fuel surcharges or environmental fees.' },
+      { step: 3, heading: 'Fast Delivery', body: 'We drop off the dumpster at your specified location in {{city}}, ensuring driveway protection with boards if requested.' },
+      { step: 4, heading: 'Fill It Up', body: 'Load the dumpster at your own pace during your rental period. Need more time? Simply call us to extend your rental.' },
+      { step: 5, heading: 'Prompt Pickup & Disposal', body: 'Once finished, schedule a pickup online or by phone. We haul the dumpster away and dispose of the waste responsibly, recycling what we can.' },
+    ],
+    faqH2: 'Dumpster Rental FAQs',
+    faqs: [
+      { question: 'How do I choose the right dumpster size?', answer: 'For minor cleanouts or yard work, a 10 or 15-yard dumpster is ideal. Kitchen remodels or full carpet replacement usually require a 20-yard dumpster. Large construction, demolition, or estate cleanouts are best served by our 30 or 40-yard dumpsters.' },
+      { question: 'What is included in the rental price?', answer: 'Our upfront flat-rate pricing includes delivery, drop-off, the agreed rental period, pickup, and a specific tonnage weight limit.' },
+      { question: 'Are there items I cannot put in the dumpster?', answer: 'We cannot accept hazardous materials, chemicals, wet paint, car batteries, tires, mattresses (in some municipalities), asbestos, or propane tanks.' },
+      { question: 'Will the dumpster damage my driveway?', answer: 'We place protective boards underneath the dumpster wheels if requested, avoiding direct contact with your asphalt or concrete to prevent scratching or cracking.' },
+      { question: 'How long can I keep the dumpster?', answer: 'Our standard rental period is 7 to 10 days, but we offer flexible daily or weekly extensions if your project takes longer.' },
+      { question: 'Do I need to be home for delivery or pickup?', answer: 'No, as long as the drop-off path is clear of cars, low-hanging tree branches, and overhead wires, our drivers can deliver or pick up without you present.' },
+      { question: 'What is the weight limit for a dumpster?', answer: 'Each dumpster size has a dedicated weight limit (typically ranging from 1 to 4 tons). Overweight dumpsters may incur additional disposal fees per ton.' },
+      { question: 'Can I request same-day delivery?', answer: 'Yes, same-day and next-day delivery options are available depending on inventory and placement schedule in {{city}}.' },
+    ],
+    seoBody: 'Looking for dumpster rentals in {{city}}? {{businessName}} offers affordable, flat-rate roll-off dumpsters in 10, 15, 20, 30, and 40-yard sizes throughout {{city}}, {{state}}. Perfect for home cleanouts, remodeling, construction sites, and waste disposal. Enjoy flexible rental periods and prompt delivery. Call for a free estimate today.',
+    servicePageBenefits: [
+      { heading: 'Flat-Rate Pricing', body: 'All-inclusive flat rates with delivery, pickup, rental period, and weight allowance included. No hidden fees.' },
+      { heading: 'Multiple Sizes Available', body: 'Choose from 10, 15, 20, 30, or 40-yard dumpster models to match any project size or volume.' },
+      { heading: 'Fast Delivery & Pickup', body: 'Same-day and next-day delivery slots available in {{city}} to keep your project on track.' },
+      { heading: 'Safe Driveway Placement', body: 'We use driveway protection boards to safeguard your asphalt or concrete from damage.' },
+      { heading: 'Flexible Rental Periods', body: 'Keep the dumpster for as long as you need. Easy extensions available at low daily rates.' },
+      { heading: 'Locally Owned & Operated', body: 'Dedicated local waste experts providing responsive customer service and reliable hauling.' },
+    ],
+  },
+  seo: {
+    schemaType: 'HomeAndConstructionBusiness',
+    metaDescriptionTemplate: 'Reliable roll-off dumpster rentals in {{city}}, {{state}}. Choose 10, 15, 20, 30, or 40-yard dumpsters. Upfront flat-rate pricing. Call {{businessName}} for a free quote.',
+  },
+  calculator: {
+    enabled: true,
+    title: 'Dumpster Rental Cost Estimator',
+    tabs: [
+      {
+        id: 'size',
+        label: 'By Dumpster Size',
+        resultLabel: 'Estimated Rental Cost',
+        baseMin: 290,
+        baseMax: 650,
+        fields: [
+          {
+            id: 'dumpsterSize',
+            label: 'Dumpster Size',
+            type: 'select',
+            options: [
+              { label: '10-Yard Dumpster', value: 1 },
+              { label: '15-Yard Dumpster', value: 1.2 },
+              { label: '20-Yard Dumpster', value: 1.4 },
+              { label: '30-Yard Dumpster', value: 1.8 },
+              { label: '40-Yard Dumpster', value: 2.2 },
+            ],
+          },
+          {
+            id: 'duration',
+            label: 'Rental Duration',
+            type: 'select',
+            options: [
+              { label: 'Up to 7 Days', value: 1 },
+              { label: '10 Days', value: 1.15 },
+              { label: '14 Days', value: 1.3 },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+};
+
+
 // ─── Category Placeholder Images ──────────────────────────────────────────────
 // Category-specific Unsplash placeholder images shown before a user uploads
 // their own photos. Keys match data-placeholder attributes in the generator.
@@ -2424,6 +2548,13 @@ export const CATEGORY_PLACEHOLDER_IMAGES: Record<string, CategoryPlaceholderImag
     'location-image':  'https://images.unsplash.com/photo-1494526585095-c41746248156?w=800&q=80',  // clean property
     'about-team-photo':'https://images.unsplash.com/photo-1600880292089-90a7e086ee0c?w=800&q=80',  // removal crew
   },
+  'dumpster-rental': {
+    hero:              'https://images.unsplash.com/photo-1618090584126-129cd1f3fbaa?w=1200&q=80', // dumpster bin
+    'main-image':      'https://images.unsplash.com/photo-1567393528677-d6adae7d4a0a?w=800&q=80',  // waste recycling
+    'service-image':   'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=800&q=80',  // waste removal
+    'location-image':  'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80',  // house exterior
+    'about-team-photo':'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=800&q=80',  // team photo
+  },
 };
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
@@ -2445,6 +2576,7 @@ export const CATEGORIES: CategoryConfig[] = [
   windowReplacementConfig,
   housePaintingConfig,
   junkRemovalConfig,
+  dumpsterRentalConfig,
   // future: pressureWashingConfig, handymanConfig, ...
 ];
 
