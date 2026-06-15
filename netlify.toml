@@ -1,21 +1,17 @@
 [build]
   base = "."
   publish = "dist/public"
-  command = "vite build && esbuild server/netlify-handler.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --outbase=server"
+  command = "vite build && esbuild server/netlify-handler.ts --platform=node --packages=external --bundle --format=esm --outfile=netlify/functions/api.js"
 
 [build.environment]
   NODE_VERSION = "18"
   NPM_FLAGS = "--legacy-peer-deps"
 
-[[functions]]
-  name = "api"
-  path = "dist/netlify-handler.js"
-
 [functions]
   node_bundler = "esbuild"
   external_node_modules = ["sharp"]
 
-[functions."api"]
+[functions.api]
   timeout = 26
 
 [[redirects]]
