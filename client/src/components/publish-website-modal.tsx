@@ -178,9 +178,16 @@ export function PublishWebsiteModal({
     };
   }, []);
 
+  const wasOpenRef = useRef(false);
+
   // ── Initialize on open ─────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
 
     // Reset state
     setStep(checklistNeedsAttention ? "checklist" : "api-check");

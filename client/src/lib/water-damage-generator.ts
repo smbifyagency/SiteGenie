@@ -2556,8 +2556,16 @@ function sanitizeBusinessData(data: WDBusinessData): WDBusinessData {
     clean.primaryKeyword = toTitleCase(clean.primaryKeyword);
   }
 
+  if (typeof clean.services === 'string') {
+    clean.services = (clean.services as string)
+      .split(/[,;\n]/)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
   if (Array.isArray(clean.services)) {
     clean.services = clean.services.map(s => toTitleCase(s));
+  } else {
+    clean.services = [];
   }
 
   if (clean.city) {
@@ -2584,6 +2592,12 @@ function sanitizeBusinessData(data: WDBusinessData): WDBusinessData {
     }
   }
 
+  if (typeof clean.serviceAreas === 'string') {
+    clean.serviceAreas = (clean.serviceAreas as string)
+      .split(/[,;\n]/)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
   if (Array.isArray(clean.serviceAreas)) {
     clean.serviceAreas = clean.serviceAreas.map(loc => {
       let l = loc.trim().replace(/,+/g, ',').trim();
@@ -2597,6 +2611,8 @@ function sanitizeBusinessData(data: WDBusinessData): WDBusinessData {
       }
       return l;
     });
+  } else {
+    clean.serviceAreas = [];
   }
 
   return clean;
