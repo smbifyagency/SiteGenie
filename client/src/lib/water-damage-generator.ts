@@ -5774,7 +5774,7 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
 
   const staticPages = staticPagesList
     .map(page => `  <url>
-    <loc>${base}/${page}</loc>
+    <loc>${base}/${page}.html</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -5784,7 +5784,7 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
   const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
   const calculatorUrls = isRestoration ? CALCULATORS
     .map(c => `  <url>
-    <loc>${base}/calculators/${c.slug}</loc>
+    <loc>${base}/calculators/${c.slug}.html</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -5793,7 +5793,7 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
 
   const serviceUrls = showServicesLocations ? data.services
     .map(s => `  <url>
-    <loc>${base}/services/${slugify(s)}-${slugify(data.city)}</loc>
+    <loc>${base}/services/${slugify(s)}-${slugify(data.city)}.html</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -5802,7 +5802,7 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
 
   const locationUrls = showServicesLocations ? data.serviceAreas
     .map(l => `  <url>
-    <loc>${base}/locations/${slugify(l)}</loc>
+    <loc>${base}/locations/${slugify(l)}.html</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -5811,7 +5811,7 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
 
   const blogPostUrls = sitemapBlogPosts
     .map(post => `  <url>
-    <loc>${base}/blog/${slugify(post.slug || post.title)}</loc>
+    <loc>${base}/blog/${slugify(post.slug || post.title)}.html</loc>
     <lastmod>${post.date || today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -5820,7 +5820,7 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
 
   const matrixUrls = (tier === '3' && data.enableMatrixPages) ? data.services.flatMap(s =>
     data.serviceAreas.map(l => `  <url>
-    <loc>${base}/matrix/${slugify(s)}-in-${slugify(l)}</loc>
+    <loc>${base}/matrix/${slugify(s)}-in-${slugify(l)}.html</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -5886,18 +5886,18 @@ export function generateLLMsTxt(data: WDBusinessData, domain: string): string {
   const hasBlog = llmBlogPosts.length > 0;
   const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
 
-  const servicesList = showServicesLocations ? data.services.map(s => `- [${s}](${base}/services/${slugify(s)}-${slugify(data.city)})`).join('\n') : '';
-  const areasList = showServicesLocations ? data.serviceAreas.map(a => `- [${a}](${base}/locations/${slugify(a)})`).join('\n') : '';
+  const servicesList = showServicesLocations ? data.services.map(s => `- [${s}](${base}/services/${slugify(s)}-${slugify(data.city)}.html)`).join('\n') : '';
+  const areasList = showServicesLocations ? data.serviceAreas.map(a => `- [${a}](${base}/locations/${slugify(a)}.html)`).join('\n') : '';
   const blogList = hasBlog
-    ? llmBlogPosts.map(p => `- [${p.title}](${base}/blog/${slugify(p.slug || p.title)})`).join('\n')
+    ? llmBlogPosts.map(p => `- [${p.title}](${base}/blog/${slugify(p.slug || p.title)}.html)`).join('\n')
     : '';
 
   const matrixList = (tier === '3' && data.enableMatrixPages) ? data.services.flatMap(s =>
-    data.serviceAreas.map(l => `- [${s} in ${l}](${base}/matrix/${slugify(s)}-in-${slugify(l)})`)
+    data.serviceAreas.map(l => `- [${s} in ${l}](${base}/matrix/${slugify(s)}-in-${slugify(l)}.html)`)
   ).join('\n') : '';
 
   const individualCalcsList = isRestoration
-    ? CALCULATORS.map(c => `- [${c.title} Calculator](${base}/calculators/${c.slug})`).join('\n')
+    ? CALCULATORS.map(c => `- [${c.title} Calculator](${base}/calculators/${c.slug}.html)`).join('\n')
     : '';
 
   return `# ${data.businessName}
@@ -5911,12 +5911,12 @@ ${data.email ? `- Email: ${data.email}` : ''}
 
 ## Pages
 - [Home](${base}/)
-- [About](${base}/about)
-- [Contact](${base}/contact)
-- [FAQ](${base}/faq)
-- [Gallery](${base}/gallery)
-- [Calculators](${base}/calculator)
-${individualCalcsList ? individualCalcsList + '\n' : ''}${hasBlog ? `- [Blog](${base}/blog)` : ''}
+- [About](${base}/about.html)
+- [Contact](${base}/contact.html)
+- [FAQ](${base}/faq.html)
+- [Gallery](${base}/gallery.html)
+- [Calculators](${base}/calculator.html)
+${individualCalcsList ? individualCalcsList + '\n' : ''}${hasBlog ? `- [Blog](${base}/blog.html)` : ''}
 ${showServicesLocations ? `\n## Services\n${servicesList}\n\n## Service Areas\n${areasList}` : ''}
 ${hasBlog ? `\n## Blog Posts\n${blogList}` : ''}
 ${matrixList ? `\n## Combination Pages\n${matrixList}` : ''}
@@ -5948,21 +5948,21 @@ export function generateHTMLSitemap(data: WDBusinessData, domain: string): strin
     : '';
 
   const serviceLinks = data.services.map(s =>
-    `<li><a href="services/${slugify(s)}-${slugify(data.city)}">${s} — ${data.city}</a></li>`
+    `<li><a href="services/${slugify(s)}-${slugify(data.city)}.html">${s} — ${data.city}</a></li>`
   ).join('\n            ');
 
   const locationLinks = data.serviceAreas.map(a =>
-    `<li><a href="locations/${slugify(a)}">${a}</a></li>`
+    `<li><a href="locations/${slugify(a)}.html">${a}</a></li>`
   ).join('\n            ');
 
   const blogLinks = hasBlog
     ? htmlBlogPosts.map(p =>
-        `<li><a href="blog/${slugify(p.slug || p.title)}">${p.title}</a></li>`
+        `<li><a href="blog/${slugify(p.slug || p.title)}.html">${p.title}</a></li>`
       ).join('\n            ')
     : '';
 
   const matrixLinks = (tier === '3' && data.enableMatrixPages) ? data.services.flatMap(s =>
-    data.serviceAreas.map(l => `<li><a href="matrix/${slugify(s)}-in-${slugify(l)}">${s} in ${l}</a></li>`)
+    data.serviceAreas.map(l => `<li><a href="matrix/${slugify(s)}-in-${slugify(l)}.html">${s} in ${l}</a></li>`)
   ).join('\n            ') : '';
 
   return `<!DOCTYPE html>
