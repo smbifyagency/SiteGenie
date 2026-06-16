@@ -7072,6 +7072,7 @@ Generated on: ${new Date().toISOString()}`;
         customImages, facebookUrl, instagramUrl, googleUrl, yelpUrl, twitterUrl,
         floatingCTA, whatsappNumber, logoUrl, logoAlt, licenseNumber, insuranceInfo,
         aboutContent, teamDescription, galleryImages,
+        generateBlog, enableMatrixPages, hideBeforeAfter, businessHours, publishTier,
       } = req.body;
 
       // Auto-generate urlSlug from businessName if blank
@@ -7215,6 +7216,11 @@ Generated on: ${new Date().toISOString()}`;
         teamDescription: teamDescription || undefined,
         galleryImages: Array.isArray(galleryImages) && galleryImages.length > 0 ? galleryImages : undefined,
         blogPosts: Array.isArray(req.body.blogPosts) && req.body.blogPosts.length > 0 ? req.body.blogPosts : undefined,
+        generateBlog: generateBlog ?? undefined,
+        enableMatrixPages: enableMatrixPages ?? undefined,
+        hideBeforeAfter: hideBeforeAfter ?? undefined,
+        businessHours: businessHours || undefined,
+        publishTier: publishTier || undefined,
       };
 
       // Generate all HTML files
