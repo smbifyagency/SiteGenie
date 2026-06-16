@@ -1603,6 +1603,47 @@ export default function WDSiteEditor() {
     }
   }
 
+  async function downloadZip() {
+    if (!siteData) return;
+    try {
+      // First save changes so DB has latest content
+      const saveRes = await fetch(`/api/websites/${websiteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ businessData: stripDeploymentFields(siteData) }),
+      });
+      if (!saveRes.ok) throw new Error("Failed to save changes before download");
+      if (siteData.openaiApiKey || siteData.geminiApiKey) setApiStatus("ready");
+
+      const res = await fetch("/api/generate-wd-website", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ...siteDataToWDData(siteData),
+          websiteId: websiteId,
+          returnFiles: false,  // download ZIP
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${siteData.urlSlug || 'website'}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Downloaded", description: "Website ZIP downloaded successfully." });
+    } catch (err) {
+      toast({ title: "Download Failed", description: String(err), variant: "destructive" });
+    }
+  }
+
   // ── Deploy to Netlify ─────────────────────────────────────────────────
 
   async function deployToNetlify() {
@@ -4080,6 +4121,7 @@ export default function WDSiteEditor() {
         onReviewChecklist={() => setActiveTab("checklist")}
         publishTier={siteData.publishTier || '1'}
         onChangePublishTier={(tier) => updateField("publishTier", tier)}
+        onDownloadZip={downloadZip}
         onBeforeDeploy={async () => {
           const currentSiteData = siteDataRef.current;
           if (!currentSiteData) {

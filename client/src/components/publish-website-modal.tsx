@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   Settings,
   ArrowRight,
+  Download,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -77,6 +78,7 @@ interface PublishWebsiteModalProps {
   onDeploySuccess?: (url: string, siteName: string) => void;
   publishTier?: '1' | '2' | '3';
   onChangePublishTier?: (tier: '1' | '2' | '3') => void;
+  onDownloadZip?: () => Promise<void> | void;
 }
 
 export function PublishWebsiteModal({
@@ -95,6 +97,7 @@ export function PublishWebsiteModal({
   onDeploySuccess,
   publishTier,
   onChangePublishTier,
+  onDownloadZip,
 }: PublishWebsiteModalProps) {
   const { toast } = useToast();
   const isRedeploy = Boolean(deployedUrl);
@@ -114,6 +117,7 @@ export function PublishWebsiteModal({
 
   // Deploy
   const [isDeploying, setIsDeploying] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [deployProgress, setDeployProgress] = useState(0);
   const [deployPhase, setDeployPhase] = useState("");
   const [resultUrl, setResultUrl] = useState("");
@@ -732,6 +736,30 @@ export function PublishWebsiteModal({
                 <Rocket className="w-4 h-4 mr-2" />
                 {isRedeploy ? "Update Website" : "Publish Website"}
               </Button>
+
+              {/* Download ZIP button (only for paid users - Tier 2 and Tier 3) */}
+              {(localTier === '2' || localTier === '3') && (
+                <Button
+                  onClick={async () => {
+                    setIsDownloading(true);
+                    try {
+                      await onDownloadZip?.();
+                    } finally {
+                      setIsDownloading(false);
+                    }
+                  }}
+                  disabled={isDownloading || isDeploying}
+                  type="button"
+                  variant="outline"
+                  className="w-full border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800 font-medium h-11 text-sm mt-2"
+                >
+                  {isDownloading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Downloading...</>
+                  ) : (
+                    <><Download className="w-4 h-4 mr-2" /> Download ZIP</>
+                  )}
+                </Button>
+              )}
 
               {slug && slugAvailable === null && !isCheckingSlug && slug.length >= 3 && (
                 <p className="text-xs text-center text-yellow-500/80">
