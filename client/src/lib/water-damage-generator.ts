@@ -658,6 +658,7 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
   data = sanitizeBusinessData(data);
   const prefix = currentPath.includes('/') ? '../' : '';
   const theme = resolveTheme(data);
+  const primaryColor = theme.primaryColor || '#1e3a5f';
   const accentColor = theme.accentColor || '#dc2626';
   const secondaryColor = theme.secondaryColor || '#0ea5e9';
   const tier = data.publishTier || '1';
@@ -743,7 +744,7 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
       <div class="footer-contact">
         <h3>Contact Us</h3>
         <div class="footer-contact-item">
-          <span class="footer-contact-icon">${iconToSVG('phone', secondaryColor)}</span>
+          <span class="footer-contact-icon">${iconToSVG('phone', primaryColor)}</span>
           <div>
             <div class="footer-contact-label">Phone</div>
             <div class="footer-contact-value"><a href="tel:${data.countryCode || '+1'}${data.phone.replace(/\D/g, '')}" class="footer-phone">${data.phone}</a></div>
@@ -751,21 +752,21 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
         </div>
         ${data.email ? `
         <div class="footer-contact-item">
-          <span class="footer-contact-icon">${iconToSVG('mail', secondaryColor)}</span>
+          <span class="footer-contact-icon">${iconToSVG('mail', primaryColor)}</span>
           <div>
             <div class="footer-contact-label">Email</div>
             <div class="footer-contact-value"><a href="mailto:${data.email}">${data.email}</a></div>
           </div>
         </div>` : ''}
         <div class="footer-contact-item">
-          <span class="footer-contact-icon">${iconToSVG('mapPin', secondaryColor)}</span>
+          <span class="footer-contact-icon">${iconToSVG('mapPin', primaryColor)}</span>
           <div>
             <div class="footer-contact-label">Address</div>
             <div class="footer-contact-value">${data.address}<br>${data.city}, ${data.state}</div>
           </div>
         </div>
         <div class="footer-contact-item">
-          <span class="footer-contact-icon">${iconToSVG('clock', secondaryColor)}</span>
+          <span class="footer-contact-icon">${iconToSVG('clock', primaryColor)}</span>
           <div>
             <div class="footer-contact-label">Hours</div>
             <div class="footer-contact-value">${data._footerEmergencyText || 'Available 24/7'}</div>
@@ -2115,7 +2116,7 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
 
 /* ── Footer ────────────────────────────────────── */
 .site-footer {
-  background: ${darkenHex(primaryColor, 0.85)};
+  background: ${darkenHex(primaryColor, 0.15)};
   color: #cbd5e1;
   padding: 4.5rem 0 2rem;
   position: relative;
@@ -2193,7 +2194,7 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   height: 36px;
   border-radius: 8px;
   background: rgba(255,255,255,0.08);
-  color: ${secondaryColor};
+  color: ${primaryColor};
   flex-shrink: 0;
 }
 
@@ -2258,7 +2259,7 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
-  color: #64748b;
+  color: #94a3b8;
   flex-wrap: wrap;
   gap: 0.5rem;
   position: relative;
