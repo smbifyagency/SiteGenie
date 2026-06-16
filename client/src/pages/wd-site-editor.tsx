@@ -372,7 +372,7 @@ function siteDataToWDData(data: WDSiteData): Record<string, any> {
     primaryKeyword: data.primaryKeyword,
     services: data.services,
     serviceAreas: data.serviceAreas,
-    urlSlug: data.urlSlug || data.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    urlSlug: data.urlSlug || (data.businessName ? data.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'website'),
     primaryColor: data.primaryColor,
     secondaryColor: data.secondaryColor,
     customImages: data.customImages,
@@ -1128,12 +1128,7 @@ export default function WDSiteEditor() {
     };
 
     if (options?.includeCustomFiles) {
-      const domain = data.urlSlug || ((data.businessName || 'my-site').toLowerCase().replace(/[^a-z0-9]+/g, '-'));
-      console.log("[persistCurrentWebsiteState] Generating custom files for domain:", domain);
-      const latestFiles = generateLocalServiceWebsite(categoryId, siteDataToWDData(data), domain);
-      payload.customFiles = Object.keys(visualEditorOverrides).length > 0
-        ? { ...latestFiles, ...visualEditorOverrides }
-        : latestFiles;
+      payload.customFiles = visualEditorOverrides;
     }
 
     console.log("[persistCurrentWebsiteState] Sending PUT request to save website...");
