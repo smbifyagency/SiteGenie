@@ -112,6 +112,9 @@ interface WDSiteData {
   faviconUrl?: string;
   businessHours?: string;
   publishTier?: '1' | '2' | '3';
+  generateBlog?: boolean;
+  enableMatrixPages?: boolean;
+  hideBeforeAfter?: boolean;
   generationStatus?: 'idle' | 'generating' | 'deploying' | 'completed' | 'failed';
   generationProgress?: number;
   generationError?: string | null;
@@ -404,7 +407,7 @@ function siteDataToWDData(data: WDSiteData): Record<string, any> {
     generationProgress: data.generationProgress ?? 0,
     generationError: data.generationError || null,
     blogPosts: data.blogPosts || [],
-    generateBlog: (data.blogPosts && data.blogPosts.length > 0) ? true : false,
+    generateBlog: data.generateBlog ?? false,
   } as any;
 }
 
@@ -1310,6 +1313,7 @@ export default function WDSiteEditor() {
         businessHours: bd.businessHours || "",
         galleryImages: Array.isArray(bd.galleryImages) ? bd.galleryImages : [],
         blogPosts: Array.isArray(bd.blogPosts) ? bd.blogPosts : [],
+        generateBlog: bd.generateBlog ?? (Array.isArray(bd.blogPosts) && bd.blogPosts.length > 0),
         logoUrl: bd.logoUrl,
         faviconUrl: bd.faviconUrl,
         googleAnalyticsId: bd.googleAnalyticsId || "",
@@ -1322,8 +1326,8 @@ export default function WDSiteEditor() {
         _aiAboutContent: bd._aiAboutContent,
         _aiTestimonials: bd._aiTestimonials,
         _aiServiceDescs: bd._aiServiceDescs,
-        enableMatrixPages: bd.enableMatrixPages,
-        hideBeforeAfter: bd.hideBeforeAfter,
+        enableMatrixPages: bd.enableMatrixPages ?? false,
+        hideBeforeAfter: bd.hideBeforeAfter ?? false,
         publishTier: bd.publishTier || '1',
         generationStatus: bd.generationStatus || 'idle',
         generationProgress: bd.generationProgress ?? 0,
@@ -2581,7 +2585,13 @@ export default function WDSiteEditor() {
                       </p>
                     </div>
                     <button
-                      onClick={() => updateField("enableMatrixPages", !(siteData as any).enableMatrixPages)}
+                      onClick={() => {
+                        const nextVal = !(siteData as any).enableMatrixPages;
+                        updateField("enableMatrixPages", nextVal);
+                        if (siteData) {
+                          rebuildPreview({ ...siteData, enableMatrixPages: nextVal });
+                        }
+                      }}
                       className={`relative w-10 h-5 rounded-full transition-colors ${
                         (siteData as any).enableMatrixPages ? 'bg-[#7C3AED]' : 'bg-gray-700'
                       }`}
@@ -3529,7 +3539,13 @@ export default function WDSiteEditor() {
                   <p className="text-[10px] text-gray-500">Hide the before/after slider section entirely from the Gallery page</p>
                 </div>
                 <button
-                  onClick={() => updateField("hideBeforeAfter", !(siteData as any).hideBeforeAfter)}
+                  onClick={() => {
+                    const nextVal = !(siteData as any).hideBeforeAfter;
+                    updateField("hideBeforeAfter", nextVal);
+                    if (siteData) {
+                      rebuildPreview({ ...siteData, hideBeforeAfter: nextVal });
+                    }
+                  }}
                   className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
                     (siteData as any).hideBeforeAfter ? 'bg-[#7C3AED]' : 'bg-gray-700'
                   }`}
@@ -3695,34 +3711,62 @@ export default function WDSiteEditor() {
 
             {/* ── Blog Writer Tab ─────────────────────────────────────── */}
             <TabsContent value="blog" className="p-4 space-y-4 mt-0">
-              {/* Incremental blog generation button */}
-              {(() => {
-                if (!siteData || Object.keys(generatedFiles).length === 0) return null;
-                const newBlogPosts = (siteData.blogPosts || []).filter(p => p.slug && !generatedFiles[`blog/${p.slug}.html`]);
-                if (newBlogPosts.length === 0) return null;
-                return (
-                  <button
-                    onClick={() => generateIncrementalPages('blog')}
-                    className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#7C3AED]/15 text-[#7C3AED] hover:bg-[#7C3AED]/25 px-3 py-2 rounded-lg transition-colors font-medium border border-[#7C3AED]/20"
-                    title={`Generate ${newBlogPosts.length} new blog page(s) without full rebuild`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5" /> Generate {newBlogPosts.length} New Blog Post Page{newBlogPosts.length > 1 ? 's' : ''} (incremental)
-                  </button>
-                );
-              })()}
-              <BlogWriterSection
-                siteData={siteData!}
-                onPostsChange={(posts) => {
-                  setSiteData(prev => {
-                    if (!prev) return prev;
-                    const next = { ...prev, blogPosts: posts };
-                    // Auto-rebuild preview so blog pages appear instantly
-                    setTimeout(() => rebuildPreview(next), 0);
-                    return next;
-                  });
-                }}
-                onRebuildPreview={rebuildPreview}
-              />
+              {/* ── Enable Blog Toggle ── */}
+              <div className="rounded-lg border border-gray-700 p-3 flex items-center justify-between bg-gray-800/20">
+                <div>
+                  <p className="text-xs font-medium text-gray-300">Enable Blog Page</p>
+                  <p className="text-[10px] text-gray-500">Show the Blog link in the navigation menu and generate blog pages</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const nextVal = !siteData?.generateBlog;
+                    updateField("generateBlog", nextVal);
+                    if (siteData) {
+                      rebuildPreview({ ...siteData, generateBlog: nextVal });
+                    }
+                  }}
+                  className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
+                    siteData?.generateBlog ? 'bg-[#7C3AED]' : 'bg-gray-700'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                    siteData?.generateBlog ? 'translate-x-5' : ''
+                  }`} />
+                </button>
+              </div>
+
+              {siteData?.generateBlog && (
+                <>
+                  {/* Incremental blog generation button */}
+                  {(() => {
+                    if (!siteData || Object.keys(generatedFiles).length === 0) return null;
+                    const newBlogPosts = (siteData.blogPosts || []).filter(p => p.slug && !generatedFiles[`blog/${p.slug}.html`]);
+                    if (newBlogPosts.length === 0) return null;
+                    return (
+                      <button
+                        onClick={() => generateIncrementalPages('blog')}
+                        className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#7C3AED]/15 text-[#7C3AED] hover:bg-[#7C3AED]/25 px-3 py-2 rounded-lg transition-colors font-medium border border-[#7C3AED]/20"
+                        title={`Generate ${newBlogPosts.length} new blog page(s) without full rebuild`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" /> Generate {newBlogPosts.length} New Blog Post Page{newBlogPosts.length > 1 ? 's' : ''} (incremental)
+                      </button>
+                    );
+                  })()}
+                  <BlogWriterSection
+                    siteData={siteData!}
+                    onPostsChange={(posts) => {
+                      setSiteData(prev => {
+                        if (!prev) return prev;
+                        const next = { ...prev, blogPosts: posts };
+                        // Auto-rebuild preview so blog pages appear instantly
+                        setTimeout(() => rebuildPreview(next), 0);
+                        return next;
+                      });
+                    }}
+                    onRebuildPreview={rebuildPreview}
+                  />
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="checklist" className="p-4 space-y-4 mt-0">

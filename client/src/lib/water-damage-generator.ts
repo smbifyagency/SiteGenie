@@ -186,6 +186,7 @@ export interface WDBusinessData {
   galleryImages?: WDGalleryImage[];
   // Blog posts
   blogPosts?: WDBlogPost[];
+  generateBlog?: boolean;
   // AI-generated content
   homepageContent?: WDHomepageContent;
   serviceContent?: Record<string, WDServiceContent>;
@@ -661,6 +662,7 @@ function generateNav(data: WDBusinessData, currentPath: string = ''): string {
   const prefix = currentPath.includes('/') ? '../' : '';
   const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
+  const showBlog = (tier === '2' || tier === '3') && (data.generateBlog !== undefined ? data.generateBlog : (data.blogPosts && data.blogPosts.length > 0));
 
   const serviceLinks = data.services
     .slice(0, 8)
@@ -717,7 +719,7 @@ function generateNav(data: WDBusinessData, currentPath: string = ''): string {
               <li><a href="${prefix}calculators/restore-vs-replace.html">Restore vs Replace</a></li>
             </ul>
           </li>
-          ${((tier === '2' || tier === '3') && data.blogPosts && data.blogPosts.length > 0) ? `<li><a href="${prefix}blog.html">Blog</a></li>` : ''}
+          ${showBlog ? `<li><a href="${prefix}blog.html">Blog</a></li>` : ''}
           <li><a href="${prefix}contact.html">Contact</a></li>
         </ul>
       </nav>
@@ -5851,7 +5853,7 @@ export function generateSitemap(data: WDBusinessData, domain: string): string {
   const today = new Date().toISOString().split('T')[0];
   const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
-  const showBlog = tier === '2' || tier === '3';
+  const showBlog = (tier === '2' || tier === '3') && (data.generateBlog !== undefined ? data.generateBlog : (data.blogPosts && data.blogPosts.length > 0));
 
   const sitemapBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
   const staticPagesList = ['about', 'contact', 'faq', 'calculator', 'gallery', 'privacy', 'terms'];
@@ -5966,7 +5968,7 @@ export function generateLLMsTxt(data: WDBusinessData, domain: string): string {
   const base = getSiteUrl(data, domain);
   const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
-  const showBlog = tier === '2' || tier === '3';
+  const showBlog = (tier === '2' || tier === '3') && (data.generateBlog !== undefined ? data.generateBlog : (data.blogPosts && data.blogPosts.length > 0));
   const llmBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
   const hasBlog = llmBlogPosts.length > 0;
   const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(data._categoryId || 'water-damage');
@@ -6020,7 +6022,7 @@ export function generateHTMLSitemap(data: WDBusinessData, domain: string): strin
   const base = getSiteUrl(data, domain);
   const tier = data.publishTier || '1';
   const showServicesLocations = tier === '2' || tier === '3';
-  const showBlog = tier === '2' || tier === '3';
+  const showBlog = (tier === '2' || tier === '3') && (data.generateBlog !== undefined ? data.generateBlog : (data.blogPosts && data.blogPosts.length > 0));
   const htmlBlogPosts = showBlog ? ((data.blogPosts && data.blogPosts.length > 0) ? data.blogPosts : getDefaultBlogPosts(data)) : [];
   const hasBlog = htmlBlogPosts.length > 0;
   const fullTheme = resolveTheme(data);
@@ -6171,8 +6173,8 @@ export function generateWaterDamageWebsite(
   files['gallery.html']    = generateGalleryPage(data, domain);
   const tier = data.publishTier || '1';
 
-  // Blog pages — generate blog.html and individual posts only for Tier 2 and Tier 3 if blogPosts exist
-  if ((tier === '2' || tier === '3') && data.blogPosts && data.blogPosts.length > 0) {
+  const showBlog = (tier === '2' || tier === '3') && (data.generateBlog !== undefined ? data.generateBlog : (data.blogPosts && data.blogPosts.length > 0));
+  if (showBlog) {
     files['blog.html'] = generateBlogArchivePage(data, domain);
     const displayPosts = data.blogPosts && data.blogPosts.length > 0 ? data.blogPosts : getDefaultBlogPosts(data);
     for (const post of displayPosts) {
