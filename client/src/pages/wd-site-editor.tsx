@@ -110,6 +110,7 @@ interface WDSiteData {
   customHeadCode?: string;
   logoUrl?: string;
   faviconUrl?: string;
+  businessHours?: string;
   publishTier?: '1' | '2' | '3';
   generationStatus?: 'idle' | 'generating' | 'deploying' | 'completed' | 'failed';
   generationProgress?: number;
@@ -364,6 +365,7 @@ function siteDataToWDData(data: WDSiteData): Record<string, any> {
     address: data.address,
     city: data.city,
     state: data.state,
+    businessHours: data.businessHours,
     primaryKeyword: data.primaryKeyword,
     services: data.services,
     serviceAreas: data.serviceAreas,
@@ -1305,6 +1307,7 @@ export default function WDSiteEditor() {
         twitterUrl: bd.twitterUrl || "",
         floatingCTA: bd.floatingCTA || "call",
         whatsappNumber: bd.whatsappNumber || "",
+        businessHours: bd.businessHours || "",
         galleryImages: Array.isArray(bd.galleryImages) ? bd.galleryImages : [],
         blogPosts: Array.isArray(bd.blogPosts) ? bd.blogPosts : [],
         logoUrl: bd.logoUrl,
@@ -2371,6 +2374,12 @@ export default function WDSiteEditor() {
                     <Label className="text-xs text-gray-400">State</Label>
                     <Input value={siteData.state} onChange={e => updateField("state", e.target.value)} className="bg-gray-800 border-gray-700 text-white mt-1 text-sm" />
                   </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs text-gray-400">Business Hours</Label>
+                  <Input value={siteData.businessHours || ""} onChange={e => updateField("businessHours", e.target.value)} className="bg-gray-800 border-gray-700 text-white mt-1 text-sm" placeholder="Monday-Friday: 8:00 AM - 6:00 PM, Saturday: 9:00 AM - 4:00 PM, Sunday: Emergency Only" />
+                  <p className="text-[10px] text-gray-500 mt-1">Separate different days with commas.</p>
                 </div>
 
                 <div>

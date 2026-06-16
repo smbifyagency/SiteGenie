@@ -732,6 +732,10 @@ export const businessDataSchema = z.object({
   contentAiProvider: z.enum(["openai", "gemini", "openrouter", "deepseek"]).optional().default("openai"),
   blogOutputOption: z.enum(["direct_download", "blog_integrated"]).optional().default("blog_integrated"),
 
+  // Layout & settings toggles
+  hideBeforeAfter: z.boolean().optional().default(false),
+  enableMatrixPages: z.boolean().optional().default(false),
+
   // Publish and Background Generation Tiers
   publishTier: z.enum(["1", "2", "3"]).optional().default("1"),
   generationStatus: z.enum(["idle", "generating", "deploying", "completed", "failed"]).optional().default("idle"),

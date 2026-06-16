@@ -140,7 +140,7 @@ export function generateLocalServiceWebsite(
 
   if (c.schemaDescription)      d._schemaDescription      = interpolate(c.schemaDescription, enriched);
   if (c.schemaOfferCatalogName) d._schemaOfferCatalogName = c.schemaOfferCatalogName;
-  if (c.footerEmergencyText)    d._footerEmergencyText    = c.footerEmergencyText;
+  if (c.footerEmergencyText)    d._footerEmergencyText    = interpolate(c.footerEmergencyText, enriched);
   if (c.whatsappMessage)        d._whatsappMessage        = c.whatsappMessage;
   if (c.servicePageBenefits)    d._servicePageBenefits    = c.servicePageBenefits;
 
@@ -213,7 +213,7 @@ export function enrichBusinessDataForCategory(
   const c = config.copy;
   if (c.schemaDescription)      enriched._schemaDescription      = interpolate(c.schemaDescription, enriched);
   if (c.schemaOfferCatalogName) enriched._schemaOfferCatalogName = c.schemaOfferCatalogName;
-  if (c.footerEmergencyText)    enriched._footerEmergencyText    = c.footerEmergencyText;
+  if (c.footerEmergencyText)    enriched._footerEmergencyText    = interpolate(c.footerEmergencyText, enriched);
   if (c.whatsappMessage)        enriched._whatsappMessage        = c.whatsappMessage;
   if (c.servicePageBenefits)    enriched._servicePageBenefits    = c.servicePageBenefits;
 

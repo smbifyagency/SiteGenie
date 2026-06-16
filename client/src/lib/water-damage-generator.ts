@@ -38,6 +38,87 @@ function hexToRgb(hex: string): string {
   } catch { return '15, 34, 68'; }
 }
 
+/** Capitalize the first letter of each word except common prepositions/conjunctions. */
+export function capitalizeHeading(str: string): string {
+  if (!str) return "";
+  const lowercasePrepositions = [
+    'in', 'and', 'for', 'of', 'to', 'a', 'an', 'the', 'at', 'by', 'from', 'on', 'with', 'about', 'as', 'into', 'like', 'through', 'over', 'under'
+  ];
+  return str
+    .split(/\s+/)
+    .map((word, index) => {
+      const cleanedWord = word.replace(/[^a-zA-Z]/g, '');
+      const lowerClean = cleanedWord.toLowerCase();
+      if (index > 0 && lowercasePrepositions.includes(lowerClean)) {
+        return word.toLowerCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
+
+/** Check if the address already contains the city and state, and format nicely without duplicates. */
+export function formatDisplayAddress(address: string, city: string = "", state: string = ""): string {
+  if (!address) return "";
+  const cleanedAddress = address.trim();
+  const cleanedCity = city.trim();
+  const cleanedState = state.trim();
+  const addressLower = cleanedAddress.toLowerCase();
+
+  const containsCity = cleanedCity && addressLower.includes(cleanedCity.toLowerCase());
+  const containsState = cleanedState && addressLower.includes(cleanedState.toLowerCase());
+
+  if (containsCity && containsState) {
+    return cleanedAddress;
+  }
+
+  const parts = [cleanedAddress];
+  const cityStateParts = [];
+  if (cleanedCity && !containsCity) {
+    cityStateParts.push(cleanedCity);
+  }
+  if (cleanedState && !containsState) {
+    cityStateParts.push(cleanedState);
+  }
+  if (cityStateParts.length > 0) {
+    parts.push(cityStateParts.join(', '));
+  }
+  return parts.join(', ');
+}
+
+/** Format address specifically for contact block and footer, splitting street and city/state on a new line. */
+export function formatFooterAddress(address: string, city: string = "", state: string = ""): string {
+  if (!address) return "";
+  const cleanedAddress = address.trim();
+  const cleanedCity = city.trim();
+  const cleanedState = state.trim();
+  const addressLower = cleanedAddress.toLowerCase();
+
+  const containsCity = cleanedCity && addressLower.includes(cleanedCity.toLowerCase());
+  const containsState = cleanedState && addressLower.includes(cleanedState.toLowerCase());
+
+  if (containsCity) {
+    const cityIndex = addressLower.indexOf(cleanedCity.toLowerCase());
+    if (cityIndex > 0) {
+      const partBeforeCity = cleanedAddress.substring(0, cityIndex).trim();
+      const partFromCity = cleanedAddress.substring(cityIndex).trim();
+      const streetPart = partBeforeCity.replace(/,\s*$/, '').trim();
+      return `${streetPart}<br>${partFromCity}`;
+    }
+    return cleanedAddress;
+  }
+
+  const streetPart = cleanedAddress;
+  const cityStateParts = [];
+  if (cleanedCity) cityStateParts.push(cleanedCity);
+  if (cleanedState) cityStateParts.push(cleanedState);
+
+  if (cityStateParts.length > 0) {
+    return `${streetPart}<br>${cityStateParts.join(', ')}`;
+  }
+  return streetPart;
+}
+
 export interface WDTheme {
   primaryColor: string;    // header, buttons, headings
   secondaryColor: string;  // links, accents, hover
@@ -96,6 +177,8 @@ export interface WDBusinessData {
   whatsappNumber?: string;
   // Matrix pages: service × location cross-product
   enableMatrixPages?: boolean;
+  hideBeforeAfter?: boolean;
+  businessHours?: string;
   // Publishing tier (Stage 1, 2, or 3)
   publishTier?: '1' | '2' | '3';
   customDomain?: string;
@@ -546,14 +629,14 @@ function generateGoogleMap(data: WDBusinessData, focusCity?: string): string {
       src="${mapSrc}"
       width="100%" height="350" style="border:0;display:block;" loading="lazy"
       referrerpolicy="no-referrer-when-downgrade"
-      title="Map showing ${data.address}, ${data.city}, ${data.state}"
+      title="Map showing ${formatDisplayAddress(data.address, data.city, data.state)}"
       allowfullscreen></iframe>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:1.5rem;margin-top:1.25rem;padding:1rem;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.05);align-items:center;justify-content:space-between;">
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;flex:1;">
       <div style="min-width:180px;">
         <strong style="font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b;">Address</strong>
-        <p style="margin:.25rem 0 0;color:#1e293b;">${data.address}, ${data.city}, ${data.state}</p>
+        <p style="margin:.25rem 0 0;color:#1e293b;">${formatDisplayAddress(data.address, data.city, data.state)}</p>
       </div>
       <div style="min-width:140px;">
         <strong style="font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b;">Phone</strong>
@@ -634,7 +717,7 @@ function generateNav(data: WDBusinessData, currentPath: string = ''): string {
               <li><a href="${prefix}calculators/restore-vs-replace.html">Restore vs Replace</a></li>
             </ul>
           </li>
-          ${(tier === '2' || tier === '3') ? `<li><a href="${prefix}blog.html">Blog</a></li>` : ''}
+          ${((tier === '2' || tier === '3') && data.blogPosts && data.blogPosts.length > 0) ? `<li><a href="${prefix}blog.html">Blog</a></li>` : ''}
           <li><a href="${prefix}contact.html">Contact</a></li>
         </ul>
       </nav>
@@ -762,14 +845,14 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
           <span class="footer-contact-icon">${iconToSVG('mapPin', primaryColor)}</span>
           <div>
             <div class="footer-contact-label">Address</div>
-            <div class="footer-contact-value">${data.address}<br>${data.city}, ${data.state}</div>
+            <div class="footer-contact-value">${formatFooterAddress(data.address, data.city, data.state)}</div>
           </div>
         </div>
         <div class="footer-contact-item">
           <span class="footer-contact-icon">${iconToSVG('clock', primaryColor)}</span>
           <div>
             <div class="footer-contact-label">Hours</div>
-            <div class="footer-contact-value">${data._footerEmergencyText || 'Available 24/7'}</div>
+            <div class="footer-contact-value">${data.businessHours ? data.businessHours.split(',').map(h => h.trim()).join('<br>') : (data._footerEmergencyText || 'Available 24/7').replace(/\{\{city\}\}/g, data.city || '')}</div>
           </div>
         </div>
         ${data.licenseNumber ? `<p style="font-size:.8rem;color:#64748b;margin-top:.5rem;">License: ${data.licenseNumber}</p>` : ''}
@@ -1826,7 +1909,7 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   animation: gradientShift 10s ease infinite;
   color: #fff;
   text-align: center;
-  padding: 5.5rem 0;
+  padding: 3.5rem 0;
   position: relative;
   overflow: hidden;
 }
@@ -2770,7 +2853,7 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
                 <span class="contact-icon">${iconToSVG('map-pin', secondaryColor)}</span>
                 <div>
                   <strong>Address</strong><br>
-                  ${data.address}, ${data.city}, ${data.state}
+                  ${formatDisplayAddress(data.address, data.city, data.state)}
                 </div>
               </div>
               ${data.email ? `<div class="contact-item"><span class="contact-icon">${iconToSVG('file', secondaryColor)}</span><div><strong>Email</strong><br><a href="mailto:${data.email}">${data.email}</a></div></div>` : ''}
@@ -2791,7 +2874,7 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
     <div class="hero-inner">
       <div class="hero-content">
         ${data._emergencyBadge || data._categoryId ? `<span class="hero-badge">${data._emergencyBadge || '24/7 Emergency Response'}</span>` : '<span class="hero-badge">24/7 Emergency Response</span>'}
-        <h1>${h1}</h1>
+        <h1>${capitalizeHeading(h1)}</h1>
         <p class="hero-sub">${heroSub}</p>
         <div class="hero-actions">
           <a href="tel:${data.countryCode || '+1'}${data.phone.replace(/\D/g, '')}" class="btn-primary"><span class="btn-icon">${iconToSVG('phone', '#fff')}</span> Call ${data.phone}</a>
@@ -3202,13 +3285,13 @@ export function generateServicePage(
     <span>›</span>
     <a href="../index.html#services">Services</a>
     <span>›</span>
-    <span aria-current="page">${service}</span>
+    <span aria-current="page">${capitalizeHeading(service)}</span>
   </div>
 
   <!-- ── Page Hero ──────────────────────────────── -->
   <section class="page-hero" role="banner">
     <div class="container">
-      <h1>${h1}</h1>
+      <h1>${capitalizeHeading(h1)}</h1>
       <p>${heroSub}</p>
       <div class="trust-badges">${trustBadgesHTML}</div>
       <div style="margin-top:1.5rem; display:flex; gap:1rem; flex-wrap:wrap;">
@@ -3486,13 +3569,13 @@ export function generateLocationPage(
     <span>›</span>
     <span>Service Areas</span>
     <span>›</span>
-    <span aria-current="page">${city}</span>
+    <span aria-current="page">${capitalizeHeading(city)}</span>
   </div>
 
   <!-- ── Page Hero ──────────────────────────────── -->
   <section class="page-hero" role="banner">
     <div class="container">
-      <h1>${h1}</h1>
+      <h1>${capitalizeHeading(h1)}</h1>
       <p>${heroSub}</p>
       <div class="trust-badges">${trustBadgesHTML}</div>
       <div style="margin-top:1.5rem; display:flex; gap:1rem; flex-wrap:wrap;">
@@ -3669,14 +3752,14 @@ export function generateServiceLocationMatrixPage(
   <div class="breadcrumb container">
     <a href="${prefix}index.html">Home</a>
     <span>›</span>
-    <a href="${prefix}services/${svcSlug}-${slugify(data.city)}.html">${service}</a>
+    <a href="${prefix}services/${svcSlug}-${slugify(data.city)}.html">${capitalizeHeading(service)}</a>
     <span>›</span>
-    <span aria-current="page">${service} in ${city}</span>
+    <span aria-current="page">${capitalizeHeading(service)} in ${capitalizeHeading(city)}</span>
   </div>
 
   <section class="page-hero" role="banner">
     <div class="container">
-      <h1>${h1}</h1>
+      <h1>${capitalizeHeading(h1)}</h1>
       <p>${heroSub}</p>
       <div class="trust-badges">
         ${(data._trustBadges || ['Licensed & Insured', '24/7 Available', 'Free Estimates']).map(b => `<span class="trust-badge">${b}</span>`).join('')}
@@ -4000,8 +4083,7 @@ export function generateContactPage(data: WDBusinessData, domain: string): strin
             <span class="contact-icon">${iconToSVG('map-pin', secondaryColor)}</span>
             <div>
               <strong>Address</strong><br>
-              ${data.address}<br>
-              ${data.city}, ${data.state}
+              ${formatFooterAddress(data.address, data.city, data.state)}
             </div>
           </div>
 
@@ -4009,8 +4091,10 @@ export function generateContactPage(data: WDBusinessData, domain: string): strin
             <span class="contact-icon">${iconToSVG('clock', secondaryColor)}</span>
             <div>
               <strong>Hours</strong><br>
-              Emergency Response: 24/7, 365 days<br>
-              Office Hours: Mon–Fri 8am–6pm
+              ${(data.businessHours || "Monday-Friday: 8:00 AM - 6:00 PM, Saturday: 9:00 AM - 4:00 PM, Sunday: Emergency Only")
+                .split(',')
+                .map(h => h.trim())
+                .join('<br>')}
             </div>
           </div>
 
@@ -4199,7 +4283,7 @@ export function generateFAQPage(data: WDBusinessData, domain: string): string {
 
   <section class="page-hero" role="banner">
     <div class="container">
-      <h1>${h1}</h1>
+      <h1>${capitalizeHeading(h1)}</h1>
       <p>${intro}</p>
     </div>
   </section>
@@ -4320,7 +4404,7 @@ export function generateCalculatorPage(data: WDBusinessData, domain: string): st
 
     <section class="page-hero" role="banner">
       <div class="container">
-        <h1>${calc.title || data.primaryKeyword + ' Cost Estimator'}</h1>
+        <h1>${capitalizeHeading(calc.title || data.primaryKeyword + ' Cost Estimator')}</h1>
         <p>Get a quick, upfront price estimate for your project. Choose options below to see estimated pricing ranges based on your needs.</p>
       </div>
     </section>
@@ -4475,7 +4559,7 @@ export function generateCalculatorPage(data: WDBusinessData, domain: string): st
 
     <section class="page-hero" role="banner">
       <div class="container">
-        <h1>${data._calcPageH1 || 'Free ' + (data.primaryKeyword || 'Water Damage') + ' Calculators'}</h1>
+        <h1>${capitalizeHeading(data._calcPageH1 || 'Free ' + (data.primaryKeyword || 'Water Damage') + ' Calculators')}</h1>
         <p>Estimate costs, drying time, mold risk, insurance payouts, and more. These tools give you a starting point — for exact figures, call us for a free on-site assessment.</p>
       </div>
     </section>
@@ -4845,13 +4929,13 @@ function generateSingleCalculatorPage(data: WDBusinessData, calcIndex: number, d
     <span>›</span>
     <a href="${prefix}calculator.html">Calculators</a>
     <span>›</span>
-    <span aria-current="page">${calc.title}</span>
+    <span aria-current="page">${capitalizeHeading(calc.title)}</span>
   </div>
 
   <section class="page-hero" role="banner">
     <div class="container">
       <div style="margin-bottom:.75rem;color:#fff;opacity:.85;">${iconToSVG(calc.icon, '#fff')}</div>
-      <h1>${calc.title} Calculator</h1>
+      <h1>${capitalizeHeading(calc.title)} Calculator</h1>
       <p>${calc.desc}</p>
     </div>
   </section>
@@ -5171,7 +5255,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   <section class="page-hero" role="banner">
     <div class="container">
-      <h1>${data.primaryKeyword} Gallery</h1>
+      <h1>${capitalizeHeading(data.primaryKeyword)} Gallery</h1>
       <p>Real before-and-after photos from ${data.primaryKeyword.toLowerCase()} projects in ${data.city} and surrounding areas. Replace placeholder images with your own work photos in the editor.</p>
     </div>
   </section>
@@ -5393,8 +5477,8 @@ export function generateBlogArchivePage(data: WDBusinessData, domain: string): s
 
   <section class="page-hero" role="banner">
     <div class="container">
-      <h1>Water Damage Restoration Blog</h1>
-      <p>Expert tips, guides, and information about water damage restoration, mold prevention, insurance claims, and protecting your ${data.city} property.</p>
+      <h1>${capitalizeHeading(data.primaryKeyword)} Blog</h1>
+      <p>Expert tips, guides, and information about ${data.primaryKeyword.toLowerCase()}, prevention, and protecting your ${data.city} property.</p>
     </div>
   </section>
 
@@ -5646,7 +5730,7 @@ export function generatePrivacyPage(data: WDBusinessData, domain: string): strin
       <p style="color:#475569;">For questions about this Privacy Policy or your personal information, contact:</p>
       <p style="color:#475569;">
         <strong>${data.businessName}</strong><br>
-        ${data.address}, ${data.city}, ${data.state}<br>
+        ${formatDisplayAddress(data.address, data.city, data.state)}<br>
         ${data.phone}<br>
         ${data.email ? `${data.email}` : ''}
       </p>
@@ -5734,7 +5818,7 @@ export function generateTermsPage(data: WDBusinessData, domain: string): string 
       <h2>Contact</h2>
       <p style="color:#475569;">
         <strong>${data.businessName}</strong><br>
-        ${data.address}, ${data.city}, ${data.state}<br>
+        ${formatDisplayAddress(data.address, data.city, data.state)}<br>
         ${data.phone}<br>
         ${data.email ? data.email : ''}
       </p>
@@ -5908,7 +5992,7 @@ export function generateLLMsTxt(data: WDBusinessData, domain: string): string {
 ## Contact
 - Phone: ${data.phone}
 ${data.email ? `- Email: ${data.email}` : ''}
-- Address: ${data.address}, ${data.city}, ${data.state}
+- Address: ${formatDisplayAddress(data.address, data.city, data.state)}
 
 ## Pages
 - [Home](${base}/)
@@ -6087,8 +6171,8 @@ export function generateWaterDamageWebsite(
   files['gallery.html']    = generateGalleryPage(data, domain);
   const tier = data.publishTier || '1';
 
-  // Blog pages — generate blog.html and individual posts only for Tier 2 and Tier 3
-  if (tier === '2' || tier === '3') {
+  // Blog pages — generate blog.html and individual posts only for Tier 2 and Tier 3 if blogPosts exist
+  if ((tier === '2' || tier === '3') && data.blogPosts && data.blogPosts.length > 0) {
     files['blog.html'] = generateBlogArchivePage(data, domain);
     const displayPosts = data.blogPosts && data.blogPosts.length > 0 ? data.blogPosts : getDefaultBlogPosts(data);
     for (const post of displayPosts) {

@@ -124,6 +124,8 @@ export function LiveWebsitePreview({ businessData, template, useDynamicGenerator
         publishTier: businessData.publishTier || "1",
         generationStatus: businessData.generationStatus || "idle",
         generationProgress: businessData.generationProgress || 0,
+        hideBeforeAfter: businessData.hideBeforeAfter || false,
+        enableMatrixPages: businessData.enableMatrixPages || false,
       };
 
       if (useDynamicGenerator) {
