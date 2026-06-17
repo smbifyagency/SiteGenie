@@ -15,7 +15,12 @@ function truncateText(text: string, maxLen: number): string {
   const lastSpace = truncated.lastIndexOf(' ');
   return (lastSpace > maxLen * 0.6 ? truncated.slice(0, lastSpace) : truncated).trimEnd() + '…';
 }
-function seoTitle(t: string): string { return truncateText(t, 60); }
+function seoTitle(t: string): string {
+  if (!t) return '';
+  const trimmed = t.trim();
+  const capitalized = trimmed ? (trimmed.charAt(0).toUpperCase() + trimmed.slice(1)) : '';
+  return truncateText(capitalized, 60);
+}
 function seoDescription(d: string): string { return truncateText(d, 160); }
 
 // Site settings interface for tracking codes

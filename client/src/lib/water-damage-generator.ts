@@ -490,7 +490,12 @@ function truncateText(text: string, maxLen: number): string {
 }
 
 /** Ensure SEO title is ≤ 60 characters. */
-function seoTitle(title: string): string { return truncateText(title, 60); }
+function seoTitle(title: string): string {
+  if (!title) return '';
+  const trimmed = title.trim();
+  const capitalized = trimmed ? (trimmed.charAt(0).toUpperCase() + trimmed.slice(1)) : '';
+  return truncateText(capitalized, 60);
+}
 /** Ensure SEO meta description is ≤ 160 characters. */
 function seoDescription(desc: string): string { return truncateText(desc, 160); }
 /** Ensure image alt text is ≤ 100 characters. */

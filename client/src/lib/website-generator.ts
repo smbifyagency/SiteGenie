@@ -8,6 +8,12 @@ import {
   getResponsiveBreakpoint 
 } from "./website-layout-config";
 
+function capitalizeTitle(str: string): string {
+  if (!str) return '';
+  const trimmed = str.trim();
+  return trimmed ? (trimmed.charAt(0).toUpperCase() + trimmed.slice(1)) : '';
+}
+
 // Generate JSON-LD structured data for local business
 function generateLocalBusinessSchema(data: BusinessData, pageTitle?: string, pageDescription?: string): string {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -261,7 +267,7 @@ function generateTestimonials(data: BusinessData): string {
 
 // Generate optimized meta tags for local SEO
 function generateSEOMetaTags(data: BusinessData, pageTitle?: string, pageDescription?: string, pageType: string = 'home'): string {
-  const title = pageTitle || `${data.businessName} - ${data.heroService} in ${data.heroLocation}`;
+  const title = capitalizeTitle(pageTitle || `${data.businessName} - ${data.heroService} in ${data.heroLocation}`);
   const description = pageDescription || data.heroDescription;
   const keywords = `${data.heroService}, ${data.heroLocation}, ${data.targetedKeywords}, ${data.businessName}`;
   
@@ -368,7 +374,7 @@ function generateHTML(data: BusinessData, template: Template): string {
   const featureDescriptions = data.featureDescriptions.split(',').map(d => d.trim());
   
   // Use custom meta data if provided, otherwise use auto-generated
-  const optimizedTitle = data.metaTitle || `${data.heroService} in ${data.heroLocation} | ${data.businessName} | ${data.yearsInBusiness}+ Years Experience`;
+  const optimizedTitle = capitalizeTitle(data.metaTitle || `${data.heroService} in ${data.heroLocation} | ${data.businessName} | ${data.yearsInBusiness}+ Years Experience`);
   const optimizedDescription = data.metaDescription || `Professional ${data.heroService.toLowerCase()} services in ${data.heroLocation}. ${data.heroDescription} Call ${data.phone} for free estimates. Serving ${data.serviceAreas}.`;
   
   return `<!DOCTYPE html>

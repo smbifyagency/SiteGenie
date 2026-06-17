@@ -1915,6 +1915,14 @@ function generateBlogPostPage(post: any, businessData: any, template: string): s
   const navigationHTML = generateNavigation(businessData, 'blog', true);
   const slug = post.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+  const capitalizeFirst = (str: string) => {
+    if (!str) return '';
+    const trimmed = str.trim();
+    return trimmed ? (trimmed.charAt(0).toUpperCase() + trimmed.slice(1)) : '';
+  };
+  const pageTitle = capitalizeFirst(post.metaTitle || post.title);
+  const ogTitle = capitalizeFirst(post.title);
+
   // Generate comprehensive blog post schema
   const blogSchema = {
     "@context": "https://schema.org",
@@ -1968,7 +1976,7 @@ function generateBlogPostPage(post: any, businessData: any, template: string): s
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${post.metaTitle || post.title} - ${businessData.businessName}</title>
+    <title>${pageTitle} - ${businessData.businessName}</title>
     <meta name="description" content="${post.metaDescription || post.excerpt}">
     <meta name="keywords" content="${Array.isArray(post.keywords) ? post.keywords.join(', ') : post.keywords}">
     
@@ -1977,7 +1985,7 @@ function generateBlogPostPage(post: any, businessData: any, template: string): s
     
     <!-- Open Graph / Social Media -->
     <meta property="og:type" content="article">
-    <meta property="og:title" content="${post.title}">
+    <meta property="og:title" content="${ogTitle}">
     <meta property="og:description" content="${post.excerpt}">
     <meta property="og:image" content="${post.featuredImage || `https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&h=600`}">
     <meta property="article:author" content="${businessData.businessName}">
@@ -1986,7 +1994,7 @@ function generateBlogPostPage(post: any, businessData: any, template: string): s
     
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="${post.title}">
+    <meta name="twitter:title" content="${ogTitle}">
     <meta name="twitter:description" content="${post.excerpt}">
     <meta name="twitter:image" content="${post.featuredImage || `https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&h=600`}">
     

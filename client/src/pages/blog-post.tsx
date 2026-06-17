@@ -92,7 +92,11 @@ export default function BlogPost() {
   return (
     <div className="min-h-screen bg-white text-gray-900 pt-20">
       {/* SEO Meta Tags */}
-      <title>{post.metaTitle || post.title}</title>
+      <title>
+        {(post.metaTitle || post.title)
+          ? (post.metaTitle || post.title).trim().charAt(0).toUpperCase() + (post.metaTitle || post.title).trim().slice(1)
+          : ''}
+      </title>
       <meta name="description" content={post.metaDescription || post.excerpt} />
 
       <div className="container mx-auto px-4 py-8">
