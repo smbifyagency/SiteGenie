@@ -52,7 +52,7 @@ export default function DashboardNewWebsite() {
     city: "",
     state: "",
     primaryKeyword: "",
-    targetKeywords: "",
+    targetedKeywords: "",
     services: [] as string[],
     serviceAreas: "",
     urlSlug: "",
@@ -146,7 +146,7 @@ export default function DashboardNewWebsite() {
       city: 'Austin',
       state: 'TX',
       primaryKeyword: cat.defaultPrimaryKeyword,
-      targetKeywords: cat.defaultServices.slice(0, 4).join(', '),
+      targetedKeywords: cat.defaultServices.slice(0, 4).join(', '),
       services: cat.defaultServices.slice(0, 8),
       serviceAreas: 'Austin, TX\nRound Rock, TX\nCedar Park, TX\nGeorgetown, TX\nPflugerville, TX',
       urlSlug: slug,
@@ -309,6 +309,18 @@ export default function DashboardNewWebsite() {
                   rows={5}
                   className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 resize-none font-mono text-sm" />
                 <p className="text-xs text-gray-500 mt-1">Generated automatically from your City/State. Each area gets its own localized landing page.</p>
+              </div>
+
+              {/* Target Keywords (Directly visible and editable) */}
+              <div>
+                <Label className="text-gray-300 text-sm mb-1.5 block flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-[#7C3AED]" /> Target Keywords (one per line or comma separated)
+                </Label>
+                <Textarea value={form.targetedKeywords} onChange={e => set("targetedKeywords", e.target.value)}
+                  placeholder={"plumbing repair\nemergency plumber\ndrain cleaning"}
+                  rows={5}
+                  className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]/50 resize-none font-mono text-sm" />
+                <p className="text-xs text-gray-500 mt-1">These keywords will guide the AI when writing your website's content and service pages.</p>
               </div>
             </div>
 
