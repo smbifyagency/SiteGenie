@@ -52,6 +52,7 @@ import PricingPage from "@/pages/pricing";
 import FeaturesPage from "@/pages/features";
 import DemoPage from "@/pages/demo";
 import AffiliatesPage from "@/pages/affiliates";
+import HowToUsePage from "@/pages/how-to-use";
 
 // Auth Pages
 import SignupPage from "@/pages/signup";
@@ -207,6 +208,9 @@ function Router() {
           </Route>
           <Route path="/affiliates">
             <PublicRoute><AffiliatesPage /></PublicRoute>
+          </Route>
+          <Route path="/how-to-use">
+            <PublicRoute><HowToUsePage /></PublicRoute>
           </Route>
           <Route path="/terms">
             <PublicRoute><TermsPage /></PublicRoute>

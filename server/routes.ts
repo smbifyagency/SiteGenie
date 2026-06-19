@@ -261,6 +261,13 @@ const splitValues = (value: unknown): string[] => {
   return [];
 };
 
+const splitKeywords = (value: unknown): string[] => {
+  if (typeof value === "string") {
+    return splitValues(value.replace(/,/g, "\n"));
+  }
+  return splitValues(value);
+};
+
 const toCsv = (items: string[]): string => uniqueValues(items).join("\n");
 
 const normalizeLocationLabel = (value: unknown, preferredState?: string): string => {
@@ -744,8 +751,8 @@ const toPromptContext = (
   const primaryCity = stringValue(overrides.primaryCity || normalizedBusinessData?.heroLocation || locationItems[0] || "Local Area");
   const nicheKeywords = uniqueValues(
     [
-      ...splitValues(overrides.nicheKeywords),
-      ...splitValues(normalizedBusinessData?.targetedKeywords),
+      ...splitKeywords(overrides.nicheKeywords),
+      ...splitKeywords(normalizedBusinessData?.targetedKeywords),
       ...serviceItems,
       stringValue(normalizedBusinessData?.category),
     ].filter(Boolean)
@@ -775,7 +782,7 @@ const fallbackServicePageContent = (service: string, businessData: any) => {
   const city = stringValue(businessData?.heroLocation || businessData?.serviceAreas) || "your area";
   const businessName = stringValue(businessData?.businessName) || "Our team";
   const category = stringValue(businessData?.category).toLowerCase() || "service";
-  const nicheKeywords = splitValues(businessData?.targetedKeywords).slice(0, 4);
+  const nicheKeywords = splitKeywords(businessData?.targetedKeywords).slice(0, 4);
   const nicheSnippet = nicheKeywords.length > 0 ? `Key focus areas include ${nicheKeywords.join(", ")}.` : "";
   const contentFingerprint = createContentFingerprint(businessData);
 
@@ -818,7 +825,7 @@ const fallbackLocationPageContent = (location: string, businessData: any) => {
   const service = stringValue(businessData?.heroService || businessData?.services).toLowerCase() || "professional service";
   const businessName = stringValue(businessData?.businessName) || "Our team";
   const category = stringValue(businessData?.category).toLowerCase() || "service";
-  const nicheKeywords = splitValues(businessData?.targetedKeywords).slice(0, 4);
+  const nicheKeywords = splitKeywords(businessData?.targetedKeywords).slice(0, 4);
   const localSnippet = nicheKeywords.length > 0 ? `This page is tailored for ${nicheKeywords.join(", ")} in ${location}.` : "";
   const contentFingerprint = createContentFingerprint(businessData);
 
@@ -5514,8 +5521,8 @@ Total Websites: ${validatedData.businesses.length}
         ]).slice(0, 6);
 
         const generatedKeywords = uniqueValues([
-          ...splitValues(operationalDetails?.targetedKeywords),
-          ...splitValues(mappedHomeData.targetedKeywords),
+          ...splitKeywords(operationalDetails?.targetedKeywords),
+          ...splitKeywords(mappedHomeData.targetedKeywords),
           `${context.serviceType} in ${context.location}`,
         ]).slice(0, 10);
 

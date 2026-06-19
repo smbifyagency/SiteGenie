@@ -90,6 +90,7 @@ export function Navigation() {
       {navLink("/features", "Features")}
       {navLink("/pricing", "Pricing")}
       {navLink("/demo", "Demo")}
+      {navLink("/how-to-use", "How to Use")}
       {navLink("/about", "About")}
       {navLink("/contact", "Contact")}
     </>
@@ -184,6 +185,7 @@ export function Navigation() {
     { path: "/features", label: "Features" },
     { path: "/pricing", label: "Pricing" },
     { path: "/demo", label: "Demo" },
+    { path: "/how-to-use", label: "How to Use" },
     { path: "/about", label: "About" },
     { path: "/contact", label: "Contact" },
     { path: "/affiliates", label: "Affiliates" },

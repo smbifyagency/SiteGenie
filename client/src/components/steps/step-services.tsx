@@ -116,10 +116,11 @@ export function StepServices({ form }: StepServicesProps) {
             name="targetedKeywords"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Target Keywords (comma separated)</FormLabel>
+                <FormLabel>Target Keywords (one per line or comma separated)</FormLabel>
                 <FormControl>
-                  <Input 
-                    placeholder="plumber, plumbing repair, emergency plumber, drain cleaning"
+                  <Textarea 
+                    rows={6}
+                    placeholder="plumber&#10;plumbing repair&#10;emergency plumber&#10;drain cleaning"
                     {...field} 
                   />
                 </FormControl>

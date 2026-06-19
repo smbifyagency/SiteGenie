@@ -2377,8 +2377,13 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
 
 @media (max-width: 768px) {
   .main-nav { display: none; }
-  .main-nav.open { display: block; position: absolute; top: 72px; left: 0; right: 0; background: #fff; border-bottom: 1px solid #e2e8f0; padding: 1rem; }
-  .main-nav.open .nav-list { flex-direction: column; }
+  .main-nav.open { display: block; position: absolute; top: 72px; left: 0; right: 0; background: #fff; border-bottom: 1px solid #e2e8f0; padding: 1rem; z-index: 999; }
+  .main-nav.open .nav-list { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+  .main-nav.open .nav-list a { color: #1e293b !important; display: block; width: 100%; padding: 0.75rem 1rem; }
+  .main-nav.open .nav-list a:hover { background: #f1f5f9; color: #0f172a !important; }
+  .main-nav.open .has-dropdown { flex-direction: column; align-items: flex-start; }
+  .main-nav.open .dropdown { position: static; box-shadow: none; border: none; padding: 0.5rem 0 0.5rem 1.5rem; background: transparent; width: 100%; }
+  .main-nav.open .dropdown li a { color: #475569 !important; }
   .mobile-menu-toggle { display: flex; }
   .hero { padding: 3rem 0 2.5rem; }
   section { padding: 3rem 0; }
