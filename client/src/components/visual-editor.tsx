@@ -141,9 +141,14 @@ export function VisualEditor({
             helperStyle.setAttribute("data-gjs-helper", "editor-canvas-fixes");
             helperStyle.textContent = `
                 /* Keep animated blocks visible in editor iframe when page JS is not running */
-                .animate-on-scroll {
+                .animate-on-scroll,
+                .reveal,
+                .reveal-left,
+                .reveal-right,
+                .reveal-scale {
                     opacity: 1 !important;
                     transform: none !important;
+                    transition: none !important;
                 }
             `;
             canvasDocument.head.appendChild(helperStyle);

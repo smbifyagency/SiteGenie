@@ -2228,6 +2228,7 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   margin: 0 auto;
   padding: 0 1.5rem;
   display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.5fr; /* Fallback for legacy customFiles */
   gap: 2.5rem;
   position: relative;
 }

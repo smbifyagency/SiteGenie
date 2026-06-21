@@ -2268,21 +2268,40 @@ export default function WDSiteEditor() {
 
   // ── Visual Editor helpers ─────────────────────────────────────────────
 
-  function mergeBodyIntoDocument(baseHtml: string, bodyHtml: string): string {
+  function mergeBodyIntoDocument(baseHtml: string, bodyHtml: string, css?: string): string {
     if (!bodyHtml?.trim()) return baseHtml;
     const bodyTagMatch = baseHtml.match(/<body[^>]*>/i);
     if (!bodyTagMatch) return bodyHtml;
     const bodyOpenTag = bodyTagMatch[0];
-    return baseHtml.replace(/<body[^>]*>[\s\S]*<\/body>/i, `${bodyOpenTag}\n${bodyHtml}\n</body>`);
+
+    // Extract all <script> tags from original body to prevent visual editor from stripping them
+    const bodyMatch = baseHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    let originalScripts = '';
+    if (bodyMatch) {
+      const originalBodyContent = bodyMatch[1];
+      const scriptRegex = /<script[\s\S]*?<\/script>/gi;
+      const scripts = originalBodyContent.match(scriptRegex) || [];
+      originalScripts = scripts.join('\n');
+    }
+
+    let finalBodyContent = bodyHtml;
+    if (css && css.trim()) {
+      finalBodyContent += `\n<style data-gjs-styles="true">${css}</style>`;
+    }
+    if (originalScripts) {
+      finalBodyContent += `\n${originalScripts}`;
+    }
+
+    return baseHtml.replace(/<body[^>]*>[\s\S]*<\/body>/i, `${bodyOpenTag}\n${finalBodyContent}\n</body>`);
   }
 
   function getCurrentPageHtml(): string {
     return visualEditorOverrides[previewPage] || generatedFiles[previewPage] || generatedFiles['index.html'] || '';
   }
 
-  async function handleVisualEditorSave(bodyHtml: string, _css: string) {
+  async function handleVisualEditorSave(bodyHtml: string, css: string) {
     const baseHtml = generatedFiles[previewPage] || generatedFiles['index.html'] || '';
-    const mergedHtml = mergeBodyIntoDocument(baseHtml, bodyHtml);
+    const mergedHtml = mergeBodyIntoDocument(baseHtml, bodyHtml, css);
     const newOverrides = { ...visualEditorOverrides, [previewPage]: mergedHtml };
     setVisualEditorOverrides(newOverrides);
     setShowVisualEditor(false);

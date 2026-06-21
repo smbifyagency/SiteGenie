@@ -221,7 +221,7 @@ export function FullPagePreview({
     };
   }, []);
 
-  const mergeEditedBodyIntoDocument = (baseHtml: string, editedHtml: string) => {
+  const mergeEditedBodyIntoDocument = (baseHtml: string, editedHtml: string, css?: string) => {
     if (!editedHtml?.trim()) return baseHtml;
 
     if (/<html[\s>]/i.test(editedHtml) || /<body[\s>]/i.test(editedHtml)) {
@@ -239,7 +239,25 @@ export function FullPagePreview({
       return editedHtml;
     }
 
-    return baseHtml.replace(bodyPattern, `${bodyOpenTag}\n${editedHtml}\n</body>`);
+    // Extract all <script> tags from original body to prevent visual editor from stripping them
+    const bodyMatch = baseHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    let originalScripts = '';
+    if (bodyMatch) {
+      const originalBodyContent = bodyMatch[1];
+      const scriptRegex = /<script[\s\S]*?<\/script>/gi;
+      const scripts = originalBodyContent.match(scriptRegex) || [];
+      originalScripts = scripts.join('\n');
+    }
+
+    let finalBodyContent = editedHtml;
+    if (css && css.trim()) {
+      finalBodyContent += `\n<style data-gjs-styles="true">${css}</style>`;
+    }
+    if (originalScripts) {
+      finalBodyContent += `\n${originalScripts}`;
+    }
+
+    return baseHtml.replace(bodyPattern, `${bodyOpenTag}\n${finalBodyContent}\n</body>`);
   };
 
   const ensurePageHtmlDocument = (candidateHtml: string, pageKey: string) => {
@@ -318,7 +336,7 @@ export function FullPagePreview({
   }, [generatedFiles, activeEditedFiles, currentPage]);
 
   const applyVisualEdits = (editedBodyHtml: string, editedCss: string) => {
-    const mergedPageHtml = mergeEditedBodyIntoDocument(pageSourceHtml, editedBodyHtml);
+    const mergedPageHtml = mergeEditedBodyIntoDocument(pageSourceHtml, editedBodyHtml, editedCss);
     const normalizedVisualCss = normalizeVisualEditorCss(editedCss);
 
     updateEditedFiles((prev) => {
