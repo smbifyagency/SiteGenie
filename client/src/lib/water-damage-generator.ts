@@ -246,6 +246,7 @@ const loremParagraphs = (count: number): string[] =>
   );
 
 export interface WDBlogPost {
+  id?: string;
   slug: string;
   title: string;
   excerpt: string;
@@ -255,6 +256,8 @@ export interface WDBlogPost {
   date?: string;
   category?: string;
   keywords?: string;
+  status?: string;
+  isAiGenerated?: boolean;
 }
 
 export interface WDFAQPageContent {
@@ -2844,6 +2847,27 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
         </div>
       </div>`).join('');
 
+  const recentProjects = getCategoryProjects(data);
+  const recentProjectsHTML = recentProjects.map((project, idx) => {
+    const imgSrc = data.customImages?.[`gallery-normal-${idx}`] || project.defaultImg;
+    return `
+        <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
+          <img
+            src="${imgSrc}"
+            alt="${project.alt}"
+            style="width: 100%; height: 220px; object-fit: cover;"
+            data-placeholder="gallery-normal-${idx}"
+            loading="lazy"
+            width="400"
+            height="220"
+          >
+          <div style="padding: 1.25rem;">
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: ${primaryColor};">${project.title}</h3>
+            <p style="font-size: 0.9rem; color: #475569; margin: 0; line-height: 1.5;">${project.desc}</p>
+          </div>
+        </div>`;
+  }).join('\n');
+
   const introParagraphsHTML = introParas.map(p => `<p>${p}</p>`).join('');
 
   const contactSection = data.contactFormEmbed
@@ -2939,7 +2963,7 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
       <div>
         <img
           src="${data.customImages?.['about-image'] || (data as any)._categoryImages?.['about-image'] || WD_PLACEHOLDER_IMAGES.team}"
-          alt="PLACEHOLDER: Replace with your team or office photo"
+          alt="${data.primaryKeyword || 'Services'} - ${data.businessName || 'Our Team'} - ${data.city || 'Your Area'}"
           class="placeholder-img"
           data-placeholder="about-image"
           style="border-radius: 12px; object-fit: cover; max-height: 380px; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.04);"
@@ -2995,51 +3019,7 @@ export function generateHomepage(data: WDBusinessData, domain: string): string {
         <a href="gallery.html" class="btn-secondary" style="margin-top: 0;">View Full Gallery →</a>
       </div>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
-        <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
-          <img
-            src="${data.customImages?.['gallery-normal-0'] || WD_PLACEHOLDER_IMAGES.flooding}"
-            alt="Water damage cleanup project"
-            style="width: 100%; height: 220px; object-fit: cover;"
-            data-placeholder="gallery-normal-0"
-            loading="lazy"
-            width="400"
-            height="220"
-          >
-          <div style="padding: 1.25rem;">
-            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: ${primaryColor};">Water Extraction &amp; Cleanup</h3>
-            <p style="font-size: 0.9rem; color: #475569; margin: 0; line-height: 1.5;">Emergency water removal, structural dehumidification, and damage assessment completed in ${data.city}.</p>
-          </div>
-        </div>
-        <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
-          <img
-            src="${data.customImages?.['gallery-normal-1'] || WD_PLACEHOLDER_IMAGES.equipment}"
-            alt="Structural drying project"
-            style="width: 100%; height: 220px; object-fit: cover;"
-            data-placeholder="gallery-normal-1"
-            loading="lazy"
-            width="400"
-            height="220"
-          >
-          <div style="padding: 1.25rem;">
-            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: ${primaryColor};">Rapid Structural Drying</h3>
-            <p style="font-size: 0.9rem; color: #475569; margin: 0; line-height: 1.5;">Industrial air movers and LGR dehumidifiers placed to extract moisture from framing and drywalls.</p>
-          </div>
-        </div>
-        <div style="background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid #f1f5f9;">
-          <img
-            src="${data.customImages?.['gallery-normal-2'] || WD_PLACEHOLDER_IMAGES.mold}"
-            alt="Mold remediation project"
-            style="width: 100%; height: 220px; object-fit: cover;"
-            data-placeholder="gallery-normal-2"
-            loading="lazy"
-            width="400"
-            height="220"
-          >
-          <div style="padding: 1.25rem;">
-            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: ${primaryColor};">Mold Containment &amp; Removal</h3>
-            <p style="font-size: 0.9rem; color: #475569; margin: 0; line-height: 1.5;">Detailed mold testing, containment barriers, HEPA vacuuming, and sanitization in subfloors.</p>
-          </div>
-        </div>
+        ${recentProjectsHTML}
       </div>
     </div>
   </section>
@@ -3325,7 +3305,7 @@ export function generateServicePage(
   <div class="container reveal-scale" style="padding-bottom:2rem;">
     <img
       src="${data.customImages?.['service-image-' + slug] || data.customImages?.['service-image'] || (data as any)._categoryImages?.['service-image'] || WD_PLACEHOLDER_IMAGES.equipment}"
-      alt="PLACEHOLDER: Replace with your ${service.toLowerCase()} work photo"
+      alt="${service} project by ${data.businessName || 'Our Team'} in ${data.city || 'Your Area'}"
       class="placeholder-img"
       data-placeholder="service-image-${slug}"
       style="max-height:380px; object-fit:cover; border-radius:16px;"
@@ -3609,7 +3589,7 @@ export function generateLocationPage(
   <div class="container reveal-scale" style="padding-bottom:2rem;">
     <img
       src="${data.customImages?.['location-image-' + citySlug] || data.customImages?.['location-image'] || (data as any)._categoryImages?.['location-image'] || WD_PLACEHOLDER_IMAGES.drying}"
-      alt="PLACEHOLDER: Replace with your ${city} team or project photo"
+      alt="${data.primaryKeyword || 'Services'} project by ${data.businessName || 'Our Team'} in ${city}"
       class="placeholder-img"
       data-placeholder="location-image-${citySlug}"
       style="max-height:360px; object-fit:cover; border-radius:16px;"
@@ -3917,7 +3897,7 @@ ${data.businessName} serves all of ${data.city} and surrounding communities. We 
       <div>
         <img
           src="${data.customImages?.['about-team-photo'] || data.customImages?.['about-image'] || (data as any)._categoryImages?.['about-team-photo'] || WD_PLACEHOLDER_IMAGES.team}"
-          alt="PLACEHOLDER: Replace with a real photo of your team"
+          alt="Our professional team at ${data.businessName || 'Our Company'} in ${data.city || 'Your Area'}"
           class="placeholder-img"
           data-placeholder="about-team-photo"
           style="border-radius:10px;"
@@ -5116,22 +5096,11 @@ export function generateGalleryPage(data: WDBusinessData, domain: string): strin
   });
 
   // Default placeholder before/after pairs if none provided
-  const defaultPairs = [
-    { before: { src: WD_PLACEHOLDER_IMAGES.flooding, alt: 'PLACEHOLDER: Before — damaged area', type: 'before' as const, pairId: 'p1', caption: 'Before: Damage discovered' }, after: { src: WD_PLACEHOLDER_IMAGES.drying, alt: 'PLACEHOLDER: After — restored room', type: 'after' as const, pairId: 'p1', caption: 'After: Fully restored' } },
-    { before: { src: WD_PLACEHOLDER_IMAGES.mold, alt: 'PLACEHOLDER: Before — mold damage', type: 'before' as const, pairId: 'p2', caption: 'Before: Mold remediation project' }, after: { src: WD_PLACEHOLDER_IMAGES.team, alt: 'PLACEHOLDER: After — mold removed', type: 'after' as const, pairId: 'p2', caption: 'After: Mold removed, area treated' } },
-    { before: { src: WD_PLACEHOLDER_IMAGES.equipment, alt: 'PLACEHOLDER: Before — flooded basement', type: 'before' as const, pairId: 'p3', caption: 'Before: Flooded basement' }, after: { src: WD_PLACEHOLDER_IMAGES.hero, alt: 'PLACEHOLDER: After — dry basement', type: 'after' as const, pairId: 'p3', caption: 'After: Dried and restored' } },
-  ];
+  const defaultPairs = getCategoryBeforeAfterPairs(data);
 
   const displayPairs = beforeAfterPairs.length > 0 ? beforeAfterPairs : defaultPairs;
 
-  const defaultNormal: WDGalleryImage[] = [
-    { src: WD_PLACEHOLDER_IMAGES.equipment, alt: 'PLACEHOLDER: Industrial drying equipment in use', type: 'normal' },
-    { src: WD_PLACEHOLDER_IMAGES.team, alt: 'PLACEHOLDER: Restoration team at work', type: 'normal' },
-    { src: WD_PLACEHOLDER_IMAGES.drying, alt: 'PLACEHOLDER: Structural drying in progress', type: 'normal' },
-    { src: WD_PLACEHOLDER_IMAGES.flooding, alt: 'PLACEHOLDER: Water extraction process', type: 'normal' },
-    { src: WD_PLACEHOLDER_IMAGES.mold, alt: 'PLACEHOLDER: Mold inspection and treatment', type: 'normal' },
-    { src: WD_PLACEHOLDER_IMAGES.hero, alt: 'PLACEHOLDER: Completed restoration project', type: 'normal' },
-  ];
+  const defaultNormal: WDGalleryImage[] = getCategoryGalleryPhotos(data);
 
   const displayNormal = normalImages.length > 0 ? normalImages : defaultNormal;
 
@@ -5355,15 +5324,380 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ─── BLOG ARCHIVE PAGE ─────────────────────────────────────────────────────
 
+interface ProjectItem {
+  title: string;
+  desc: string;
+  defaultImg: string;
+  placeholderKey: string;
+  alt: string;
+}
+
+function getCategoryProjects(data: WDBusinessData): ProjectItem[] {
+  const categoryId = (data as any)._categoryId || (data as any).categoryId || 'water-damage';
+  const city = data.city || 'your area';
+  const categoryImages = (data as any)._categoryImages;
+  const bizName = data.businessName || 'Our Team';
+
+  switch (categoryId) {
+    case 'dumpster-rental':
+      return [
+        {
+          title: 'Residential Cleanout Dumpster',
+          desc: `Delivered a 15-yard roll-off dumpster for a residential estate cleanout and garage purging project in ${city}.`,
+          defaultImg: categoryImages?.['main-image'] || 'https://images.unsplash.com/photo-1567393528677-d6adae7d4a0a?w=800&q=80',
+          placeholderKey: 'gallery-normal-0',
+          alt: `Residential cleanout dumpster delivery in ${city} by ${bizName}`
+        },
+        {
+          title: 'Commercial Construction Waste Removal',
+          desc: `Provided ongoing 30-yard dumpster rentals for drywall, wood, and metal disposal at a commercial renovation site in ${city}.`,
+          defaultImg: categoryImages?.['service-image'] || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=800&q=80',
+          placeholderKey: 'gallery-normal-1',
+          alt: `Commercial roll-off dumpster provided by ${bizName} in ${city}`
+        },
+        {
+          title: 'Yard Waste & Demolition Dumpster',
+          desc: `Delivered a 20-yard dumpster for landscaping debris, soil, and old decking removal for a backyard remodel in ${city}.`,
+          defaultImg: categoryImages?.['location-image'] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80',
+          placeholderKey: 'gallery-normal-2',
+          alt: `Yard waste dumpster rental project in ${city} by ${bizName}`
+        }
+      ];
+    case 'plumbing':
+      return [
+        {
+          title: 'Emergency Pipe Repair',
+          desc: `Replaced a burst copper main pipe in a residential basement, preventing major flooding and water damage in ${city}.`,
+          defaultImg: categoryImages?.['main-image'] || 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80',
+          placeholderKey: 'gallery-normal-0',
+          alt: `Emergency plumbing and pipe repair in ${city} by ${bizName}`
+        },
+        {
+          title: 'Tankless Water Heater Installation',
+          desc: `Installed a high-efficiency energy-saving tankless water heater for continuous hot water in a ${city} home.`,
+          defaultImg: categoryImages?.['service-image'] || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&q=80',
+          placeholderKey: 'gallery-normal-1',
+          alt: `Tankless water heater installation by ${bizName} in ${city}`
+        },
+        {
+          title: 'Drain Cleaning & Hydro-Jetting',
+          desc: `Cleared a severe main sewer line blockage using high-pressure hydro-jetting equipment, restoring full flow in ${city}.`,
+          defaultImg: categoryImages?.['location-image'] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80',
+          placeholderKey: 'gallery-normal-2',
+          alt: `Professional sewer drain cleaning in ${city} by ${bizName}`
+        }
+      ];
+    case 'roofing':
+      return [
+        {
+          title: 'Complete Roof Replacement',
+          desc: `Installed a new architectural asphalt shingle roof with leak barriers and ventilation upgrades in ${city}.`,
+          defaultImg: categoryImages?.['main-image'] || 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=800&q=80',
+          placeholderKey: 'gallery-normal-0',
+          alt: `Architectural shingle roof replacement in ${city} by ${bizName}`
+        },
+        {
+          title: 'Storm Damage Roof Repair',
+          desc: `Repaired wind-damaged shingles and sealed leaking chimney flashings during an emergency service call in ${city}.`,
+          defaultImg: categoryImages?.['service-image'] || 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=800&q=80',
+          placeholderKey: 'gallery-normal-1',
+          alt: `Emergency storm roof repair by ${bizName} in ${city}`
+        },
+        {
+          title: 'Commercial Flat Roof Coating',
+          desc: `Applied a premium silicone reflective coating over a commercial flat roof, extending life and lowering cooling bills in ${city}.`,
+          defaultImg: categoryImages?.['location-image'] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80',
+          placeholderKey: 'gallery-normal-2',
+          alt: `Commercial flat roof coating installation in ${city} by ${bizName}`
+        }
+      ];
+    default:
+      const primaryKw = data.primaryKeyword || 'Services';
+      const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(categoryId);
+      if (isRestoration) {
+        return [
+          {
+            title: 'Water Extraction & Cleanup',
+            desc: `Emergency water removal, structural dehumidification, and damage assessment completed in ${city}.`,
+            defaultImg: WD_PLACEHOLDER_IMAGES.flooding,
+            placeholderKey: 'gallery-normal-0',
+            alt: `Water damage cleanup project in ${city} by ${bizName}`
+          },
+          {
+            title: 'Rapid Structural Drying',
+            desc: `Industrial air movers and LGR dehumidifiers placed to extract moisture from framing and drywalls.`,
+            defaultImg: WD_PLACEHOLDER_IMAGES.equipment,
+            placeholderKey: 'gallery-normal-1',
+            alt: `Rapid structural drying by ${bizName} in ${city}`
+          },
+          {
+            title: 'Mold Containment & Removal',
+            desc: `Detailed mold testing, containment barriers, HEPA vacuuming, and sanitization in subfloors.`,
+            defaultImg: WD_PLACEHOLDER_IMAGES.mold,
+            placeholderKey: 'gallery-normal-2',
+            alt: `Mold containment and removal in ${city} by ${bizName}`
+          }
+        ];
+      }
+      return [
+        {
+          title: `Residential ${primaryKw} Service`,
+          desc: `Completed a comprehensive residential ${primaryKw.toLowerCase()} project, ensuring safety and compliance in ${city}.`,
+          defaultImg: categoryImages?.['main-image'] || 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&q=80',
+          placeholderKey: 'gallery-normal-0',
+          alt: `Residential ${primaryKw.toLowerCase()} project in ${city} by ${bizName}`
+        },
+        {
+          title: `Emergency ${primaryKw} Support`,
+          desc: `Responded to an urgent service call, diagnosing and resolving issues promptly for a property in ${city}.`,
+          defaultImg: categoryImages?.['service-image'] || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&q=80',
+          placeholderKey: 'gallery-normal-1',
+          alt: `Emergency ${primaryKw.toLowerCase()} service by ${bizName} in ${city}`
+        },
+        {
+          title: `Commercial ${primaryKw} Project`,
+          desc: `Executed large-scale commercial ${primaryKw.toLowerCase()} installation and testing with minimal business disruption in ${city}.`,
+          defaultImg: categoryImages?.['location-image'] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80',
+          placeholderKey: 'gallery-normal-2',
+          alt: `Commercial ${primaryKw.toLowerCase()} project in ${city} by ${bizName}`
+        }
+      ];
+  }
+}
+
+function getCategoryBeforeAfterPairs(data: WDBusinessData): Array<{ before: WDGalleryImage; after: WDGalleryImage }> {
+  const categoryId = (data as any)._categoryId || (data as any).categoryId || 'water-damage';
+  const categoryImages = (data as any)._categoryImages;
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(categoryId);
+  const bizName = data.businessName || 'Our Team';
+
+  let before1 = data.customImages?.['gallery-before-0'] || categoryImages?.['gallery-before-0'] || (isRestoration ? WD_PLACEHOLDER_IMAGES.flooding : 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800&q=80');
+  let after1 = data.customImages?.['gallery-after-0'] || categoryImages?.['gallery-after-0'] || categoryImages?.['main-image'] || (isRestoration ? WD_PLACEHOLDER_IMAGES.drying : 'https://images.unsplash.com/photo-1567393528677-d6adae7d4a0a?w=800&q=80');
+  let cap1Before = isRestoration ? 'Before: Damage discovered' : 'Before: Work area prepped';
+  let cap1After = isRestoration ? 'After: Fully restored' : 'After: Project completed';
+
+  let before2 = data.customImages?.['gallery-before-1'] || categoryImages?.['gallery-before-1'] || (isRestoration ? WD_PLACEHOLDER_IMAGES.mold : 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80');
+  let after2 = data.customImages?.['gallery-after-1'] || categoryImages?.['gallery-after-1'] || categoryImages?.['service-image'] || (isRestoration ? WD_PLACEHOLDER_IMAGES.team : 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=800&q=80');
+  let cap2Before = isRestoration ? 'Before: Mold remediation project' : 'Before: Prior setup / old equipment';
+  let cap2After = isRestoration ? 'After: Mold removed, area treated' : 'After: New professional installation';
+
+  let before3 = data.customImages?.['gallery-before-2'] || categoryImages?.['gallery-before-2'] || (isRestoration ? WD_PLACEHOLDER_IMAGES.equipment : 'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=800&q=80');
+  let after3 = data.customImages?.['gallery-after-2'] || categoryImages?.['gallery-after-2'] || categoryImages?.['location-image'] || (isRestoration ? WD_PLACEHOLDER_IMAGES.hero : 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80');
+  let cap3Before = isRestoration ? 'Before: Flooded basement' : 'Before: Initial inspection / site survey';
+  let cap3After = isRestoration ? 'After: Dried and restored' : 'After: Final walkthrough and cleanup';
+
+  if (categoryId === 'dumpster-rental') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=800&q=80';
+    after1 = data.customImages?.['gallery-after-0'] || data.customImages?.['main-image'] || categoryImages?.['main-image'] || 'https://images.unsplash.com/photo-1567393528677-d6adae7d4a0a?w=800&q=80';
+    cap1Before = 'Before: Attic cleanout accumulation';
+    cap1After = `After: Cleanly sorted and hauled away by ${bizName}`;
+
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800&q=80';
+    after2 = data.customImages?.['gallery-after-1'] || data.customImages?.['service-image'] || categoryImages?.['service-image'] || 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80';
+    cap2Before = 'Before: Demolition debris piled up';
+    cap2After = `After: Dumpster filled and site cleared by ${bizName}`;
+
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=800&q=80';
+    after3 = data.customImages?.['gallery-after-2'] || data.customImages?.['location-image'] || categoryImages?.['location-image'] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80';
+    cap3Before = 'Before: Driveway placement prep';
+    cap3After = `After: Dumpster placed safely on protective boards by ${bizName}`;
+  } else if (categoryId === 'plumbing') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800&q=80';
+    cap1Before = 'Before: Leaky pipe damage';
+    cap1After = 'After: Pipe replaced and area clean';
+
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80';
+    cap2Before = 'Before: Old inefficient water heater';
+    cap2After = 'After: Brand new system installed';
+  } else if (categoryId === 'roofing') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800&q=80';
+    cap1Before = 'Before: Damaged and missing shingles';
+    cap1After = 'After: Beautiful new shingle roof';
+
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80';
+    cap2Before = 'Before: Leaking chimney flashing';
+    cap2After = 'After: Sealed and repaired flashing';
+  } else if (categoryId === 'hvac') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80';
+    cap1Before = 'Before: Aging, noisy AC unit';
+    cap1After = 'After: Modern central AC system';
+
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800&q=80';
+    cap2Before = 'Before: Dirty furnace filter & clogged blower';
+    cap2After = 'After: Cleaned, serviced, and tuned heating unit';
+  } else if (categoryId === 'carpet-cleaning') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=800&q=80';
+    cap1Before = 'Before: Stained and high-traffic carpet';
+    cap1After = 'After: Steam-cleaned and stain-free carpet';
+  } else if (categoryId === 'house-painting') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800&q=80';
+    cap1Before = 'Before: Peeling, faded exterior paint';
+    cap1After = 'After: Freshly painted exterior';
+  } else if (categoryId === 'electrical') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80';
+    cap1Before = 'Before: Outdated electrical fuse panel';
+    cap1After = 'After: Clean modern 200-Amp electrical panel';
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80';
+    cap2Before = 'Before: Unfinished garage wall (no EV charging)';
+    cap2After = 'After: Level 2 EV charging station installed';
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&q=80';
+    cap3Before = 'Before: Outdated single bulb ceiling lighting';
+    cap3After = 'After: Sleek, energy-efficient recessed LED lights';
+  } else if (categoryId === 'locksmith') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&q=80';
+    cap1Before = 'Before: Worn out, insecure entry door lock';
+    cap1After = 'After: Modern touchscreen smart lock installed';
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1509721148489-4b444214f3f2?w=800&q=80';
+    cap2Before = 'Before: Multiple keys required for home entry';
+    cap2After = 'After: Lock cylinders rekeyed to a single master key';
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&q=80';
+    cap3Before = 'Before: Damaged commercial door locking bar';
+    cap3After = 'After: Secure, commercial-grade panic hardware';
+  } else if (categoryId === 'pest-control') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80';
+    cap1Before = 'Before: Active pest nesting area under siding';
+    cap1After = 'After: Treated, cleaned, and pest-free exterior perimeter';
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80';
+    cap2Before = 'Before: Open foundation vent allowing rodent access';
+    cap2After = 'After: Heavy-duty mesh screen exclusion installed';
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1494526585095-c41746248156?w=800&q=80';
+    cap3Before = 'Before: Termite damaged structural wood framing';
+    cap3After = 'After: Treated framing with protective termite barrier';
+  } else if (categoryId === 'tree-service') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=800&q=80';
+    cap1Before = 'Before: Decayed pine tree leaning dangerously over roof';
+    cap1After = 'After: Tree safely removed, structure protected';
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=800&q=80';
+    cap2Before = 'Before: Overgrown oak branches blocking sunlight';
+    cap2After = 'After: Pruned and elevated canopy for light and wind safety';
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=800&q=80';
+    cap3Before = 'Before: Large hardwood stump in front lawn';
+    cap3After = 'After: Stump ground down, backfilled with topsoil';
+  } else if (categoryId === 'garage-door') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80';
+    cap1Before = 'Before: Dented, non-insulated wood garage door';
+    cap1After = 'After: Modern R-value insulated steel carriage door';
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=800&q=80';
+    cap2Before = 'Before: Broken heavy-duty garage torsion spring';
+    cap2After = 'After: High-cycle replacement spring installed';
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=800&q=80';
+    cap3Before = 'Before: Noisy, outdated chain-drive opener';
+    cap3After = 'After: Ultra-quiet belt-drive smart opener with camera';
+  } else if (categoryId === 'foundation-repair') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=800&q=80';
+    cap1Before = 'Before: Expanding crack in exterior brick foundation wall';
+    cap1After = 'After: Foundation lifted with piers, brick crack closed';
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=800&q=80';
+    cap2Before = 'Before: Water leaking through basement foundation crack';
+    cap2After = 'After: Sealed with high-pressure polyurethane injection';
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1480074568708-e7b720bb3f09?w=800&q=80';
+    cap3Before = 'Before: Damp, moldy crawl space dirt floor';
+    cap3After = 'After: Heavy 20-mil vapor barrier encapsulation';
+  } else if (categoryId === 'window-replacement') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80';
+    cap1Before = 'Before: Drafty, single-pane wooden window';
+    cap1After = 'After: Energy-efficient double-pane vinyl window';
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80';
+    cap2Before = 'Before: Sticky, outdated sliding glass door';
+    cap2After = 'After: Premium low-E sliding glass door installed';
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80';
+    cap3Before = 'Before: Simple double-hung window group';
+    cap3After = 'After: Custom wood-framed bay window configuration';
+  } else if (categoryId === 'junk-removal') {
+    before1 = data.customImages?.['gallery-before-0'] || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=800&q=80';
+    cap1Before = 'Before: Basement filled with years of accumulated junk';
+    cap1After = 'After: Basement completely cleared, swept, and cleaned';
+    before2 = data.customImages?.['gallery-before-1'] || 'https://images.unsplash.com/photo-1567393528677-d6adae7d4a0a?w=800&q=80';
+    cap2Before = 'Before: Remodeling debris and drywalls piled in backyard';
+    cap2After = 'After: Yard cleared and debris hauled for recycling';
+    before3 = data.customImages?.['gallery-before-2'] || 'https://images.unsplash.com/photo-1494526585095-c41746248156?w=800&q=80';
+    cap3Before = 'Before: Heavy, broken sectional sofa on front porch';
+    cap3After = 'After: Bulk furniture removed, restoring porch space';
+  }
+
+  return [
+    {
+      before: { src: before1, alt: `${cap1Before} - ${bizName}`, type: 'before', pairId: 'p1', caption: cap1Before },
+      after: { src: after1, alt: `${cap1After} - ${bizName}`, type: 'after', pairId: 'p1', caption: cap1After }
+    },
+    {
+      before: { src: before2, alt: `${cap2Before} - ${bizName}`, type: 'before', pairId: 'p2', caption: cap2Before },
+      after: { src: after2, alt: `${cap2After} - ${bizName}`, type: 'after', pairId: 'p2', caption: cap2After }
+    },
+    {
+      before: { src: before3, alt: `${cap3Before} - ${bizName}`, type: 'before', pairId: 'p3', caption: cap3Before },
+      after: { src: after3, alt: `${cap3After} - ${bizName}`, type: 'after', pairId: 'p3', caption: cap3After }
+    }
+  ];
+}
+
+function getCategoryGalleryPhotos(data: WDBusinessData): WDGalleryImage[] {
+  const categoryId = (data as any)._categoryId || (data as any).categoryId || 'water-damage';
+  const categoryImages = (data as any)._categoryImages;
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(categoryId);
+  const bizName = data.businessName || 'Our Team';
+
+  if (isRestoration) {
+    return [
+      { src: data.customImages?.['gallery-normal-0'] || WD_PLACEHOLDER_IMAGES.equipment, alt: `Industrial drying equipment in use by ${bizName}`, type: 'normal' },
+      { src: data.customImages?.['gallery-normal-1'] || WD_PLACEHOLDER_IMAGES.team, alt: `Restoration team from ${bizName} at work`, type: 'normal' },
+      { src: data.customImages?.['gallery-normal-2'] || WD_PLACEHOLDER_IMAGES.drying, alt: `Structural drying in progress by ${bizName}`, type: 'normal' },
+      { src: data.customImages?.['about-team-photo'] || WD_PLACEHOLDER_IMAGES.team, alt: `Our professional restoration team at ${bizName}`, type: 'normal' },
+      { src: data.customImages?.['hero-bg'] || WD_PLACEHOLDER_IMAGES.hero, alt: `Completed property restoration project by ${bizName}`, type: 'normal' },
+      { src: data.customImages?.['main-image'] || WD_PLACEHOLDER_IMAGES.flooding, alt: `Water extraction process completed by ${bizName}`, type: 'normal' },
+    ];
+  }
+
+  const mainImg = data.customImages?.['main-image'] || categoryImages?.['main-image'] || 'https://images.unsplash.com/photo-1567393528677-d6adae7d4a0a?w=800&q=80';
+  const serviceImg = data.customImages?.['service-image'] || categoryImages?.['service-image'] || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=800&q=80';
+  const locationImg = data.customImages?.['location-image'] || categoryImages?.['location-image'] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80';
+  const teamImg = data.customImages?.['about-team-photo'] || categoryImages?.['about-team-photo'] || 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=800&q=80';
+  const heroImg = data.customImages?.['hero-bg'] || data.customImages?.['hero'] || categoryImages?.['hero'] || 'https://images.unsplash.com/photo-1618090584126-129cd1f3fbaa?w=800&q=80';
+
+  const norm0 = data.customImages?.['gallery-normal-0'] || mainImg;
+  const norm1 = data.customImages?.['gallery-normal-1'] || serviceImg;
+  const norm2 = data.customImages?.['gallery-normal-2'] || locationImg;
+  const norm3 = data.customImages?.['about-team-photo'] || teamImg;
+  const norm4 = data.customImages?.['hero-bg'] || heroImg;
+  const norm5 = data.customImages?.['main-image'] || mainImg;
+
+  if (categoryId === 'dumpster-rental') {
+    return [
+      { src: norm0, alt: `Roll-off dumpster rental project completed by ${bizName}`, type: 'normal' },
+      { src: norm1, alt: `Safe driveway dumpster delivery by ${bizName}`, type: 'normal' },
+      { src: norm2, alt: `Local waste management and recycling job by ${bizName}`, type: 'normal' },
+      { src: norm3, alt: `Our dedicated dumpster rental team at ${bizName}`, type: 'normal' },
+      { src: norm4, alt: `Commercial waste management dumpster site by ${bizName}`, type: 'normal' },
+      { src: norm5, alt: `Residential cleanout dumpster project by ${bizName}`, type: 'normal' },
+    ];
+  }
+
+  const primaryKw = data.primaryKeyword || 'Services';
+  return [
+    { src: norm0, alt: `Professional ${primaryKw.toLowerCase()} project completed by ${bizName}`, type: 'normal' },
+    { src: norm1, alt: `Specialized ${primaryKw.toLowerCase()} equipment utilized by ${bizName}`, type: 'normal' },
+    { src: norm2, alt: `Service delivery in our local area by ${bizName}`, type: 'normal' },
+    { src: norm3, alt: `Our expert ${primaryKw.toLowerCase()} crew at ${bizName}`, type: 'normal' },
+    { src: norm4, alt: `Commercial ${primaryKw.toLowerCase()} project by ${bizName}`, type: 'normal' },
+    { src: norm5, alt: `Residential ${primaryKw.toLowerCase()} work completed by ${bizName}`, type: 'normal' },
+  ];
+}
+
 // ─── DEFAULT BLOG POSTS (used when no AI posts are generated) ──────────────
 
-function getDefaultBlogPosts(data: WDBusinessData): WDBlogPost[] {
+export function getDefaultBlogPosts(data: WDBusinessData): WDBlogPost[] {
+  const categoryId = (data as any)._categoryId || (data as any).categoryId || 'water-damage';
+  const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(categoryId);
+  if (!isRestoration) {
+    return getDynamicDefaultBlogPosts(data);
+  }
+
   const today = new Date().toISOString().split('T')[0];
   const city = data.city || 'Your Area';
   const state = data.state || '';
   const bizName = data.businessName || 'Our Restoration Team';
 
-  return [
+  const posts = [
     {
       slug: 'what-to-do-after-water-damage',
       title: `What to Do Immediately After Water Damage in Your ${city} Home`,
@@ -5423,6 +5757,128 @@ function getDefaultBlogPosts(data: WDBusinessData): WDBlogPost[] {
       category: 'Education',
       featuredImage: WD_PLACEHOLDER_IMAGES.hero,
       featuredImageAlt: `Professional restoration equipment vs DIY tools in ${city}`
+    }
+  ];
+  return posts.slice(0, 5);
+}
+
+export function getDynamicDefaultBlogPosts(data: WDBusinessData): WDBlogPost[] {
+  const categoryId = (data as any)._categoryId || (data as any).categoryId || 'water-damage';
+  const today = new Date().toISOString().split('T')[0];
+  const city = data.city || 'Your Area';
+  const bizName = data.businessName || 'Our Team';
+  const primaryKw = data.primaryKeyword || 'Services';
+  const categoryImages = (data as any)._categoryImages;
+
+  const mainImg = data.customImages?.['main-image'] || categoryImages?.['main-image'] || 'https://images.unsplash.com/photo-1567393528677-d6adae7d4a0a?w=800&q=80';
+  const serviceImg = data.customImages?.['service-image'] || categoryImages?.['service-image'] || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=800&q=80';
+  const locationImg = data.customImages?.['location-image'] || categoryImages?.['location-image'] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80';
+
+  if (categoryId === 'dumpster-rental') {
+    return [
+      {
+        slug: 'choosing-right-dumpster-size',
+        title: `How to Choose the Right Dumpster Size for Your Project in ${city}`,
+        excerpt: `Selecting the right dumpster size prevents extra costs and keeps your project on track. Learn how to choose between 10, 15, 20, 30, and 40-yard roll-off bins in ${city}.`,
+        content: `<h2>Finding the Perfect Dumpster Fit</h2><p>Whether you are cleaning out a cluttered garage, tackling a kitchen renovation, or managing a large construction site in ${city}, having the right size dumpster is key. Underestimating your debris volume can lead to scheduling additional pickups, while overestimating means paying for more space than you need.</p><h2>10 & 15-Yard Dumpsters: Minor Projects</h2><p>These smaller bins are perfect for minor cleanouts, small landscaping projects, and attic decluttering. They fit comfortably in most residential driveways and have a lower profile for easy loading.</p><h2>20-Yard Dumpsters: Medium Renovations</h2><p>The 20-yard dumpster is the most popular choice for kitchen or bathroom remodeling, carpet tear-outs, and deck removals. It offers ample volume for bulky household items.</p><h2>30 & 40-Yard Dumpsters: Construction & Demolition</h2><p>For whole-home renovations, commercial cleanouts, or major construction debris, these large-capacity roll-off dumpsters are essential. They handle high-weight materials and bulky waste easily.</p>`,
+        date: today,
+        category: 'Dumpster Guide',
+        featuredImage: mainImg,
+        featuredImageAlt: `Choosing the right dumpster rental size in ${city}`
+      },
+      {
+        slug: 'items-prohibited-in-dumpsters',
+        title: `Prohibited Items: What You Cannot Put in a Roll-Off Dumpster in ${city}`,
+        excerpt: `Avoid compliance issues and extra fees. Discover the key items that local regulations prohibit from being disposed of in temporary roll-off dumpsters in ${city}.`,
+        content: `<h2>Understanding Disposal Regulations</h2><p>Renting a dumpster makes disposing of large volumes of waste quick and easy. However, for environmental safety and landfill compliance in ${city}, certain materials are strictly prohibited from entering roll-off containers. Putting forbidden items in your dumpster can result in additional handling fees or refusal of pickup.</p><h2>1. Hazardous Waste and Chemicals</h2><p>Wet paint, solvents, motor oil, fuels, pesticides, and other household chemical wastes must never be thrown into a standard dumpster. These pose serious fire hazards and can contaminate local soil and groundwater.</p><h2>2. Batteries, Tires, and Large Appliances</h2><p>Car batteries contain lead-acid and must be recycled at designated centers. Tires are generally banned from municipal landfills and require specialized recycling. Large appliances containing freon (like refrigerators or AC units) must be evacuated before disposal.</p><h2>3. Propane Tanks and Pressurized Cylinders</h2><p>Pressurized tanks present a significant risk of explosion when compressed by sorting machinery or landfills. Ensure all tanks are returned to licensed exchange facilities instead.</p>`,
+        date: today,
+        category: 'Disposal Rules',
+        featuredImage: serviceImg,
+        featuredImageAlt: `Prohibited dumpster rental items list`
+      },
+      {
+        slug: 'preparing-driveway-for-dumpster',
+        title: `How to Prepare Your Driveway for a Dumpster Delivery in ${city}`,
+        excerpt: `Protect your driveway asphalt or concrete from scratches and cracks. Follow these simple prep steps before your dumpster rental arrives.`,
+        content: `<h2>Safe Placement for Peace of Mind</h2><p>When renting a roll-off dumpster from ${bizName} for your project in ${city}, ensuring a safe delivery spot protects both our drivers and your property. While dumpsters are designed to sit securely on flat surfaces, the weight of a loaded bin can sometimes cause scratches or stress cracks on driveway pavement.</p><h2>1. Select a Flat, Clear Spot</h2><p>Choose a level location with at least 60 feet of straight-line clearance for the delivery truck. Ensure there are no low-hanging branches or overhead wires directly above the drop zone.</p><h2>2. Use Protective Wood Boards</h2><p>We recommend placing two-by-four or plywood boards on the driveway where the dumpster wheels will rest. This distributes the weight and prevents the metal rollers from scratching asphalt or concrete.</p><h2>3. Remove Obstructions</h2><p>Ensure all personal vehicles, kids' toys, and trash bins are cleared from the path. Keep pets and children indoors during delivery to ensure a safe drop-off process.</p>`,
+        date: today,
+        category: 'Delivery Tips',
+        featuredImage: locationImg,
+        featuredImageAlt: `Driveway protection for dumpster delivery in ${city}`
+      },
+      {
+        slug: 'dumpster-rental-cost-factors',
+        title: `Understanding Dumpster Rental Costs and Pricing Factors in ${city}`,
+        excerpt: `Demystify dumpster rental pricing. Learn about flat-rate vs. variable pricing, weight limits, disposal fees, and how to avoid hidden costs in ${city}.`,
+        content: `<h2>How Much Does a Dumpster Rental Cost?</h2><p>Renting a dumpster in ${city} doesn't have to be complicated or full of surprises. Understanding how pricing is calculated helps you budget accurately for your cleanup or renovation project. Most rental companies, like ${bizName}, offer flat-rate pricing, but several factors can influence the final cost.</p><h2>1. Dumpster Size and Volume</h2><p>Naturally, larger dumpsters cost more to rent than smaller ones. A 10-yard bin has lower base rates compared to a massive 40-yard construction dumpster. Choose a size that closely matches your debris volume to avoid paying for empty space.</p><h2>2. Debris Weight and Landfill Fees</h2><p>Every dumpster comes with a designated weight limit (in tons). If your debris exceeds this limit, landfills charge disposal fees per additional ton. Bulky materials like brick, concrete, or dirt are extremely heavy and can quickly exceed weight limits.</p><h2>3. Rental Duration</h2><p>Standard rental periods typically range from 7 to 10 days. If you need to keep the dumpster longer, most companies charge a reasonable daily or weekly extension rate. Make sure to schedule your pickup as soon as you are finished to avoid extra charges.</p>`,
+        date: today,
+        category: 'Pricing Guide',
+        featuredImage: mainImg,
+        featuredImageAlt: `Dumpster rental pricing and cost factors in ${city}`
+      },
+      {
+        slug: 'residential-vs-commercial-dumpster',
+        title: `Residential vs. Commercial Dumpsters: Which Do You Need in ${city}?`,
+        excerpt: `Discover the differences between residential roll-off bins and commercial front-load dumpsters. Learn which style fits your project in ${city}.`,
+        content: `<h2>Understanding Your Dumpster Options</h2><p>If you are planning a cleanout or managing a business in ${city}, you might wonder whether a residential roll-off dumpster or a commercial dumpster is the right fit. While both serve to dispose of waste, they are designed for very different scenarios, durations, and volumes.</p><h2>Residential Roll-Off Dumpsters</h2><p>Roll-off dumpsters are temporary containers delivered for residential cleanup, remodeling, or landscaping. They are open-topped, range from 10 to 40 yards, and are hauled away once your project is complete. They are ideal for one-off projects.</p><h2>Commercial Front-Load Dumpsters</h2><p>Commercial dumpsters are permanent fixtures for businesses, restaurants, and apartment complexes. They are smaller (typically 2 to 8 yards), have lids, and are emptied on a regular scheduled basis (weekly or bi-weekly). They are designed for daily waste generation.</p><h2>Which Option is Right for You?</h2><p>Choose a roll-off dumpster if you have a short-term project with a large volume of waste, such as a roof replacement or estate cleanout. Choose a commercial contract if you need ongoing waste management for your local property or business.</p>`,
+        date: today,
+        category: 'Dumpster Guide',
+        featuredImage: serviceImg,
+        featuredImageAlt: `Residential roll-off dumpster vs commercial dumpster comparison`
+      }
+    ];
+  }
+
+  return [
+    {
+      slug: 'how-to-choose-the-right-professional',
+      title: `How to Choose the Right ${primaryKw} Professional in ${city}`,
+      excerpt: `Finding a reliable local contractor is key to a successful project. Here are the top questions to ask before hiring a ${primaryKw.toLowerCase()} specialist in ${city}.`,
+      content: `<h2>Hiring with Confidence</h2><p>When you need professional ${primaryKw.toLowerCase()} services in ${city}, choosing the right contractor can make all the difference. Outlining your project scope, requesting license and insurance verifications, and reading local client reviews ensures you receive reliable, high-quality results from a contractor like ${bizName}.</p><h2>1. Verify License and Insurance</h2><p>Ensure the contractor is fully licensed and carries general liability and workers' compensation coverage to protect you from liability.</p><h2>2. Ask for a Clear Written Estimate</h2><p>A reputable company will provide an upfront, written flat-rate or itemized estimate before beginning any work.</p><h2>3. Read Client Testimonials</h2><p>Look for companies with a proven track record of responsive customer service and quality craftsmanship in the ${city} area.</p>`,
+      date: today,
+      category: 'Hiring Tips',
+      featuredImage: mainImg,
+      featuredImageAlt: `Hiring a professional ${primaryKw.toLowerCase()} contractor in ${city}`
+    },
+    {
+      slug: 'routine-maintenance-to-save-money',
+      title: `Top Maintenance Tips to Save Money on ${primaryKw} in ${city}`,
+      excerpt: `Prevent expensive repairs before they happen. Discover key routine maintenance tasks that prolong your systems' lifespan and save you money.`,
+      content: `<h2>Proactive Care Pays Off</h2><p>Many major ${primaryKw.toLowerCase()} failures can be prevented through simple, regular maintenance. Taking proactive steps not only keeps your property operating efficiently but also delays the need for full system replacements, saving you thousands over time.</p><h2>1. Schedule Regular Inspections</h2><p>Having a professional perform periodic checkups catches minor wear and tear before it turns into a major breakdown.</p><h2>2. Address Small Issues Early</h2><p>Don't ignore warning signs like slow drainage, minor drips, or unusual sounds — addressing them immediately is far cheaper than dealing with emergency repairs.</p><h2>3. Keep Surfaces and Systems Clean</h2><p>Clean systems run more efficiently and experience less mechanical strain, ensuring they last for years to come.</p>`,
+      date: today,
+      category: 'Maintenance',
+      featuredImage: serviceImg,
+      featuredImageAlt: `Routine maintenance tips for ${primaryKw.toLowerCase()}`
+    },
+    {
+      slug: 'signs-you-need-professional-service',
+      title: `5 Warning Signs You Need Professional ${primaryKw} Services in ${city}`,
+      excerpt: `Don't wait for a breakdown. Learn the top warning signs that your systems require immediate attention from a professional ${primaryKw.toLowerCase()} team.`,
+      content: `<h2>Recognizing Warning Signs</h2><p>Recognizing the early warning signs of system failure protects your property from damage and ensures your systems remain safe. If you notice any of these signs in your ${city} home or business, it is time to contact ${bizName} for a professional assessment.</p><h2>1. Unusual Sounds or Odors</h2><p>Persistent hums, squeals, or damp odors are clear signs of underlying mechanical or structural wear.</p><h2>2. Decreased Performance</h2><p>If your systems are running longer or producing poorer results, they are working too hard and consuming excess energy.</p><h2>3. Widespread Minor Problems</h2><p>Multiple small failures occurring simultaneously suggest a systemic issue that needs a comprehensive professional fix.</p>`,
+      date: today,
+      category: 'Expert Advice',
+      featuredImage: locationImg,
+      featuredImageAlt: `Signs you need professional ${primaryKw.toLowerCase()} service`
+    },
+    {
+      slug: 'diy-vs-professional-service',
+      title: `DIY vs. Professional ${primaryKw}: When to Hire an Expert in ${city}`,
+      excerpt: `Torn between tackling a project yourself or hiring a pro? Read this honest comparison of DIY versus professional ${primaryKw.toLowerCase()} services in ${city}.`,
+      content: `<h2>Evaluating Your Project Options</h2><p>When property issues arise in ${city}, the temptation to save money by doing it yourself is strong. While simple fixes can be satisfying DIY projects, major tasks involving ${primaryKw.toLowerCase()} require professional tools, specialized training, and safety compliance.</p><h2>1. Safety Risks and Hazards</h2><p>Many home maintenance projects carry safety risks, particularly electrical, roofing, or structural work. Professional teams are fully trained in safety protocols and carry liability insurance to protect your property and family.</p><h2>2. Tooling and Equipment Cost</h2><p>Specialized tasks require expensive, professional-grade equipment. Buying or renting these tools for a single job often costs more than hiring a contractor like ${bizName} who already owns the equipment.</p><h2>3. Quality and Longevity of Results</h2><p>Professional work comes with warranties and is built to code. DIY repairs may fail prematurely, leading to even more expensive repairs down the road. When in doubt, call in a certified specialist.</p>`,
+      date: today,
+      category: 'Expert Advice',
+      featuredImage: mainImg,
+      featuredImageAlt: `DIY vs professional ${primaryKw.toLowerCase()} services comparison`
+    },
+    {
+      slug: 'preparing-for-service-delivery',
+      title: `How to Prepare Your Property for ${primaryKw} Services in ${city}`,
+      excerpt: `Ensure a smooth, efficient service appointment. Follow this checklist to prepare your ${city} home or business before our technicians arrive.`,
+      content: `<h2>Ensuring a Successful Service Visit</h2><p>Preparing your property for a scheduled service from ${bizName} helps our technicians work efficiently and protects your belongings. A little preparation goes a long way in ensuring a summary, hassle-free appointment in ${city}.</p><h2>1. Clear Access to the Work Area</h2><p>Ensure there is a clear path to the utility panel, basement, attic, or specific room where work will take place. Remove fragile items, furniture, and clutter from the area.</p><h2>2. Keep Pets and Children Safe</h2><p>Work sites can have loud noises, open panels, and heavy equipment. For their safety and to let our crew work without distraction, keep pets and children in a separate area of the house.</p><h2>3. Be Ready to Discuss Details</h2><p>Have your paperwork, notes about the issue, and any questions ready for our team. Clear communication at the start of the visit ensures we meet your expectations.</p>`,
+      date: today,
+      category: 'Home Tips',
+      featuredImage: serviceImg,
+      featuredImageAlt: `Preparing property for ${primaryKw.toLowerCase()} service visit`
     }
   ];
 }

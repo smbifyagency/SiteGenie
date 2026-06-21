@@ -1377,7 +1377,34 @@ export default function WDSiteEditor() {
 
       // Try to load pre-generated files (stored as customFiles in DB)
       if (data.customFiles && typeof data.customFiles === "object" && Object.keys(data.customFiles).length > 0) {
-        setGeneratedFiles(data.customFiles);
+        const catId = (data.template as string) || "water-damage";
+        const isRestoration = ["water-damage", "mold-remediation", "fire-damage"].includes(catId);
+        let isStale = false;
+        
+        if (!isRestoration) {
+          const indexHtml = (data.customFiles as Record<string, string>)["index.html"] || "";
+          if (
+            indexHtml.includes("Water Extraction & Cleanup") ||
+            indexHtml.includes("Rapid Structural Drying") ||
+            indexHtml.includes("Mold Containment & Removal")
+          ) {
+            console.warn(`[editor] Stale water damage content detected in custom files for category ${catId}. Re-generating fresh files.`);
+            isStale = true;
+          }
+        }
+
+        if (isStale) {
+          try {
+            const domain = (loadedSiteData as any).urlSlug || ((loadedSiteData.businessName || 'my-site').toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+            const autoFiles = generateLocalServiceWebsite(catId, siteDataToWDData(loadedSiteData as any), domain);
+            setGeneratedFiles(autoFiles);
+          } catch (e) {
+            console.error('Auto-generate preview failed after stale detection:', e);
+            setGeneratedFiles(data.customFiles);
+          }
+        } else {
+          setGeneratedFiles(data.customFiles);
+        }
         // Do NOT set visualEditorOverrides from customFiles — generatedFiles already contains
         // them and overrides should only be set during live Visual Editor edits this session.
         // Setting overrides here would prevent image uploads from refreshing the preview.

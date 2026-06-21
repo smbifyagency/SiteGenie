@@ -413,7 +413,9 @@ function generateCategoryRelevantSearchTerms(keyword: string, businessCategory?:
     'flooring': ['home renovation', 'interior design', 'construction'],
     'painting': ['home improvement', 'house painting', 'interior design'],
     'windows': ['home improvement', 'window installation', 'house exterior'],
-    'concrete': ['construction', 'driveway', 'concrete work', 'home improvement']
+    'concrete': ['construction', 'driveway', 'concrete work', 'home improvement'],
+    'dumpster-rental': ['dumpster', 'roll off dumpster', 'waste management', 'trash container', 'garbage truck'],
+    'junk-removal': ['junk removal', 'trash collection', 'decluttering', 'waste disposal', 'cleaning service']
   };
 
   // Find relevant category terms

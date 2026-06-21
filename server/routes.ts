@@ -29,7 +29,7 @@ import { generateWithDeepSeek, generateStructuredJsonWithDeepSeek, generateMulti
 import { encrypt, decrypt } from './crypto.js';
 import { netlifyService } from "./services/netlify.js";
 import { deployToNetlify, validateNetlifyToken } from "./services/netlify-deployment.js";
-import { generateWaterDamageWebsite } from "../client/src/lib/water-damage-generator.js";
+import { generateWaterDamageWebsite, getDefaultBlogPosts, getDynamicDefaultBlogPosts } from "../client/src/lib/water-damage-generator.js";
 import {
   MASTER_SYSTEM_PROMPT,
   buildHomePagePrompt,
@@ -413,10 +413,39 @@ const createContentFingerprint = (businessData: any): string => {
   return `SITE-${hash.toString(16).toUpperCase().padStart(8, "0")}`;
 };
 
+const getCategoryIdFromBusinessData = (bd: any): string => {
+  if (!bd) return 'water-damage';
+  if (bd.categoryId) return bd.categoryId;
+  if (bd._categoryId) return bd._categoryId;
+  if (bd.category) {
+    const catName = String(bd.category).toLowerCase().trim();
+    if (catName.includes('dumpster')) return 'dumpster-rental';
+    if (catName.includes('water damage') || catName.includes('restoration')) return 'water-damage';
+    if (catName.includes('mold')) return 'mold-remediation';
+    if (catName.includes('fire')) return 'fire-damage';
+    if (catName.includes('plumbing')) return 'plumbing';
+    if (catName.includes('roofing') || catName.includes('roof replacement')) return 'roofing';
+    if (catName.includes('hvac') || catName.includes('ac companies') || catName.includes('ac repair')) return 'hvac';
+    if (catName.includes('electrical')) return 'electrical';
+    if (catName.includes('locksmith')) return 'locksmith';
+    if (catName.includes('pest')) return 'pest-control';
+    if (catName.includes('tree')) return 'tree-service';
+    if (catName.includes('garage')) return 'garage-door';
+    if (catName.includes('foundation')) return 'foundation-repair';
+    if (catName.includes('carpet')) return 'carpet-cleaning';
+    if (catName.includes('window')) return 'window-replacement';
+    if (catName.includes('paint')) return 'house-painting';
+    if (catName.includes('junk')) return 'junk-removal';
+  }
+  return 'water-damage';
+};
+
 const normalizeBusinessDataForGeneration = (businessData: any) => {
   if (!businessData || typeof businessData !== "object") return businessData;
 
   const normalized = { ...businessData } as Record<string, any>;
+
+  normalized.categoryId = getCategoryIdFromBusinessData(normalized);
 
   const normalizedServices = uniqueValues(
     [
@@ -455,6 +484,26 @@ const normalizeBusinessDataForGeneration = (businessData: any) => {
   if (!stringValue(normalized.aboutImage2Alt) && normalizedLocations.length > 0) {
     const category = stringValue(normalized.category) || "local";
     normalized.aboutImage2Alt = `${category} service coverage in ${normalizedLocations[0]}`;
+  }
+
+  if (!normalized.blogPosts || !Array.isArray(normalized.blogPosts) || normalized.blogPosts.length === 0) {
+    try {
+      const defaultPosts = getDefaultBlogPosts(normalized as any);
+      normalized.blogPosts = defaultPosts.map((p, idx) => ({
+        id: p.id || `blog-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 6)}`,
+        title: p.title,
+        slug: p.slug,
+        excerpt: p.excerpt,
+        content: "", // set empty so it is recognized as draft needing AI writing
+        featuredImage: p.featuredImage || "",
+        featuredImageAlt: p.featuredImageAlt || "",
+        category: p.category || "Tips",
+        status: "draft",
+        isAiGenerated: true,
+      }));
+    } catch (e) {
+      console.error("Failed to populate default draft blog posts:", e);
+    }
   }
 
   return normalized;
@@ -7461,9 +7510,27 @@ Generated on: ${new Date().toISOString()}`;
     const seoProtectedFiles = new Set(['sitemap.html']);
     const storedCustomFiles = website.customFiles as Record<string, string> | null;
     if (storedCustomFiles && typeof storedCustomFiles === 'object') {
-      for (const [filename, content] of Object.entries(storedCustomFiles)) {
-        if (typeof content === 'string' && filename.endsWith('.html') && !seoProtectedFiles.has(filename)) {
-          (files as any)[filename] = content;
+      const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(categoryId);
+      let skipCustomFiles = false;
+
+      if (!isRestoration) {
+        // If stored index.html contains hardcoded water damage project titles, the custom files are stale
+        const indexHtml = storedCustomFiles['index.html'] || '';
+        if (
+          indexHtml.includes('Water Extraction & Cleanup') ||
+          indexHtml.includes('Rapid Structural Drying') ||
+          indexHtml.includes('Mold Containment & Removal')
+        ) {
+          console.log(`[deploy] Stale water damage content detected in stored custom files for category ${categoryId}. Skipping overrides.`);
+          skipCustomFiles = true;
+        }
+      }
+
+      if (!skipCustomFiles) {
+        for (const [filename, content] of Object.entries(storedCustomFiles)) {
+          if (typeof content === 'string' && filename.endsWith('.html') && !seoProtectedFiles.has(filename)) {
+            (files as any)[filename] = content;
+          }
         }
       }
     }
@@ -7593,7 +7660,7 @@ Generated on: ${new Date().toISOString()}`;
       const website = await storage.getWebsite(websiteId);
       if (!website) return;
 
-      let bd = { ...((website.businessData || {}) as any) };
+      let bd = normalizeBusinessDataForGeneration({ ...((website.businessData || {}) as any) });
       bd.publishTier = publishTier;
       bd.generationStatus = 'generating';
       bd.generationProgress = 5;
@@ -7606,6 +7673,64 @@ Generated on: ${new Date().toISOString()}`;
 
       const provider = bd.contentAiProvider || 'openai';
       const apiKey = await getAIProviderConfig(userId, provider);
+
+      // Real-time AI Image Generation for Dumpster-Rental Category
+      if (categoryId === 'dumpster-rental') {
+        console.log(`[Background Job] Generating real-time AI images for dumpster-rental site: ${websiteId}`);
+        bd.customImages = bd.customImages || {};
+        
+        // Define the image slots to generate
+        const dumpsterImageQueries = {
+          'hero-bg': 'roll-off dumpster rental container bin',
+          'main-image': 'clean dumpster rental delivery truck',
+          'about-image': 'eco-friendly waste recycling dumpster',
+          'service-image': 'roll-off dumpster driveway drop-off',
+          'location-image': 'dumpster bin placement residential',
+          'about-team-photo': 'friendly waste management team professional',
+          'gallery-normal-0': 'residential driveway dumpster container',
+          'gallery-normal-1': 'commercial site roll-off dumpster',
+          'gallery-normal-2': 'yard waste landscaping dumpster',
+          'gallery-before-0': 'cluttered messy garage cleanout junk',
+          'gallery-after-0': 'clean empty garage space',
+          'gallery-before-1': 'construction site debris pile wood metal',
+          'gallery-after-1': 'clean construction site with dumpster',
+          'gallery-before-2': 'yard waste branches debris pile',
+          'gallery-after-2': 'clean yard landscaping with dumpster'
+        };
+
+        // Fetch Unsplash API key
+        let unsplashKey: string | undefined;
+        try {
+          const { decrypt } = await import('./crypto.js').catch(() => ({ decrypt: (k: string) => k }));
+          const unsplashSetting = await storage.getApiSetting(userId, 'unsplash');
+          if (unsplashSetting && (unsplashSetting.apiKey || unsplashSetting.accessKey)) {
+            unsplashKey = decrypt(unsplashSetting.accessKey || unsplashSetting.apiKey || "");
+          } else {
+            unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
+          }
+        } catch (e) {
+          console.warn("Could not get Unsplash API key for dumpster rental image generation");
+        }
+
+        // Parallel generate with a concurrency limit of 3
+        const keysToGen = Object.keys(dumpsterImageQueries).filter(key => force || !bd.customImages[key]);
+        if (keysToGen.length > 0) {
+          await pLimit(keysToGen, 3, async (key) => {
+            try {
+              const query = dumpsterImageQueries[key as keyof typeof dumpsterImageQueries];
+              console.log(`[Background Job] Fetching AI image for ${key} with query: "${query}"`);
+              const image = await fetchUnsplashImage(query, unsplashKey, 'dumpster-rental');
+              if (image && image.url) {
+                bd.customImages[key] = image.url;
+              }
+            } catch (err) {
+              console.error(`[Background Job] Failed to generate/fetch image for slot ${key}:`, err);
+            }
+          });
+          // Update database
+          await storage.updateWebsite(websiteId, { businessData: { ...bd } });
+        }
+      }
 
       // 1. Core/Homepage AI content
       const hasHomepageContent = bd._aiIntroParas && bd._aiFaqs && bd._aiSeoBody && bd._aiProcessSteps;
@@ -7761,6 +7886,102 @@ Generated on: ${new Date().toISOString()}`;
                 await new Promise(r => setTimeout(r, 500));
               } catch (err) {
                 console.error(`[Background Job] Location AI error for ${location}:`, err);
+              }
+            });
+          }
+        }
+        // 2c. Background Blog Post Generation
+        if (apiKey && Array.isArray(bd.blogPosts) && bd.blogPosts.length > 0) {
+          console.log(`[Background Job] Checking blog posts for AI content generation...`);
+          const pendingBlogPosts = bd.blogPosts.filter((post: any) => force || !post.content || post.content === "" || post.status === 'draft');
+          
+          if (pendingBlogPosts.length > 0) {
+            console.log(`[Background Job] Generating content for ${pendingBlogPosts.length} blog posts...`);
+            
+            // Fetch Unsplash API key
+            let unsplashKey: string | undefined;
+            try {
+              const { decrypt } = await import('./crypto.js').catch(() => ({ decrypt: (k: string) => k }));
+              const unsplashSetting = await storage.getApiSetting(userId, 'unsplash');
+              if (unsplashSetting && (unsplashSetting.apiKey || unsplashSetting.accessKey)) {
+                unsplashKey = decrypt(unsplashSetting.accessKey || unsplashSetting.apiKey || "");
+              } else {
+                unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
+              }
+            } catch (e) {
+              console.warn("Could not get Unsplash API key for background blog generation");
+            }
+
+            const businessContext = {
+              businessName: bd.businessName,
+              category: bd.category || categoryId || catConfig.name,
+              heroLocation: `${bd.city || ''}, ${bd.state || ''}`.trim().replace(/^,|,$/g, '').trim() || "Your Area",
+              services: bd.services,
+              serviceAreas: bd.serviceAreas
+            };
+
+            const blogPrompt = bd.blogPromptId ? await storage.getBlogPrompt(bd.blogPromptId) : null;
+            const promptText = blogPrompt?.prompt || `Write a comprehensive, engaging blog post that provides real value to readers. Use SEO best practices and include actionable advice.`;
+
+            await pLimit(pendingBlogPosts, 2, async (postToGen) => {
+              try {
+                console.log(`[Background Job] Generating blog post content for: "${postToGen.title}"`);
+                
+                let generatedPost;
+                if (provider === 'gemini') {
+                  const { generateBlogPostWithGemini } = await import('./services/gemini.js');
+                  generatedPost = await generateBlogPostWithGemini(
+                    postToGen.title,
+                    promptText,
+                    businessContext,
+                    apiKey
+                  );
+                } else if (provider === 'openrouter') {
+                  generatedPost = await generateBlogPostWithOpenRouter(
+                    postToGen.title,
+                    promptText,
+                    businessContext,
+                    apiKey
+                  );
+                } else if (provider === 'deepseek') {
+                  const { generateBlogPostWithDeepSeek } = await import("./services/deepseek.js");
+                  generatedPost = await generateBlogPostWithDeepSeek(
+                    postToGen.title,
+                    promptText,
+                    businessContext,
+                    apiKey
+                  );
+                } else {
+                  generatedPost = await generateBlogPost(
+                    postToGen.title,
+                    promptText,
+                    businessContext,
+                    apiKey,
+                    unsplashKey
+                  );
+                }
+
+                if (generatedPost) {
+                  bd.blogPosts = bd.blogPosts.map((p: any) => {
+                    if (p.id === postToGen.id || p.slug === postToGen.slug) {
+                      return {
+                        ...p,
+                        content: generatedPost.content || p.content,
+                        excerpt: generatedPost.excerpt || p.excerpt || postToGen.excerpt,
+                        featuredImage: generatedPost.featuredImage || p.featuredImage || postToGen.featuredImage,
+                        featuredImageAlt: generatedPost.featuredImageAlt || p.featuredImageAlt || postToGen.featuredImageAlt,
+                        status: 'published',
+                        isAiGenerated: true
+                      };
+                    }
+                    return p;
+                  });
+                  
+                  await storage.updateWebsite(websiteId, { businessData: { ...bd } });
+                }
+                await new Promise(r => setTimeout(r, 1000));
+              } catch (err) {
+                console.error(`[Background Job] Failed to generate blog post "${postToGen.title}":`, err);
               }
             });
           }
