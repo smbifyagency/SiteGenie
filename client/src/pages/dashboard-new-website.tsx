@@ -30,6 +30,57 @@ const COLOR_PALETTES = [
   { name: "Charcoal",     primary: "#111827", secondary: "#9ca3af" },
 ] as const;
 
+const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<string> => {
+  return new Promise((resolve) => {
+    if (file.type === "image/svg+xml") {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+};
+
 const STEPS = ["Select Category", "Customize Website"];
 
 export default function DashboardNewWebsite() {
@@ -86,10 +137,13 @@ export default function DashboardNewWebsite() {
       ? form.services.filter(x => x !== s)
       : [...form.services, s]);
 
-  const handleLogoUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = e => set("logoUrl", e.target?.result as string);
-    reader.readAsDataURL(file);
+  const handleLogoUpload = async (file: File) => {
+    try {
+      const url = await compressImage(file, 600, 300, 0.85);
+      set("logoUrl", url);
+    } catch (err) {
+      toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+    }
   };
 
   const handleCityChange = (val: string) => {

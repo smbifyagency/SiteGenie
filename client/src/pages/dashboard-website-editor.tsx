@@ -17,6 +17,57 @@ type AIProvider = "openai" | "gemini" | "openrouter" | "deepseek";
 const isAIProvider = (value: unknown): value is AIProvider =>
     value === "openai" || value === "gemini" || value === "openrouter" || value === "deepseek";
 
+const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<string> => {
+    return new Promise((resolve) => {
+        if (file.type === "image/svg+xml") {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.onerror = () => resolve("");
+            reader.readAsDataURL(file);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = Math.round((width * maxHeight) / height);
+                        height = maxHeight;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext("2d");
+                if (!ctx) {
+                    resolve(e.target?.result as string);
+                    return;
+                }
+
+                ctx.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL("image/jpeg", quality);
+                resolve(dataUrl);
+            };
+            img.onerror = () => resolve(e.target?.result as string);
+            img.src = e.target?.result as string;
+        };
+        reader.onerror = () => resolve("");
+        reader.readAsDataURL(file);
+    });
+};
+
 export default function DashboardWebsiteEditor() {
     const [, setLocation] = useLocation();
     const [match, params] = useRoute("/dashboard/websites/:id");
@@ -438,14 +489,16 @@ export default function DashboardWebsiteEditor() {
                                                 accept="image/*"
                                                 className="hidden"
                                                 id="logo-upload"
-                                                onChange={(e) => {
+                                                onChange={async (e) => {
                                                     const file = e.target.files?.[0];
                                                     if (file) {
-                                                        const reader = new FileReader();
-                                                        reader.onloadend = () => {
-                                                            handleChange("logoUrl", reader.result as string);
-                                                        };
-                                                        reader.readAsDataURL(file);
+                                                        try {
+                                                            const url = await compressImage(file, 600, 300, 0.85);
+                                                            handleChange("logoUrl", url);
+                                                            toast({ title: "Logo updated", description: "Save to apply." });
+                                                        } catch (err) {
+                                                            toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+                                                        }
                                                     }
                                                 }}
                                             />

@@ -41,6 +41,58 @@ type AIProvider = "openai" | "gemini" | "openrouter" | "deepseek";
 const isAIProvider = (value: unknown): value is AIProvider =>
   value === "openai" || value === "gemini" || value === "openrouter" || value === "deepseek";
 
+const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<string> => {
+  return new Promise((resolve) => {
+    // If it's an SVG, don't try to draw it to canvas since it's already tiny and text-based
+    if (file.type === "image/svg+xml") {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = () => resolve(""); // safe fallback
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target?.result as string); // Fallback to raw base64 on error
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(""); // safe fallback
+    reader.readAsDataURL(file);
+  });
+};
+
 // ── Premade color palettes for non-tech users ─────────────────────────────
 const COLOR_PALETTES = [
   { name: "Ocean Blue",    primary: "#1e3a5f", secondary: "#0ea5e9" },
@@ -882,15 +934,15 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
                                 type="file"
                                 accept="image/*"
                                 className="hidden"
-                                onChange={e => {
+                                onChange={async e => {
                                   const file = e.target.files?.[0];
                                   if (!file) return;
-                                  const reader = new FileReader();
-                                  reader.onload = ev => {
-                                    const dataUrl = ev.target?.result as string;
-                                    setTempImageUrl(dataUrl);
-                                  };
-                                  reader.readAsDataURL(file);
+                                  try {
+                                    const url = await compressImage(file, 800, 600, 0.85);
+                                    setTempImageUrl(url);
+                                  } catch (err) {
+                                    toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+                                  }
                                   e.target.value = '';
                                 }}
                               />
@@ -1985,10 +2037,9 @@ export default function WDSiteEditor() {
     });
   }
 
-  function handleCustomImageUpload(key: string, file: File) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const dataUrl = e.target?.result as string;
+  async function handleCustomImageUpload(key: string, file: File) {
+    try {
+      const dataUrl = await compressImage(file, 1200, 1200, 0.85);
       const current = siteDataRef.current || siteData;
       const updatedImages = { ...(current?.customImages || {}), [key]: dataUrl };
       const blogSlug = getBlogImageSlugFromKey(key);
@@ -2009,8 +2060,9 @@ export default function WDSiteEditor() {
       setSiteData(nextData);
       if (nextData) rebuildPreview(nextData);
       toast({ title: "Image updated", description: "Preview refreshed. Will be saved automatically." });
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+    }
   }
 
   function removeCustomImage(key: string) {
@@ -2066,10 +2118,9 @@ export default function WDSiteEditor() {
     });
   }
 
-  function uploadPairImage(pairId: string, type: 'before' | 'after', file: File) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const src = e.target?.result as string;
+  async function uploadPairImage(pairId: string, type: 'before' | 'after', file: File) {
+    try {
+      const src = await compressImage(file, 1200, 1200, 0.85);
       const current = siteDataRef.current || siteData;
       if (!current) return;
       const next = {
@@ -2081,8 +2132,9 @@ export default function WDSiteEditor() {
       setSiteData(next);
       rebuildPreview(next);
       toast({ title: `${type === 'before' ? 'Before' : 'After'} image updated` });
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+    }
   }
 
   function addGalleryPhoto() {
@@ -2122,10 +2174,9 @@ export default function WDSiteEditor() {
     });
   }
 
-  function uploadGalleryPhoto(index: number, file: File) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const src = e.target?.result as string;
+  async function uploadGalleryPhoto(index: number, file: File) {
+    try {
+      const src = await compressImage(file, 1200, 1200, 0.85);
       const current = siteDataRef.current || siteData;
       if (!current) return;
       const normals = (current.galleryImages || []).filter(i => i.type === 'normal');
@@ -2140,11 +2191,12 @@ export default function WDSiteEditor() {
       setSiteData(next);
       rebuildPreview(next);
       toast({ title: "Gallery photo updated" });
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+    }
   }
 
-  function uploadGalleryPhotosBulk(files: FileList) {
+  async function uploadGalleryPhotosBulk(files: FileList) {
     const current = siteDataRef.current || siteData;
     if (!current) return;
 
@@ -2154,25 +2206,25 @@ export default function WDSiteEditor() {
     let loadedCount = 0;
     const nextImages = [...(current.galleryImages || [])];
 
-    filesArray.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = e => {
-        const src = e.target?.result as string;
+    for (const file of filesArray) {
+      try {
+        const src = await compressImage(file, 1200, 1200, 0.85);
         nextImages.push({ src, alt: 'Gallery photo', type: 'normal' });
-        loadedCount++;
+      } catch (err) {
+        console.error("Bulk upload image compression error:", err);
+      }
+      loadedCount++;
 
-        if (loadedCount === filesArray.length) {
-          const next = {
-            ...current,
-            galleryImages: nextImages.slice(0, 50),
-          };
-          setSiteData(next);
-          rebuildPreview(next);
-          toast({ title: `Successfully uploaded ${filesArray.length} gallery photos!` });
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+      if (loadedCount === filesArray.length) {
+        const next = {
+          ...current,
+          galleryImages: nextImages.slice(0, 50),
+        };
+        setSiteData(next);
+        rebuildPreview(next);
+        toast({ title: `Successfully uploaded ${filesArray.length} gallery photos!` });
+      }
+    }
   }
 
   // ── Update site data fields ───────────────────────────────────────────
@@ -2708,16 +2760,16 @@ export default function WDSiteEditor() {
                           <ImageIcon className="w-3.5 h-3.5" />
                           {siteData.logoUrl ? "Replace logo..." : "Upload logo (PNG/SVG)..."}
                         </div>
-                        <input type="file" accept="image/*" className="hidden" onChange={e => {
+                        <input type="file" accept="image/*" className="hidden" onChange={async e => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = ev => {
-                            const url = ev.target?.result as string;
+                          try {
+                            const url = await compressImage(file, 600, 300, 0.85);
                             setSiteData(prev => prev ? { ...prev, logoUrl: url } as any : prev);
                             toast({ title: "Logo updated", description: "Save to apply." });
-                          };
-                          reader.readAsDataURL(file);
+                          } catch (err) {
+                            toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+                          }
                           e.target.value = "";
                         }} />
                       </label>
@@ -2748,16 +2800,16 @@ export default function WDSiteEditor() {
                           <ImageIcon className="w-3.5 h-3.5" />
                           {siteData.faviconUrl ? "Replace favicon..." : "Upload favicon (ICO/PNG)..."}
                         </div>
-                        <input type="file" accept="image/*,.ico" className="hidden" onChange={e => {
+                        <input type="file" accept="image/*,.ico" className="hidden" onChange={async e => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = ev => {
-                            const url = ev.target?.result as string;
+                          try {
+                            const url = await compressImage(file, 128, 128, 0.8);
                             setSiteData(prev => prev ? { ...prev, faviconUrl: url } as any : prev);
                             toast({ title: "Favicon updated", description: "Save to apply." });
-                          };
-                          reader.readAsDataURL(file);
+                          } catch (err) {
+                            toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+                          }
                           e.target.value = "";
                         }} />
                       </label>
@@ -3524,16 +3576,16 @@ export default function WDSiteEditor() {
                         <ImageIcon className="w-3 h-3" />
                         {(siteData as any).logoUrl ? "Replace logo..." : "Upload logo (PNG/SVG)..."}
                       </div>
-                      <input type="file" accept="image/*" className="hidden" onChange={e => {
+                      <input type="file" accept="image/*" className="hidden" onChange={async e => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = ev => {
-                          const url = ev.target?.result as string;
+                        try {
+                          const url = await compressImage(file, 600, 300, 0.85);
                           setSiteData(prev => prev ? { ...prev, logoUrl: url } as any : prev);
                           toast({ title: "Logo updated", description: "Save to apply." });
-                        };
-                        reader.readAsDataURL(file);
+                        } catch (err) {
+                          toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+                        }
                         e.target.value = "";
                       }} />
                     </label>
@@ -3566,16 +3618,16 @@ export default function WDSiteEditor() {
                         <ImageIcon className="w-3 h-3" />
                         {(siteData as any).faviconUrl ? "Replace favicon..." : "Upload favicon (ICO/PNG/SVG)..."}
                       </div>
-                      <input type="file" accept="image/*,.ico" className="hidden" onChange={e => {
+                      <input type="file" accept="image/*,.ico" className="hidden" onChange={async e => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = ev => {
-                          const url = ev.target?.result as string;
+                        try {
+                          const url = await compressImage(file, 128, 128, 0.8);
                           setSiteData(prev => prev ? { ...prev, faviconUrl: url } as any : prev);
                           toast({ title: "Favicon updated", description: "Save to apply." });
-                        };
-                        reader.readAsDataURL(file);
+                        } catch (err) {
+                          toast({ title: "Upload failed", description: String(err), variant: "destructive" });
+                        }
                         e.target.value = "";
                       }} />
                     </label>
