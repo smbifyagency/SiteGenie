@@ -806,7 +806,7 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
   return `
   ${mapSection}
   <footer class="site-footer" role="contentinfo">
-    <div class="footer-inner">
+    <div class="footer-inner ${showServicesLocations ? 'has-four-cols' : 'has-two-cols'}">
       <div class="footer-brand">
         ${brandBlock}
         <p class="footer-brand-desc">${data.businessName} provides professional ${kwBase(data.primaryKeyword).toLowerCase()} services in ${data.city}, ${data.state} and surrounding areas.</p>
@@ -2228,9 +2228,16 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   margin: 0 auto;
   padding: 0 1.5rem;
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.5fr;
   gap: 2.5rem;
   position: relative;
+}
+
+.footer-inner.has-four-cols {
+  grid-template-columns: 2fr 1fr 1fr 1.5fr;
+}
+
+.footer-inner.has-two-cols {
+  grid-template-columns: 1.2fr 1fr;
 }
 
 .footer-biz-name {
