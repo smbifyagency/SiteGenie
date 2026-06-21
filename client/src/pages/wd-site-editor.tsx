@@ -63,6 +63,7 @@ const COLOR_PALETTES = [
 
 interface WDSiteData {
   id?: string;
+  categoryId?: string;
   businessName: string;
   countryCode?: string;
   phone: string;
@@ -361,6 +362,7 @@ const PREVIEW_CLICK_SCRIPT = `
 // Convert WDSiteData → the shape the generator expects
 function siteDataToWDData(data: WDSiteData): Record<string, any> {
   return {
+    categoryId: data.categoryId,
     businessName: data.businessName,
     countryCode: data.countryCode,
     phone: data.phone,
@@ -1270,6 +1272,7 @@ export default function WDSiteEditor() {
       const bd = data.businessData || {};
       const loadedSiteData: WDSiteData = {
         id: data.id,
+        categoryId: bd.categoryId || data.template || "water-damage",
         businessName: bd.businessName || data.title || "",
         phone: bd.phone || "",
         email: bd.email || "",
@@ -1413,6 +1416,7 @@ export default function WDSiteEditor() {
         credentials: "include",
         body: JSON.stringify({
           ...stripDeploymentFields(siteData),
+          categoryId: categoryId,
           websiteId: websiteId,
           returnFiles: true,  // ask server to return JSON files, not ZIP
         }),
@@ -1621,6 +1625,7 @@ export default function WDSiteEditor() {
         credentials: "include",
         body: JSON.stringify({
           ...siteDataToWDData(siteData),
+          categoryId: categoryId,
           websiteId: websiteId,
           returnFiles: false,  // download ZIP
         }),

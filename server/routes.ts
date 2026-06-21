@@ -49,10 +49,13 @@ async function generateFilesForTemplate(
   aiGeneratedContent?: any,
   siteSettings?: any[]
 ): Promise<Record<string, string>> {
-  if (template === 'water-damage') {
-    const { generateWaterDamageWebsite } = await import('../client/src/lib/water-damage-generator.js');
-    const urlSlug = businessData.urlSlug || businessData.businessName?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'website';
-    return generateWaterDamageWebsite(businessData, urlSlug) as Record<string, string>;
+  const { CATEGORIES } = await import('../client/src/lib/local-service-categories.js');
+  const isLocalService = CATEGORIES.some(c => c.id === template);
+
+  if (template === 'water-damage' || isLocalService) {
+    const { generateLocalServiceWebsite } = await import('../client/src/lib/local-service-engine.js');
+    const urlSlug = domain || businessData.urlSlug || businessData.businessName?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'website';
+    return generateLocalServiceWebsite(template, businessData, urlSlug) as Record<string, string>;
   }
   return generateAllWebsiteFiles(businessData, template, domain, blogPosts, aiGeneratedContent, siteSettings) as Record<string, string>;
 }
@@ -7071,6 +7074,7 @@ Generated on: ${new Date().toISOString()}`;
   app.post("/api/generate-wd-website", allowGuestWebsiteGeneration, async (req, res) => {
     try {
       let {
+        categoryId,
         businessName, phone, email, address, city, state, country,
         primaryKeyword, secondaryKeyword, services, serviceAreas,
         urlSlug: rawUrlSlug, primaryColor, secondaryColor, contactFormEmbed,
@@ -7208,8 +7212,25 @@ Generated on: ${new Date().toISOString()}`;
         }
       }
 
+      // Resolve categoryId (priority: req.body.categoryId > existing website's categoryId/template > 'water-damage')
+      let resolvedCategoryId = categoryId;
+      if (!resolvedCategoryId && existingWebsiteId) {
+        try {
+          const existingWebsite = await storage.getWebsite(existingWebsiteId);
+          if (existingWebsite) {
+            resolvedCategoryId = (existingWebsite.businessData as any)?.categoryId || existingWebsite.template;
+          }
+        } catch (e) {
+          console.error("Error fetching existing website to resolve categoryId:", e);
+        }
+      }
+      if (!resolvedCategoryId) {
+        resolvedCategoryId = 'water-damage';
+      }
+
       // Build website data object
       const wdData = {
+        categoryId: resolvedCategoryId,
         businessName, phone, email, address, city, state, country: country || 'US',
         primaryKeyword: primaryKeyword || 'Water Damage Restoration',
         secondaryKeyword,
@@ -7250,8 +7271,9 @@ Generated on: ${new Date().toISOString()}`;
         publishTier: publishTier || undefined,
       };
 
-      // Generate all HTML files
-      const files = generateWaterDamageWebsite(wdData, domain);
+      // Generate all HTML files using the local service engine
+      const { generateLocalServiceWebsite } = await import('../client/src/lib/local-service-engine.js');
+      const files = generateLocalServiceWebsite(resolvedCategoryId, wdData, domain);
 
       // Save/update website record if authenticated user.
       // When returnFiles=true (editor preview), also persist the generated files
@@ -7270,7 +7292,7 @@ Generated on: ${new Date().toISOString()}`;
               title: businessName,
               businessData: wdData as any,
               customFiles: filesToPersist,
-              template: 'water-damage',
+              template: resolvedCategoryId,
             });
             savedWebsiteId = website?.id;
           }
@@ -7547,7 +7569,8 @@ Generated on: ${new Date().toISOString()}`;
     userId: string,
     publishTier: '1' | '2' | '3',
     netlifyApiKey?: string,
-    siteName?: string
+    siteName?: string,
+    force?: boolean
   ) {
     try {
       const website = await storage.getWebsite(websiteId);
@@ -7569,7 +7592,7 @@ Generated on: ${new Date().toISOString()}`;
 
       // 1. Core/Homepage AI content
       const hasHomepageContent = bd._aiIntroParas && bd._aiFaqs && bd._aiSeoBody && bd._aiProcessSteps;
-      if (!hasHomepageContent && apiKey) {
+      if ((force || !hasHomepageContent) && apiKey) {
         console.log(`[Background Job] Generating core/homepage content for ${websiteId}...`);
         const aiContent = await generateLocalServiceAIContent(
           bd, userId, catConfig.name, catConfig.defaultPrimaryKeyword
@@ -7668,8 +7691,8 @@ Generated on: ${new Date().toISOString()}`;
 
         // 2a. Services
         if (additionalServices.length > 0) {
-          const pendingServices = additionalServices.filter(s => !bd.serviceContent[s]);
-          const alreadyDoneCount = additionalServices.length - pendingServices.length;
+          const pendingServices = force ? additionalServices : additionalServices.filter(s => !bd.serviceContent[s]);
+          const alreadyDoneCount = force ? 0 : additionalServices.length - pendingServices.length;
           completedItems += alreadyDoneCount;
 
           if (pendingServices.length > 0) {
@@ -7699,8 +7722,8 @@ Generated on: ${new Date().toISOString()}`;
 
         // 2b. Locations
         if (additionalLocations.length > 0) {
-          const pendingLocations = additionalLocations.filter(l => !bd.locationContent[l]);
-          const alreadyDoneCount = additionalLocations.length - pendingLocations.length;
+          const pendingLocations = force ? additionalLocations : additionalLocations.filter(l => !bd.locationContent[l]);
+          const alreadyDoneCount = force ? 0 : additionalLocations.length - pendingLocations.length;
           completedItems += alreadyDoneCount;
 
           if (pendingLocations.length > 0) {
@@ -7793,8 +7816,8 @@ Generated on: ${new Date().toISOString()}`;
         return res.status(402).json({ error: "No AI API key configured. Save an OpenAI, Gemini, OpenRouter, or DeepSeek key in API Setup before generating content." });
       }
 
-      // Start the background generation worker
-      runBackgroundGenerationAndDeploy(id, userId, publishTier);
+      // Start the background generation worker with force = true
+      runBackgroundGenerationAndDeploy(id, userId, publishTier, undefined, undefined, true);
 
       return res.json({ success: true, status: 'generating', message: "Content generation started in background." });
     } catch (err: any) {
