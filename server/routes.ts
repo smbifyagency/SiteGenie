@@ -6484,7 +6484,23 @@ Generated on: ${new Date().toISOString()}`;
         const templateToUse =
           stringValue(updatePayload.selectedTemplate || updatePayload.template || existingWebsite.selectedTemplate || existingWebsite.template) ||
           "template1";
-        if (mergedBusinessData && Object.keys(normalizedCustomFiles).length > 0) {
+
+        // Local-service (WD-editor) templates use generateLocalServiceWebsite,
+        // NOT generateAllWebsiteFiles. Skip the merge for those categories to
+        // avoid crashes and "Failed to save website" errors.
+        const localServiceCategories = new Set([
+          'water-damage', 'plumbing', 'roofing', 'hvac', 'electrical',
+          'locksmith', 'pest-control', 'landscaping', 'painting',
+          'cleaning', 'garage-door', 'fencing', 'concrete',
+          'tree-service', 'moving', 'junk-removal', 'dumpster-rental',
+          'appliance-repair', 'carpet-cleaning', 'pressure-washing',
+          'pool-service', 'glass-repair', 'towing', 'mold-remediation',
+          'fire-damage', 'flood-damage',
+        ]);
+        const isLocalServiceTemplate = localServiceCategories.has(templateToUse) ||
+          localServiceCategories.has(mergedBusinessData?.categoryId || '');
+
+        if (mergedBusinessData && Object.keys(normalizedCustomFiles).length > 0 && !isLocalServiceTemplate) {
           try {
             const generatedBaseFiles = generateAllWebsiteFiles(mergedBusinessData, templateToUse) as Record<string, string>;
             const { sanitizedCustomFiles } = mergeWebsiteFilesWithCustomFiles(generatedBaseFiles, normalizedCustomFiles);
@@ -6492,8 +6508,12 @@ Generated on: ${new Date().toISOString()}`;
           } catch {
             updatePayload.customFiles = Object.keys(normalizedCustomFiles).length > 0 ? normalizedCustomFiles : null;
           }
+        } else if (Object.keys(normalizedCustomFiles).length > 0) {
+          // For local-service templates or when mergedBusinessData is null,
+          // store the custom files directly without merging
+          updatePayload.customFiles = normalizedCustomFiles;
         } else {
-          updatePayload.customFiles = Object.keys(normalizedCustomFiles).length > 0 ? normalizedCustomFiles : null;
+          updatePayload.customFiles = null;
         }
       }
 

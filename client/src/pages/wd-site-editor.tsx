@@ -1129,7 +1129,10 @@ export default function WDSiteEditor() {
       businessData: stripDeploymentFields(data),
     };
 
-    if (options?.includeCustomFiles) {
+    // Only include customFiles when there are actual overrides. Sending an empty
+    // object triggers the server's generateAllWebsiteFiles path which is
+    // incompatible with local-service (WD) templates and causes save failures.
+    if (options?.includeCustomFiles && Object.keys(visualEditorOverrides).length > 0) {
       payload.customFiles = visualEditorOverrides;
     }
 
@@ -3051,6 +3054,76 @@ export default function WDSiteEditor() {
                     <span className="text-[10px] text-gray-600">View in Blog tab</span>
                   </div>
                 )}
+
+                {/* ── Generated Pages Summary ──────────────────────────── */}
+                {Object.keys(generatedFiles).length > 0 && (() => {
+                  const files = Object.keys(generatedFiles).filter(f => f.endsWith('.html'));
+                  const corePages = files.filter(f =>
+                    !f.startsWith('services/') && !f.startsWith('locations/') &&
+                    !f.startsWith('matrix/') && !f.startsWith('blog/')
+                  );
+                  const servicePages = files.filter(f => f.startsWith('services/'));
+                  const locationPages = files.filter(f => f.startsWith('locations/'));
+                  const matrixPages = files.filter(f => f.startsWith('matrix/'));
+                  const blogPages = files.filter(f => f.startsWith('blog/'));
+                  const totalPages = files.length;
+
+                  return (
+                    <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-[#7C3AED]" />
+                          Generated Pages
+                        </span>
+                        <span className="text-xs font-bold text-white bg-[#7C3AED]/20 text-[#7C3AED] px-2 py-0.5 rounded-full">
+                          {totalPages} total
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {corePages.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                            <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                            Core Pages
+                            <span className="ml-auto font-semibold text-gray-300">{corePages.length}</span>
+                          </div>
+                        )}
+                        {servicePages.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                            <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                            Service Pages
+                            <span className="ml-auto font-semibold text-gray-300">{servicePages.length}</span>
+                          </div>
+                        )}
+                        {locationPages.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                            <span className="w-2 h-2 rounded-full bg-cyan-500 flex-shrink-0" />
+                            Location Pages
+                            <span className="ml-auto font-semibold text-gray-300">{locationPages.length}</span>
+                          </div>
+                        )}
+                        {matrixPages.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                            <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" />
+                            Matrix Pages
+                            <span className="ml-auto font-semibold text-gray-300">{matrixPages.length}</span>
+                          </div>
+                        )}
+                        {blogPages.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                            Blog Pages
+                            <span className="ml-auto font-semibold text-gray-300">{blogPages.length}</span>
+                          </div>
+                        )}
+                      </div>
+                      {siteData.publishTier === '3' && matrixPages.length === 0 && (
+                        <p className="text-[10px] text-gray-500 italic">
+                          Matrix pages will be compiled during publish (services × locations = {(siteData.services?.length || 0) * (siteData.serviceAreas?.length || 0)} pages).
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Homepage Hero */}
