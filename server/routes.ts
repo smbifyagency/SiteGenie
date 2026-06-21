@@ -7092,6 +7092,12 @@ Generated on: ${new Date().toISOString()}`;
         floatingCTA, whatsappNumber, logoUrl, logoAlt, licenseNumber, insuranceInfo,
         aboutContent, teamDescription, galleryImages,
         generateBlog, enableMatrixPages, hideBeforeAfter, businessHours, publishTier,
+        // AI Content fields to avoid 504 and reuse copy
+        homepageContent: reqHomepageContent,
+        serviceContent: reqServiceContent,
+        locationContent: reqLocationContent,
+        _aiIntroParas, _aiFaqs, _aiSeoBody, _aiProcessSteps, _aiWhyChooseUs,
+        _aiAboutContent, _aiTestimonials, _aiServiceDescs,
       } = req.body;
 
       // Robust fallback values for missing/empty required fields to prevent zip download failure
@@ -7181,11 +7187,13 @@ Generated on: ${new Date().toISOString()}`;
       // When returnFiles=true (editor preview), only generate homepage AI content
       // to avoid Vercel's 60s timeout with large service/location lists.
       // Full AI generation runs when downloading (returnFiles=false).
-      let homepageContent: any = undefined;
-      const serviceContent: Record<string, any> = {};
-      const locationContent: Record<string, any> = {};
+      let homepageContent: any = reqHomepageContent;
+      const serviceContent: Record<string, any> = reqServiceContent || {};
+      const locationContent: Record<string, any> = reqLocationContent || {};
 
-      if (apiKey) {
+      const hasHomepageContent = homepageContent || (_aiIntroParas && _aiFaqs && _aiSeoBody && _aiProcessSteps);
+
+      if (apiKey && !hasHomepageContent) {
         try {
           // Homepage content (always generated)
           const homePrompt = buildHomePagePrompt(bizContext, serviceSlugMap.map(s => s.slug), locationSlugMap.map(l => l.slug));
@@ -7247,6 +7255,15 @@ Generated on: ${new Date().toISOString()}`;
         homepageContent,
         serviceContent: Object.keys(serviceContent).length > 0 ? serviceContent : undefined,
         locationContent: Object.keys(locationContent).length > 0 ? locationContent : undefined,
+        // Pass through AI content fields
+        _aiIntroParas: _aiIntroParas || undefined,
+        _aiFaqs: _aiFaqs || undefined,
+        _aiSeoBody: _aiSeoBody || undefined,
+        _aiProcessSteps: _aiProcessSteps || undefined,
+        _aiWhyChooseUs: _aiWhyChooseUs || undefined,
+        _aiAboutContent: _aiAboutContent || undefined,
+        _aiTestimonials: _aiTestimonials || undefined,
+        _aiServiceDescs: _aiServiceDescs || undefined,
         // Preserve all extra fields the editor passes through
         customImages: customImages || undefined,
         facebookUrl: facebookUrl || undefined,
