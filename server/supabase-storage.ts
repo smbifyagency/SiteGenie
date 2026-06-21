@@ -307,7 +307,7 @@ function websiteToDB(website: any): any {
 
 export class SupabaseWebsitesStorage {
     async createWebsite(website: any) {
-        const id = randomUUID();
+        const id = website.id || randomUUID();
         const now = new Date().toISOString();
         const mapped = websiteToDB(website);
         const row = {

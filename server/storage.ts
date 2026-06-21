@@ -32,7 +32,7 @@ import {
 import { randomUUID } from "crypto";
 
 export interface IStorage {
-  createWebsite(website: InsertWebsite): Promise<Website>;
+  createWebsite(website: any): Promise<Website>;
   getWebsite(id: string): Promise<Website | undefined>;
   listWebsites(): Promise<Website[]>;
   listUserWebsites(userId: string): Promise<Website[]>; // Add method for user-specific websites
@@ -937,8 +937,8 @@ export class MemStorage implements IStorage {
     return this.blogMedia.delete(id);
   }
 
-  async createWebsite(insertWebsite: InsertWebsite): Promise<Website> {
-    const id = randomUUID();
+  async createWebsite(insertWebsite: any): Promise<Website> {
+    const id = insertWebsite.id || randomUUID();
     const now = new Date();
     const website: Website = {
       ...insertWebsite,
@@ -1199,7 +1199,7 @@ export class DatabaseStorage implements IStorage {
 
 
   // Website operations
-  async createWebsite(website: InsertWebsite): Promise<Website> {
+  async createWebsite(website: any): Promise<Website> {
     const { db } = await import('./db');
     const { websites } = await import('@shared/schema');
 

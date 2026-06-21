@@ -6465,8 +6465,27 @@ Generated on: ${new Date().toISOString()}`;
       const userId = req.user.id;
 
       // Check if website belongs to user
-      const existingWebsite = await storage.getWebsite(id);
-      if (!existingWebsite || existingWebsite.userId !== userId) {
+      let existingWebsite = await storage.getWebsite(id);
+      if (!existingWebsite) {
+        console.warn(`[routes] Website ${id} not found. Auto-recreating website record in storage.`);
+        const businessData = req.body.businessData || {};
+        const templateToUse = req.body.selectedTemplate || req.body.template || businessData?.categoryId || "water-damage";
+        const title = businessData.businessName || "Untitled Website";
+        
+        existingWebsite = await storage.createWebsite({
+          id,
+          userId,
+          title,
+          category: businessData?.categoryId || "water-damage",
+          template: templateToUse,
+          businessData,
+          selectedTemplate: templateToUse,
+          netlifyDeploymentStatus: "not_deployed",
+          isActive: true,
+        } as any);
+      }
+
+      if (existingWebsite.userId !== userId) {
         return res.status(404).json({ message: "Website not found" });
       }
 
