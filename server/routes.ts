@@ -7488,7 +7488,10 @@ Generated on: ${new Date().toISOString()}`;
     const { getCategoryConfig: getCC2, generateLocalServiceWebsite: genLS } = await import('../client/src/lib/local-service-engine.js');
 
     // Homepage content check (fallback)
-    const hasAiContent = bd._aiIntroParas || bd._aiFaqs || bd._aiSeoBody || bd._aiProcessSteps;
+    const hasLegacyHomepageContent = bd.homepageContent && 
+                                     typeof bd.homepageContent === 'object' && 
+                                     Object.keys(bd.homepageContent).length > 0;
+    const hasAiContent = hasLegacyHomepageContent || bd._aiIntroParas || bd._aiFaqs || bd._aiSeoBody || bd._aiProcessSteps;
     if (!hasAiContent) {
       try {
         const catConfig = getCC2(categoryId);
@@ -8136,10 +8139,36 @@ Generated on: ${new Date().toISOString()}`;
         return res.status(404).json({ error: "Website not found" });
       }
       const bd = (website.businessData || {}) as any;
+      let status = bd.generationStatus || 'idle';
+      let progress = bd.generationProgress ?? 0;
+      let error = bd.generationError || null;
+
+      // Timeout safety: if status is running but website was last updated more than 4 minutes ago, auto-reset to failed
+      if (status === 'generating' || status === 'deploying') {
+        const lastUpdated = website.updatedAt ? new Date(website.updatedAt).getTime() : 0;
+        const now = Date.now();
+        const durationMin = (now - lastUpdated) / (1000 * 60);
+        if (durationMin > 4) {
+          console.log(`[generation-status] Resetting stuck background job for website ${id} (inactive for ${durationMin.toFixed(1)} minutes)`);
+          status = 'failed';
+          progress = 0;
+          error = "The background generation task timed out. Please try again.";
+          
+          try {
+            bd.generationStatus = 'failed';
+            bd.generationProgress = 0;
+            bd.generationError = error;
+            await storage.updateWebsite(id, { businessData: bd });
+          } catch (e) {
+            console.error("Failed to save background job reset:", e);
+          }
+        }
+      }
+
       return res.json({
-        status: bd.generationStatus || 'idle',
-        progress: bd.generationProgress ?? 0,
-        error: bd.generationError || null,
+        status,
+        progress,
+        error,
         publishTier: bd.publishTier || '1',
       });
     } catch (err: any) {
@@ -8194,8 +8223,12 @@ Generated on: ${new Date().toISOString()}`;
         return res.status(400).json({ error: "Site name is required." });
       }
 
-      // Check if we need to generate homepage AI content or subpage AI content
-      const needsHomepage = !bd._aiIntroParas || !bd._aiFaqs || !bd._aiSeoBody || !bd._aiProcessSteps;
+      // Check if we need to generate homepage AI content or subpage AI content.
+      // We skip homepage generation if legacy homepageContent already exists.
+      const hasLegacyHomepageContent = bd.homepageContent && 
+                                       typeof bd.homepageContent === 'object' && 
+                                       Object.keys(bd.homepageContent).length > 0;
+      const needsHomepage = !hasLegacyHomepageContent && (!bd._aiIntroParas || !bd._aiFaqs || !bd._aiSeoBody || !bd._aiProcessSteps);
       
       let needsDynamicPages = false;
       if (publishTier === '2' || publishTier === '3') {
