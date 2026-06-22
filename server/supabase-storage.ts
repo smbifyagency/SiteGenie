@@ -277,17 +277,46 @@ function websiteToDB(website: any): any {
     // Fallback
     if (website.status !== undefined && row.status === undefined) row.status = website.status;
 
-    // customFiles → stored as JSON string in generated_html column
+    // customFiles → stored in generated_html column (JSONB)
     if (website.customFiles !== undefined) {
-        row.generated_html = website.customFiles
-            ? (typeof website.customFiles === "string" ? website.customFiles : JSON.stringify(website.customFiles))
-            : null;
+        if (website.customFiles) {
+            if (typeof website.customFiles === "string") {
+                try {
+                    row.generated_html = JSON.parse(website.customFiles);
+                } catch {
+                    row.generated_html = website.customFiles;
+                }
+            } else {
+                row.generated_html = website.customFiles;
+            }
+        } else {
+            row.generated_html = null;
+        }
     } else if (website.generatedHtml !== undefined) {
-        row.generated_html = website.generatedHtml;
+        if (website.generatedHtml) {
+            if (typeof website.generatedHtml === "string") {
+                try {
+                    row.generated_html = JSON.parse(website.generatedHtml);
+                } catch {
+                    row.generated_html = website.generatedHtml;
+                }
+            } else {
+                row.generated_html = website.generatedHtml;
+            }
+        } else {
+            row.generated_html = null;
+        }
     }
 
     // Merge business_data; fold in schema fields that have no dedicated column
-    const existingBD: any = website.businessData || {};
+    let existingBD: any = website.businessData || {};
+    if (typeof existingBD === "string") {
+        try {
+            existingBD = JSON.parse(existingBD);
+        } catch {
+            existingBD = {};
+        }
+    }
     const extras: Record<string, any> = {};
     if (website.description !== undefined) extras._description = website.description;
     if (website.selectedTemplate !== undefined) extras._selectedTemplate = website.selectedTemplate;
@@ -357,7 +386,36 @@ export class SupabaseWebsitesStorage {
     }
 
     async updateWebsite(id: string, updates: any) {
-        const mapped = websiteToDB(updates);
+        // Fetch existing website first to merge nested structures and avoid overwriting/wiping columns like business_data
+        const existing = await this.getWebsite(id);
+        let existingBD = existing?.businessData || {};
+        if (typeof existingBD === "string") {
+            try {
+                existingBD = JSON.parse(existingBD);
+            } catch {
+                existingBD = {};
+            }
+        }
+
+        let updatesBD = updates.businessData;
+        if (updatesBD !== undefined && updatesBD !== null) {
+            if (typeof updatesBD === "string") {
+                try {
+                    updatesBD = JSON.parse(updatesBD);
+                } catch {
+                    updatesBD = {};
+                }
+            }
+        }
+
+        const mergedUpdates = {
+            ...updates,
+            businessData: updates.businessData !== undefined
+                ? { ...existingBD, ...updatesBD }
+                : existingBD
+        };
+
+        const mapped = websiteToDB(mergedUpdates);
         const row: any = { updated_at: new Date().toISOString(), ...mapped };
 
         const { data, error } = await getClient().from("app_websites").update(row).eq("id", id).select().single();
