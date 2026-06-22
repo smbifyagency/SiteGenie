@@ -34,8 +34,10 @@ import {
   Settings,
   ArrowRight,
   Download,
+  Crown,
 } from "lucide-react";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 
 type PublishStep = "checklist" | "api-check" | "url-search" | "deploying" | "success";
 
@@ -79,6 +81,8 @@ interface PublishWebsiteModalProps {
   publishTier?: '1' | '2' | '3';
   onChangePublishTier?: (tier: '1' | '2' | '3') => void;
   onDownloadZip?: () => Promise<void> | void;
+  customImages?: Record<string, string>;
+  galleryImages?: any[];
 }
 
 export function PublishWebsiteModal({
@@ -98,7 +102,11 @@ export function PublishWebsiteModal({
   publishTier,
   onChangePublishTier,
   onDownloadZip,
+  customImages,
+  galleryImages,
 }: PublishWebsiteModalProps) {
+  const { user } = useAuth();
+  const isPaid = (user as any)?.role === "paid" || (user as any)?.role === "admin" || (user as any)?.id === "admin";
   const { toast } = useToast();
   const isRedeploy = Boolean(deployedUrl);
 
@@ -228,7 +236,7 @@ export function PublishWebsiteModal({
       .then(d => {
         if (d) {
           if (d.publishTier) {
-            setLocalTier(d.publishTier);
+            setLocalTier((!isPaid && d.publishTier !== '1') ? '1' : d.publishTier);
           }
           if (d.status === 'generating' || d.status === 'deploying') {
             setStep('deploying');
@@ -240,7 +248,14 @@ export function PublishWebsiteModal({
         }
       })
       .catch(err => console.error("Error fetching status on load:", err));
-  }, [checklistNeedsAttention, currentSiteName, defaultSlug, isOpen, isRedeploy, publishTier, websiteId, startPollingStatus]);
+  }, [checklistNeedsAttention, currentSiteName, defaultSlug, isOpen, isRedeploy, publishTier, websiteId, startPollingStatus, isPaid]);
+
+  useEffect(() => {
+    if (!isPaid && localTier !== '1') {
+      setLocalTier('1');
+      onChangePublishTier?.('1');
+    }
+  }, [isPaid, localTier, onChangePublishTier]);
 
   // ── API Status Check ──────────────────────────────────────────────
   async function checkApiStatus() {
@@ -376,6 +391,8 @@ export function PublishWebsiteModal({
           netlifyApiKey: netlifyToken || "masked",
           siteName: slug,
           publishTier: localTier,
+          customImages,
+          galleryImages,
         }),
       });
 
@@ -683,22 +700,32 @@ export function PublishWebsiteModal({
                     },
                   ].map((tierItem) => {
                     const isSelected = localTier === tierItem.id;
+                    const isDisabled = !isPaid && tierItem.id !== '1';
                     return (
                       <button
                         key={tierItem.id}
                         type="button"
+                        disabled={isDisabled}
                         onClick={() => {
+                          if (isDisabled) return;
                           setLocalTier(tierItem.id as '1' | '2' | '3');
                           onChangePublishTier?.(tierItem.id as '1' | '2' | '3');
                         }}
                         className={`flex flex-col text-left p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
                           isSelected
                             ? 'border-[#7C3AED] bg-[#7C3AED]/10 text-white'
+                            : isDisabled
+                            ? 'border-gray-905 bg-gray-950/40 text-gray-600 cursor-not-allowed opacity-50'
                             : 'border-gray-800 bg-gray-900/60 hover:border-gray-700 text-gray-300'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1 w-full">
-                          <span className="text-xs font-semibold">{tierItem.title}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold">{tierItem.title}</span>
+                            {isDisabled && (
+                              <Crown className="w-3 h-3 text-amber-400 shrink-0" />
+                            )}
+                          </div>
                           <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
                             isSelected ? 'border-[#7C3AED] bg-[#7C3AED]' : 'border-gray-600'
                           }`}>
@@ -706,6 +733,9 @@ export function PublishWebsiteModal({
                           </div>
                         </div>
                         <span className="text-[10px] text-gray-400 leading-tight">{tierItem.desc}</span>
+                        {isDisabled && (
+                          <span className="text-[9px] text-amber-400 mt-1">Upgrade to Pro required</span>
+                        )}
                       </button>
                     );
                   })}

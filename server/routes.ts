@@ -7445,7 +7445,9 @@ Generated on: ${new Date().toISOString()}`;
     userId: string,
     netlifyApiKey: string,
     siteName: string,
-    publishTier: '1' | '2' | '3'
+    publishTier: '1' | '2' | '3',
+    customImages?: any,
+    galleryImages?: any
   ): Promise<{ url: string; siteName: string }> {
     const website = await storage.getWebsite(websiteId);
     if (!website || website.userId !== userId) {
@@ -7454,6 +7456,13 @@ Generated on: ${new Date().toISOString()}`;
 
     const bd = { ...((website.businessData || {}) as any) };
     bd.publishTier = publishTier;
+
+    if (customImages) {
+      bd.customImages = { ...(bd.customImages || {}), ...customImages };
+    }
+    if (galleryImages) {
+      bd.galleryImages = galleryImages;
+    }
 
     // Fallbacks for missing/empty required fields to protect performNetlifyDeploy from crashing
     if (!bd.businessName) bd.businessName = website.title || "My Business";
@@ -7719,7 +7728,9 @@ Generated on: ${new Date().toISOString()}`;
     publishTier: '1' | '2' | '3',
     netlifyApiKey?: string,
     siteName?: string,
-    force?: boolean
+    force?: boolean,
+    customImages?: any,
+    galleryImages?: any
   ) {
     try {
       const website = await storage.getWebsite(websiteId);
@@ -7727,6 +7738,13 @@ Generated on: ${new Date().toISOString()}`;
 
       let bd = normalizeBusinessDataForGeneration({ ...((website.businessData || {}) as any) });
       bd.publishTier = publishTier;
+      
+      if (customImages) {
+        bd.customImages = { ...(bd.customImages || {}), ...customImages };
+      }
+      if (galleryImages) {
+        bd.galleryImages = galleryImages;
+      }
       bd.generationStatus = 'generating';
       bd.generationProgress = 5;
       bd.generationError = null;
@@ -8062,7 +8080,7 @@ Generated on: ${new Date().toISOString()}`;
         bd.generationStatus = 'deploying';
         await storage.updateWebsite(websiteId, { businessData: bd });
 
-        await performNetlifyDeploy(websiteId, userId, netlifyApiKey, siteName, publishTier);
+        await performNetlifyDeploy(websiteId, userId, netlifyApiKey, siteName, publishTier, customImages, galleryImages);
       }
 
       bd.generationStatus = 'completed';
@@ -8105,7 +8123,11 @@ Generated on: ${new Date().toISOString()}`;
         bd.contentAiProvider = reqProvider;
       }
       
-      const publishTier = reqTier || bd.publishTier || '1';
+      const isPaidOrAdmin = req.user.role === 'paid' || req.user.role === 'admin';
+      let publishTier = reqTier || bd.publishTier || '1';
+      if (!isPaidOrAdmin) {
+        publishTier = '1';
+      }
       bd.publishTier = publishTier;
       bd.generationStatus = 'generating';
       bd.generationProgress = 0;
@@ -8184,7 +8206,7 @@ Generated on: ${new Date().toISOString()}`;
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      let { netlifyApiKey, siteName, publishTier: reqTier } = req.body;
+      let { netlifyApiKey, siteName, publishTier: reqTier, customImages, galleryImages } = req.body;
 
       const website = await storage.getWebsite(id);
       if (!website || website.userId !== userId) {
@@ -8202,10 +8224,25 @@ Generated on: ${new Date().toISOString()}`;
         return res.status(400).json({ error: "Netlify API token required. Verify it in the Deploy tab." });
       }
 
+      const isPaidOrAdmin = req.user.role === 'paid' || req.user.role === 'admin';
       const bd = { ...((website.businessData || {}) as any) };
-      const publishTier = reqTier || bd.publishTier || '1';
+      
+      let publishTier = reqTier || bd.publishTier || '1';
+      if (!isPaidOrAdmin) {
+        publishTier = '1';
+      }
       bd.publishTier = publishTier;
+      
+      // Update basic fields in storage (will strip base64 internally)
       await storage.updateWebsite(id, { businessData: bd });
+
+      // Merge client overrides in memory for subsequent checks & deploy
+      if (customImages) {
+        bd.customImages = { ...(bd.customImages || {}), ...customImages };
+      }
+      if (galleryImages) {
+        bd.galleryImages = galleryImages;
+      }
 
       const services = uniqueValues([
         ...parseDeployList(bd.services),
@@ -8246,12 +8283,12 @@ Generated on: ${new Date().toISOString()}`;
 
       if ((needsHomepage || needsDynamicPages) && hasApiKey) {
         // Trigger background generation and deploy
-        runBackgroundGenerationAndDeploy(id, userId, publishTier, netlifyApiKey, domain);
+        runBackgroundGenerationAndDeploy(id, userId, publishTier, netlifyApiKey, domain, false, customImages, galleryImages);
         return res.json({ success: true, status: 'generating', message: "Content generation running in background." });
       }
 
       // Fast path: deploy synchronously
-      const result = await performNetlifyDeploy(id, userId, netlifyApiKey, domain, publishTier);
+      const result = await performNetlifyDeploy(id, userId, netlifyApiKey, domain, publishTier, customImages, galleryImages);
       return res.json({ url: result.url, siteName: result.siteName, status: 'deployed' });
     } catch (err: any) {
       console.error("WD deploy error:", err);

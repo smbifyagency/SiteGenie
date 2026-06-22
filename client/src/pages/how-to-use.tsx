@@ -58,25 +58,29 @@ export default function HowToUsePage() {
     },
     {
       id: "gallery",
-      label: "📸 Images & Slider Toggle",
+      label: "📸 Images & Session Storage",
       icon: Image,
-      title: "Manage Gallery & Comparisons",
-      description: "Showcase your work and control before/after image sliders.",
+      title: "Manage Gallery & Session Storage",
+      description: "Understand how your images are stored in session memory to keep your website fast and lightweight.",
       steps: [
         {
-          title: "Add Showcase Images",
-          desc: "Upload photos of your team, equipment, or recent service jobs directly to the media gallery."
+          title: "In-Memory Image Upload",
+          desc: "To prevent database storage bloat and protect performance, uploaded custom background and gallery images are kept in browser session storage (sessionStorage) instead of the PostgreSQL database."
         },
         {
-          title: "Control Before/After Toggle",
-          desc: "In the editor's Images tab, you can turn off the 'Before/After Comparison' slider if you don't have comparison photos."
+          title: "Image Upload Warning Notification",
+          desc: "Upon uploading an image, an alert dialog and toast notification appear to inform you that the file is stored in session memory."
         },
         {
-          title: "Instant Preview Rebuild",
-          desc: "Toggling the Before/After option updates the live preview instantly so you can see the changes in real-time."
+          title: "Save Image Only Utility",
+          desc: "Within the warning dialog, you can click 'Save Image Only' to instantly download the optimized Base64 image file directly to your local computer for safekeeping."
+        },
+        {
+          title: "Dynamic Merging on Deploy",
+          desc: "When deploying to Netlify or generating ZIP packages, these session-memory images are automatically merged back into your website pages on-the-fly."
         }
       ],
-      tip: "If the before/after toggle is turned off, the gallery will neatly display static showcase images instead."
+      tip: "Logo and favicon files are very lightweight, so they are stored permanently in the database, while heavier page images remain in session memory."
     },
     {
       id: "blog",
@@ -102,25 +106,29 @@ export default function HowToUsePage() {
     },
     {
       id: "deploy",
-      label: "⚡ Publish & ZIP Download",
+      label: "⚡ Publish & Tier Limitations",
       icon: Rocket,
       title: "Deploy Live or Download Clean Code",
       description: "Get your site hosted on the web or download clean static files.",
       steps: [
         {
-          title: "Instant Netlify Deployment",
-          desc: "Deploy directly to our cloud servers. Your site gets a secure SSL certificate, CDN, and goes live in under 60 seconds."
+          title: "Free User Website Cap",
+          desc: "Free plan accounts are limited to exactly 1 active website. To build a new website, you must delete your existing site or upgrade to Pro."
         },
         {
-          title: "Download ZIP Option",
-          desc: "Paid plan users (Tier 2/3) can download the entire website's static HTML/CSS/JS code as a ZIP archive."
+          title: "Tier 1: Core Pages Only Limit",
+          desc: "Free users are restricted to publishing Core Pages Only (Tier 1). Complete Site (Tier 2) and local SEO Matrix Pages (Tier 3) are locked in the publisher."
         },
         {
-          title: "Google Search Console Ready",
-          desc: "Sitemaps (`sitemap.xml`, `sitemap.html`) are fully compiled with clean static extensions to prevent crawler indexation issues."
+          title: "Pro Plan Tiers (Tiers 2 & 3)",
+          desc: "Paid/Pro plan users unlock full-site generation, keyword-targeted location/service matrices, unlimited websites, and raw ZIP downloads."
+        },
+        {
+          title: "Netlify 1-Click Publishing",
+          desc: "Simply enter your Netlify API token in the Deploy Tab and SiteGenie compiles and deploys your website live in under 30 seconds."
         }
       ],
-      tip: "Paid tier users have access to both options: 1-click Netlify deploy or download files for manual hosting."
+      tip: "Vibe/Pro plan accounts unlock unlimited website building, full dynamic service page generation, and code exports."
     }
   ];
 

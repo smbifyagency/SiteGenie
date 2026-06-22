@@ -245,6 +245,63 @@ function websiteFromDB(row: any): any {
     return base;
 }
 
+function cleanGeneratedHtmlOfBase64(generatedHtml: any): any {
+    if (!generatedHtml) return generatedHtml;
+    
+    // If it's a string, replace base64 images with a placeholder
+    if (typeof generatedHtml === "string") {
+        return generatedHtml.replace(
+            /data:image\/(jpeg|png|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=\n]+/g,
+            "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'><rect width='1' height='1' fill='%23cccccc'/></svg>"
+        );
+    }
+    
+    // If it's an object/dictionary of files, clean each file
+    if (typeof generatedHtml === "object") {
+        const cleaned: any = {};
+        for (const [key, val] of Object.entries(generatedHtml)) {
+            if (typeof val === "string") {
+                cleaned[key] = val.replace(
+                    /data:image\/(jpeg|png|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=\n]+/g,
+                    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'><rect width='1' height='1' fill='%23cccccc'/></svg>"
+                );
+            } else {
+                cleaned[key] = val;
+            }
+        }
+        return cleaned;
+    }
+    
+    return generatedHtml;
+}
+
+function stripBase64Images(obj: any): any {
+    if (!obj) return obj;
+    if (typeof obj === "string") {
+        if (obj.startsWith("data:image/")) {
+            return "";
+        }
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(item => stripBase64Images(item));
+    }
+    if (typeof obj === "object") {
+        const cleaned: any = {};
+        for (const [key, val] of Object.entries(obj)) {
+            if (key === "logoUrl" || key === "faviconUrl") {
+                cleaned[key] = val;
+            } else if (typeof val === "string" && val.startsWith("data:image/")) {
+                cleaned[key] = "";
+            } else {
+                cleaned[key] = stripBase64Images(val);
+            }
+        }
+        return cleaned;
+    }
+    return obj;
+}
+
 /**
  * Build the DB row object from the app schema fields accepted by
  * createWebsite / updateWebsite.
@@ -280,29 +337,25 @@ function websiteToDB(website: any): any {
     // customFiles → stored in generated_html column (JSONB)
     if (website.customFiles !== undefined) {
         if (website.customFiles) {
-            if (typeof website.customFiles === "string") {
+            let files = website.customFiles;
+            if (typeof files === "string") {
                 try {
-                    row.generated_html = JSON.parse(website.customFiles);
-                } catch {
-                    row.generated_html = website.customFiles;
-                }
-            } else {
-                row.generated_html = website.customFiles;
+                    files = JSON.parse(files);
+                } catch {}
             }
+            row.generated_html = cleanGeneratedHtmlOfBase64(files);
         } else {
             row.generated_html = null;
         }
     } else if (website.generatedHtml !== undefined) {
         if (website.generatedHtml) {
-            if (typeof website.generatedHtml === "string") {
+            let html = website.generatedHtml;
+            if (typeof html === "string") {
                 try {
-                    row.generated_html = JSON.parse(website.generatedHtml);
-                } catch {
-                    row.generated_html = website.generatedHtml;
-                }
-            } else {
-                row.generated_html = website.generatedHtml;
+                    html = JSON.parse(html);
+                } catch {}
             }
+            row.generated_html = cleanGeneratedHtmlOfBase64(html);
         } else {
             row.generated_html = null;
         }
@@ -328,7 +381,15 @@ function websiteToDB(website: any): any {
     if (website.isActive !== undefined) extras._isActive = website.isActive;
 
     if (website.businessData !== undefined || Object.keys(extras).length > 0) {
-        row.business_data = { ...existingBD, ...extras };
+        const mergedBD = { ...existingBD, ...extras };
+        // Safety: strip base64 image data from business_data customImages & galleryImages
+        if (mergedBD.customImages) {
+            mergedBD.customImages = stripBase64Images(mergedBD.customImages);
+        }
+        if (mergedBD.galleryImages) {
+            mergedBD.galleryImages = stripBase64Images(mergedBD.galleryImages);
+        }
+        row.business_data = mergedBD;
     }
 
     return row;

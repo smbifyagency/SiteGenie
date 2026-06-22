@@ -17,7 +17,7 @@ import {
   ArrowLeft, Save, Rocket, Image as ImageIcon, RefreshCw,
   Loader2, ExternalLink, CheckCircle2, ChevronDown, ChevronUp,
   Globe, Phone, MapPin, FileText, Layers, Edit3, Sparkles, Wand2, Trash2,
-  Eye, X as XIcon, ImagePlus, PenSquare, Plus, UploadCloud
+  Eye, X as XIcon, ImagePlus, PenSquare, Plus, UploadCloud, Download, Crown
 } from "lucide-react";
 import { generateLocalServiceWebsite, enrichBusinessDataForCategory } from "../lib/local-service-engine";
 import { getCategoryConfig } from "../lib/local-service-categories";
@@ -35,6 +35,15 @@ import {
 } from "../lib/water-damage-generator";
 import { VisualEditor } from "@/components/visual-editor";
 import { PublishWebsiteModal } from "@/components/publish-website-modal";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 type AIProvider = "openai" | "gemini" | "openrouter" | "deepseek";
 
@@ -465,11 +474,54 @@ function siteDataToWDData(data: WDSiteData): Record<string, any> {
   } as any;
 }
 
+function stripBase64Images(obj: any): any {
+  if (!obj) return obj;
+  if (typeof obj === "string") {
+    if (obj.startsWith("data:image/")) {
+      return "";
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => stripBase64Images(item));
+  }
+  if (typeof obj === "object") {
+    const cleaned: any = {};
+    for (const [key, val] of Object.entries(obj)) {
+      if (key === "logoUrl" || key === "faviconUrl") {
+        cleaned[key] = val;
+      } else if (typeof val === "string" && val.startsWith("data:image/")) {
+        cleaned[key] = "";
+      } else {
+        cleaned[key] = stripBase64Images(val);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
+function downloadBase64Image(base64DataUrl: string, defaultName = "image.jpg") {
+  const link = document.createElement("a");
+  link.href = base64DataUrl;
+  link.download = defaultName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 /** Strip deployment-only fields before storing businessData — these live in
  *  their own DB columns (deployed_url, status) and must not pollute businessData. */
 function stripDeploymentFields(data: WDSiteData) {
   const { netlifyUrl: _a, deploymentStatus: _b, netlifyApiKey: _c, ...rest } = data as any;
-  return rest;
+  const copy = { ...rest };
+  if (copy.customImages) {
+    copy.customImages = stripBase64Images(copy.customImages);
+  }
+  if (copy.galleryImages) {
+    copy.galleryImages = stripBase64Images(copy.galleryImages);
+  }
+  return copy;
 }
 
 // ─── Blog Writer Section ────────────────────────────────────────────────────
@@ -1105,6 +1157,11 @@ export default function WDSiteEditor() {
   const [location, setLocation] = useLocation();
   const websiteId = location.split("/dashboard/wd-editor/")[1]?.split("/")[0] || null;
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isPaid = user?.role === "paid" || user?.role === "admin" || user?.id === "admin";
+  const [showImageMemoryDialog, setShowImageMemoryDialog] = useState(false);
+  const [lastUploadedImageSrc, setLastUploadedImageSrc] = useState<string>("");
+  const [lastUploadedImageName, setLastUploadedImageName] = useState<string>("");
 
   const [siteData, setSiteData] = useState<WDSiteData | null>(null);
   const [categoryId, setCategoryId] = useState("water-damage");
@@ -1325,6 +1382,45 @@ export default function WDSiteEditor() {
       const data = await res.json();
 
       const bd = data.businessData || {};
+
+      // Load saved images from sessionStorage
+      let savedImages: any = null;
+      try {
+        const stored = sessionStorage.getItem(`site-images-${websiteId}`);
+        if (stored) {
+          savedImages = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.error("Failed to parse sessionStorage images:", e);
+      }
+
+      // Merge customImages:
+      const mergedCustomImages = { ...(bd.customImages || {}) };
+      if (savedImages?.customImages) {
+        for (const [k, v] of Object.entries(savedImages.customImages)) {
+          if (v) mergedCustomImages[k] = v as string;
+        }
+      }
+
+      // Merge galleryImages:
+      const mergedGalleryImages = (Array.isArray(bd.galleryImages) ? bd.galleryImages : []).map((img: any) => {
+        if (img.pairId && img.type && savedImages?.galleryImages) {
+          const match = savedImages.galleryImages.find((sImg: any) => sImg.pairId === img.pairId && sImg.type === img.type);
+          if (match?.src) {
+            return { ...img, src: match.src };
+          }
+        }
+        if (img.type === 'normal' && savedImages?.galleryImages) {
+          const dbNormals = (bd.galleryImages as any[]).filter(dbImg => dbImg.type === 'normal');
+          const normals = (savedImages.galleryImages as any[]).filter(sImg => sImg.type === 'normal');
+          const normalIdx = dbNormals.indexOf(img);
+          if (normalIdx !== -1 && normals[normalIdx]?.src) {
+            return { ...img, src: normals[normalIdx].src };
+          }
+        }
+        return img;
+      });
+
       const loadedSiteData: WDSiteData = {
         id: data.id,
         categoryId: bd.categoryId || data.template || "water-damage",
@@ -1354,7 +1450,7 @@ export default function WDSiteEditor() {
         homepageContent: bd.homepageContent,
         serviceContent: bd.serviceContent,
         locationContent: bd.locationContent,
-        customImages: bd.customImages || {},
+        customImages: mergedCustomImages,
         publishChecklist: bd.publishChecklist || {},
         facebookUrl: bd.facebookUrl || "",
         instagramUrl: bd.instagramUrl || "",
@@ -1364,7 +1460,7 @@ export default function WDSiteEditor() {
         floatingCTA: bd.floatingCTA || "call",
         whatsappNumber: bd.whatsappNumber || "",
         businessHours: bd.businessHours || "",
-        galleryImages: Array.isArray(bd.galleryImages) ? bd.galleryImages : [],
+        galleryImages: mergedGalleryImages,
         blogPosts: Array.isArray(bd.blogPosts) ? bd.blogPosts : [],
         generateBlog: bd.generateBlog ?? (Array.isArray(bd.blogPosts) && bd.blogPosts.length > 0),
         logoUrl: bd.logoUrl,
@@ -1381,7 +1477,7 @@ export default function WDSiteEditor() {
         _aiServiceDescs: bd._aiServiceDescs,
         enableMatrixPages: bd.enableMatrixPages ?? false,
         hideBeforeAfter: bd.hideBeforeAfter ?? false,
-        publishTier: bd.publishTier || '1',
+        publishTier: (!isPaid && bd.publishTier !== '1') ? '1' : (bd.publishTier || '1'),
         generationStatus: bd.generationStatus || 'idle',
         generationProgress: bd.generationProgress ?? 0,
         generationError: bd.generationError || null,
@@ -2071,6 +2167,18 @@ export default function WDSiteEditor() {
     });
   }
 
+  function saveImagesToSession(id: string | null, data: WDSiteData) {
+    if (!id) return;
+    try {
+      sessionStorage.setItem(`site-images-${id}`, JSON.stringify({
+        customImages: data.customImages || {},
+        galleryImages: data.galleryImages || []
+      }));
+    } catch (e) {
+      console.warn("sessionStorage quota exceeded or error saving:", e);
+    }
+  }
+
   async function handleCustomImageUpload(key: string, file: File) {
     try {
       const dataUrl = await compressImage(file, 1200, 1200, 0.85);
@@ -2092,8 +2200,14 @@ export default function WDSiteEditor() {
         : current;
 
       setSiteData(nextData);
-      if (nextData) rebuildPreview(nextData);
-      toast({ title: "Image updated", description: "Preview refreshed. Will be saved automatically." });
+      if (nextData) {
+        saveImagesToSession(websiteId, nextData);
+        rebuildPreview(nextData);
+      }
+      setLastUploadedImageSrc(dataUrl);
+      setLastUploadedImageName(file.name || `${key}.jpg`);
+      setShowImageMemoryDialog(true);
+      toast({ title: "Image stored in session", description: "This image is kept in session memory and will be deployed to Netlify." });
     } catch (err) {
       toast({ title: "Upload failed", description: String(err), variant: "destructive" });
     }
@@ -2105,6 +2219,7 @@ export default function WDSiteEditor() {
       const updated = { ...prev.customImages };
       delete updated[key];
       const next = { ...prev, customImages: updated };
+      saveImagesToSession(websiteId, next);
       rebuildPreview(next);
       return next;
     });
@@ -2147,6 +2262,7 @@ export default function WDSiteEditor() {
     setSiteData(prev => {
       if (!prev) return prev;
       const next = { ...prev, galleryImages: (prev.galleryImages || []).filter(i => i.pairId !== pairId) };
+      saveImagesToSession(websiteId, next);
       rebuildPreview(next);
       return next;
     });
@@ -2164,8 +2280,12 @@ export default function WDSiteEditor() {
         ),
       };
       setSiteData(next);
+      saveImagesToSession(websiteId, next);
       rebuildPreview(next);
-      toast({ title: `${type === 'before' ? 'Before' : 'After'} image updated` });
+      setLastUploadedImageSrc(src);
+      setLastUploadedImageName(file.name || `${type}.jpg`);
+      setShowImageMemoryDialog(true);
+      toast({ title: "Image stored in session", description: "This image is kept in session memory and will be deployed to Netlify." });
     } catch (err) {
       toast({ title: "Upload failed", description: String(err), variant: "destructive" });
     }
@@ -2193,6 +2313,7 @@ export default function WDSiteEditor() {
       const toRemove = normals[index];
       if (!toRemove) return prev;
       const next = { ...prev, galleryImages: (prev.galleryImages || []).filter(i => i !== toRemove) };
+      saveImagesToSession(websiteId, next);
       rebuildPreview(next);
       return next;
     });
@@ -2202,6 +2323,7 @@ export default function WDSiteEditor() {
     setSiteData(prev => {
       if (!prev) return prev;
       const next = { ...prev, galleryImages: (prev.galleryImages || []).filter(i => i.type !== 'normal') };
+      saveImagesToSession(websiteId, next);
       rebuildPreview(next);
       toast({ title: "Cleared all gallery photos" });
       return next;
@@ -2223,8 +2345,12 @@ export default function WDSiteEditor() {
         ),
       };
       setSiteData(next);
+      saveImagesToSession(websiteId, next);
       rebuildPreview(next);
-      toast({ title: "Gallery photo updated" });
+      setLastUploadedImageSrc(src);
+      setLastUploadedImageName(file.name || `gallery-${index}.jpg`);
+      setShowImageMemoryDialog(true);
+      toast({ title: "Image stored in session", description: "This image is kept in session memory and will be deployed to Netlify." });
     } catch (err) {
       toast({ title: "Upload failed", description: String(err), variant: "destructive" });
     }
@@ -2255,8 +2381,9 @@ export default function WDSiteEditor() {
           galleryImages: nextImages.slice(0, 50),
         };
         setSiteData(next);
+        saveImagesToSession(websiteId, next);
         rebuildPreview(next);
-        toast({ title: `Successfully uploaded ${filesArray.length} gallery photos!` });
+        toast({ title: "Images stored in session", description: `Successfully uploaded ${filesArray.length} gallery photos to session memory.` });
       }
     }
   }
@@ -3005,19 +3132,31 @@ export default function WDSiteEditor() {
                       { id: '3', label: 'Matrix Pages', desc: 'Core + Service × Location pages.' }
                     ].map(t => {
                       const isSelected = (siteData.publishTier || '1') === t.id;
+                      const isDisabled = !isPaid && t.id !== '1';
                       return (
                         <button
                           key={t.id}
                           type="button"
-                          onClick={() => updateField("publishTier", t.id)}
+                          disabled={isDisabled}
+                          onClick={() => {
+                            if (isDisabled) return;
+                            updateField("publishTier", t.id);
+                          }}
                           className={`flex flex-col text-left p-2.5 rounded-lg border transition-all duration-200 ${
                             isSelected
                               ? 'border-[#7C3AED] bg-[#7C3AED]/10 text-white'
+                              : isDisabled
+                              ? 'border-gray-905 bg-gray-950/40 text-gray-600 cursor-not-allowed opacity-50'
                               : 'border-gray-800 bg-gray-900/60 hover:border-gray-700 text-gray-400 hover:text-gray-300'
                           }`}
                         >
                           <div className="flex items-center justify-between w-full">
-                            <span className="text-xs font-semibold">{t.label}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold">{t.label}</span>
+                              {isDisabled && (
+                                <Crown className="w-3 h-3 text-amber-400 shrink-0" />
+                              )}
+                            </div>
                             <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
                               isSelected ? 'border-[#7C3AED] bg-[#7C3AED]' : 'border-gray-600'
                             }`}>
@@ -3025,6 +3164,9 @@ export default function WDSiteEditor() {
                             </div>
                           </div>
                           <span className="text-[10px] text-gray-500 leading-normal mt-0.5">{t.desc}</span>
+                          {isDisabled && (
+                            <span className="text-[9px] text-amber-400 mt-1">Upgrade to Pro required</span>
+                          )}
                         </button>
                       );
                     })}
@@ -4371,6 +4513,8 @@ export default function WDSiteEditor() {
         publishTier={siteData.publishTier || '1'}
         onChangePublishTier={(tier) => updateField("publishTier", tier)}
         onDownloadZip={downloadZip}
+        customImages={siteData.customImages}
+        galleryImages={siteData.galleryImages}
         onBeforeDeploy={async () => {
           const currentSiteData = siteDataRef.current;
           if (!currentSiteData) {
@@ -4386,6 +4530,45 @@ export default function WDSiteEditor() {
           updateField("urlSlug", siteName);
         }}
       />
+
+      {/* Image Session Memory Warning Dialog */}
+      <Dialog open={showImageMemoryDialog} onOpenChange={setShowImageMemoryDialog}>
+        <DialogContent className="sm:max-w-md bg-gray-950 border-gray-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <ImageIcon className="w-5 h-5 text-[#7C3AED]" />
+              Image Stored in Session Memory
+            </DialogTitle>
+            <DialogDescription className="text-gray-400 text-xs mt-2 leading-relaxed">
+              To optimize database performance and space, custom uploaded images (excluding logo and favicon) are stored in your browser session memory.
+              <br /><br />
+              These images will be bundled when you publish to Netlify or download the ZIP, but they will not be saved permanently in the database.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex sm:justify-between items-center gap-2 mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (lastUploadedImageSrc) {
+                  downloadBase64Image(lastUploadedImageSrc, lastUploadedImageName);
+                }
+              }}
+              className="border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800 text-xs flex items-center"
+            >
+              <Download className="w-3.5 h-3.5 mr-1" />
+              Save Image Only
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setShowImageMemoryDialog(false)}
+              className="bg-[#7C3AED] hover:bg-[#9333EA] text-white text-xs px-4"
+            >
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
