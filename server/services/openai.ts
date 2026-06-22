@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-// Using gpt-4.1 (latest OpenAI model, April 2025)
+// Using gpt-4o (latest OpenAI model)
 let openai: OpenAI | null = null;
 
 // Initialize OpenAI client only when API key is available
@@ -231,7 +231,7 @@ Return a JSON object with these exact fields:
 }`;
 
     const response = await getOpenAIClient(customApiKey).chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -506,7 +506,7 @@ HUMANIZED CONTENT REQUIREMENTS:
 Return JSON with: seoHeading1, seoContent1, seoHeading2, seoContent2, seoHeading3, seoContent3, seoHeading4, seoContent4, seoHeading5, seoContent5, seoHeading6, seoContent6`;
 
     const response = await client.chat.completions.create({
-      model: "gpt-4.1", // Using gpt-4.1 (latest OpenAI model, April 2025)
+      model: "gpt-4o", // Using gpt-4o (latest OpenAI model)
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -582,7 +582,7 @@ HUMANIZED FAQ REQUIREMENTS:
 Return JSON with: faqQuestion1, faqAnswer1, faqQuestion2, faqAnswer2, ... through faqQuestion10, faqAnswer10`;
 
     const response = await client.chat.completions.create({
-      model: "gpt-4.1", // Using gpt-4.1 (latest OpenAI model, April 2025)
+      model: "gpt-4o", // Using gpt-4o (latest OpenAI model)
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -654,7 +654,7 @@ Create realistic, diverse customer names.
 Return JSON: testimonial1Name, testimonial1Text, testimonial1Rating (5), testimonial2Name, testimonial2Text, testimonial2Rating (5), testimonial3Name, testimonial3Text, testimonial3Rating (5)`;
 
     const response = await client.chat.completions.create({
-      model: "gpt-4.1", // Using gpt-4.1 (latest OpenAI model, April 2025)
+      model: "gpt-4o", // Using gpt-4o (latest OpenAI model)
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -728,7 +728,7 @@ Return the response as a JSON object with these exact fields:
 }`;
 
     const response = await client.chat.completions.create({
-      model: "gpt-4.1",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -795,7 +795,7 @@ Return the response as a JSON object with these exact fields:
 }`;
 
     const response = await client.chat.completions.create({
-      model: "gpt-4.1",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         {

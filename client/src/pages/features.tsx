@@ -14,7 +14,7 @@ const featureGroups = [
             {
                 icon: Bot,
                 title: "Multi-Model AI Support",
-                description: "Choose between OpenAI GPT-4.1, Google Gemini 2.5, or OpenRouter. Bring your own keys — zero platform markup.",
+                description: "Choose between OpenAI GPT-4o, Google Gemini 2.5, or OpenRouter. Bring your own keys — zero platform markup.",
             },
             {
                 icon: FileText,

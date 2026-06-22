@@ -12,7 +12,7 @@ export async function generateWithOpenRouter(prompt: string, apiKey: string): Pr
         "X-Title": "SiteGenie"
       },
       body: JSON.stringify({
-        model: "openai/gpt-4.1",
+        model: "openai/gpt-4o",
         messages: [
           { role: "user", content: prompt }
         ],
@@ -118,7 +118,7 @@ Return a JSON object with these exact fields:
         "X-Title": "SiteGenie"
       },
       body: JSON.stringify({
-        model: "openai/gpt-4.1",
+        model: "openai/gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }

@@ -729,7 +729,7 @@ async function generateStructuredJsonWithProvider(
       const OpenAI = (await import("openai")).default;
       const openai = new OpenAI({ apiKey });
       const response = await openai.chat.completions.create({
-        model: "gpt-4.1-mini",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: MASTER_SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
@@ -752,7 +752,7 @@ async function generateStructuredJsonWithProvider(
           "X-Title": "SiteGenie",
         },
         body: JSON.stringify({
-          model: "openai/gpt-4.1-mini",
+          model: "openai/gpt-4o-mini",
           messages: [
             { role: "system", content: MASTER_SYSTEM_PROMPT },
             { role: "user", content: userPrompt },
@@ -6162,7 +6162,7 @@ Generated on: ${new Date().toISOString()}`;
 
       // Test the connection with a minimal request
       const response = await testClient.chat.completions.create({
-        model: "gpt-4.1-mini",
+        model: "gpt-4o-mini",
         messages: [{ role: "user", content: "Test connection" }],
         max_tokens: 5
       });
@@ -6252,7 +6252,7 @@ Generated on: ${new Date().toISOString()}`;
           "X-Title": "SiteGenie"
         },
         body: JSON.stringify({
-          model: "openai/gpt-4.1-mini",
+          model: "openai/gpt-4o-mini",
           messages: [{ role: "user", content: "Test connection" }],
           max_tokens: 5
         })

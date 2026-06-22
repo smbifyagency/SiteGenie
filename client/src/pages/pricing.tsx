@@ -89,7 +89,7 @@ const faqs = [
     },
     {
         question: "What AI models are supported?",
-        answer: "SiteGenie supports OpenAI GPT-4.1, GPT-4.1 Mini, Google Gemini 2.5 Flash, and 100+ models via OpenRouter. You can use any combination with your own API keys.",
+        answer: "SiteGenie supports OpenAI GPT-4o, GPT-4o Mini, Google Gemini 2.5 Flash, and 100+ models via OpenRouter. You can use any combination with your own API keys.",
     },
     {
         question: "Do you offer custom enterprise plans?",

@@ -431,7 +431,7 @@ export function BlogGenerationInterface({
                     </SelectTrigger>
                     <SelectContent>
                       {availableAIProviders.length === 0 && <SelectItem value="">No AI providers configured</SelectItem>}
-                      {availableAIProviders.includes('openai') && <SelectItem value="openai">OpenAI (GPT-4.1) {aiProvider === 'openai' && '✓'}</SelectItem>}
+                      {availableAIProviders.includes('openai') && <SelectItem value="openai">OpenAI (GPT-4o) {aiProvider === 'openai' && '✓'}</SelectItem>}
                       {availableAIProviders.includes('gemini') && <SelectItem value="gemini">Google Gemini {aiProvider === 'gemini' && '✓'}</SelectItem>}
                       {availableAIProviders.includes('openrouter') && <SelectItem value="openrouter">OpenRouter {aiProvider === 'openrouter' && '✓'}</SelectItem>}
                       {availableAIProviders.includes('deepseek') && <SelectItem value="deepseek">DeepSeek {aiProvider === 'deepseek' && '✓'}</SelectItem>}

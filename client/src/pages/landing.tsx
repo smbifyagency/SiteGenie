@@ -322,7 +322,7 @@ export default function Landing() {
                     <div className="flex-1"><div className="h-2.5 bg-blue-200 rounded-full w-1/2" /><div className="h-2 bg-gray-200 rounded-full w-1/3 mt-1.5" /></div>
                   </div>
                   {[
-                    { name: "OpenAI GPT-4.1", status: "Connected", color: "green" },
+                    { name: "OpenAI GPT-4o", status: "Connected", color: "green" },
                     { name: "Google Gemini 2.5", status: "Connected", color: "green" },
                     { name: "Netlify Token", status: "Active", color: "blue" },
                   ].map((api, i) => (
@@ -570,8 +570,8 @@ export default function Landing() {
 
           <div className="flex flex-wrap gap-5 justify-center mb-10">
             {[
-              { icon: "🟢", name: "OpenAI GPT-4.1", desc: "Most powerful AI model" },
-              { icon: "🟢", name: "GPT-4.1 Mini", desc: "Fast & cost-effective" },
+              { icon: "🟢", name: "OpenAI GPT-4o", desc: "Most powerful AI model" },
+              { icon: "🟢", name: "GPT-4o Mini", desc: "Fast & cost-effective" },
               { icon: "🔵", name: "Google Gemini 2.5", desc: "Google's latest AI" },
               { icon: "🟣", name: "OpenRouter", desc: "100+ models via one key" },
             ].map((m) => (
@@ -660,7 +660,7 @@ export default function Landing() {
                   ["AI Blog Posts (Bulk)", "✅ Bulk generate", "❌ No", "❌ No"],
                   ["One-Click Deploy", "✅ Netlify", "⚠️ Platform-only", "❌ Manual"],
                   ["200+ Categories", "✅ Yes", "❌ No", "❌ No"],
-                  ["Multi-AI Model", "✅ GPT-4.1, Gemini 2.5", "❌ No", "❌ No"],
+                  ["Multi-AI Model", "✅ GPT-4o, Gemini 2.5", "❌ No", "❌ No"],
                   ["Static HTML (Fast)", "✅ Pure HTML/CSS", "❌ Dynamic", "❌ PHP"],
                   ["Admin Dashboard", "✅ Full suite", "❌ No", "⚠️ Limited"],
                   ["Bring Your Own API Key", "✅ Yes", "❌ No", "❌ No"],

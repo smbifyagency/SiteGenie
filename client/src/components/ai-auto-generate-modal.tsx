@@ -377,7 +377,7 @@ export function AIAutoGenerateModal({ open, onOpenChange, onGenerate }: AIAutoGe
                 <SelectContent>
                   <SelectItem value="openai" disabled={!hasOpenAI}>
                     <div className="flex items-center gap-2">
-                      <span>OpenAI (GPT-4.1)</span>
+                      <span>OpenAI (GPT-4o)</span>
                       {hasOpenAI ? (
                         <CheckCircle className="h-3 w-3 text-green-600" />
                       ) : (

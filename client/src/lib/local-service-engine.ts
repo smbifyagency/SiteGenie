@@ -158,15 +158,20 @@ export function generateLocalServiceWebsite(
   })) : createLoremFaqs());
   d._seoBody      = d._aiSeoBody      ?? (c.seoBody ? interpolate(c.seoBody, enriched) : createLoremSeoBody());
 
-  if (c.processH2) d._processH2 = c.processH2;
-  if (c.faqH2)     d._faqH2     = c.faqH2;
+  if (c.processH2) d._processH2 = interpolate(c.processH2, enriched);
+  if (c.faqH2)     d._faqH2     = interpolate(c.faqH2, enriched);
 
   // Inject category-specific placeholder images so each vertical gets
   // visually relevant defaults before the user uploads their own photos.
   const categoryImages = CATEGORY_PLACEHOLDER_IMAGES[categoryId];
   if (categoryImages) d._categoryImages = categoryImages;
 
-  return generateWaterDamageWebsite(enriched, domain) as Record<string, string>;
+  const files = generateWaterDamageWebsite(enriched, domain) as Record<string, string>;
+  const processed: Record<string, string> = {};
+  for (const [filename, content] of Object.entries(files)) {
+    processed[filename] = interpolate(content, enriched);
+  }
+  return processed;
 }
 
 /**
@@ -229,8 +234,8 @@ export function enrichBusinessDataForCategory(
   })) : createLoremFaqs());
   enriched._seoBody      = enriched._aiSeoBody      ?? (c.seoBody ? interpolate(c.seoBody, enriched) : createLoremSeoBody());
 
-  if (c.processH2) enriched._processH2 = c.processH2;
-  if (c.faqH2)     enriched._faqH2     = c.faqH2;
+  if (c.processH2) enriched._processH2 = interpolate(c.processH2, enriched);
+  if (c.faqH2)     enriched._faqH2     = interpolate(c.faqH2, enriched);
 
   const categoryImages = CATEGORY_PLACEHOLDER_IMAGES[categoryId];
   if (categoryImages) enriched._categoryImages = categoryImages;
