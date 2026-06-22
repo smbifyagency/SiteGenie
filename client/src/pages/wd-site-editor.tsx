@@ -1465,7 +1465,9 @@ export default function WDSiteEditor() {
                 processed[filename] = content
                   .replace(/\{\{city\}\}/g, loadedSiteData.city || '')
                   .replace(/\{\{state\}\}/g, loadedSiteData.state || '')
-                  .replace(/\{\{businessName\}\}/g, loadedSiteData.businessName || '');
+                  .replace(/\{\{businessName\}\}/g, loadedSiteData.businessName || '')
+                  .replace(/class="footer-inner has-two-cols"/g, 'class="footer-inner has-two-cols" style="grid-template-columns: 1fr 1fr;"')
+                  .replace(/class="footer-phone"/g, 'class="footer-phone" style="white-space: nowrap;"');
               } else {
                 processed[filename] = content as string;
               }

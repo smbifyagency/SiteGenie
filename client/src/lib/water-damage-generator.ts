@@ -2238,7 +2238,7 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
 }
 
 .footer-inner.has-two-cols {
-  grid-template-columns: 1.2fr 1fr;
+  grid-template-columns: 1fr 1fr;
 }
 
 .footer-biz-name {
@@ -2322,6 +2322,7 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   font-size: 1.4rem;
   font-weight: 800;
   margin-bottom: 0.5rem;
+  white-space: nowrap;
 }
 
 .footer-social {

@@ -7577,6 +7577,15 @@ Generated on: ${new Date().toISOString()}`;
       }
     }
 
+    // Ensure footer style fixes are applied to all HTML files (both custom overrides and generated pages)
+    for (const [filename, content] of Object.entries(files)) {
+      if (typeof content === 'string' && filename.endsWith('.html')) {
+        (files as any)[filename] = content
+          .replace(/class="footer-inner has-two-cols"/g, 'class="footer-inner has-two-cols" style="grid-template-columns: 1fr 1fr;"')
+          .replace(/class="footer-phone"/g, 'class="footer-phone" style="white-space: nowrap;"');
+      }
+    }
+
     // Apply customImages
     if (bd.customImages && typeof bd.customImages === 'object' && Object.keys(bd.customImages).length > 0) {
       for (const [filename, html] of Object.entries(files as Record<string, string>)) {
