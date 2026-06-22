@@ -7568,6 +7568,17 @@ Generated on: ${new Date().toISOString()}`;
       if (!skipCustomFiles) {
         for (const [filename, content] of Object.entries(storedCustomFiles)) {
           if (typeof content === 'string' && filename.endsWith('.html') && !seoProtectedFiles.has(filename)) {
+            // Do not let stale/legacy customFiles overwrite dynamic pages (blog, services, locations, matrix)
+            // to ensure changes in blog posts, service lists, or location lists propagate correctly.
+            const isDynamicPage = filename === 'blog.html' || 
+                                  filename.startsWith('blog/') || 
+                                  filename.startsWith('services/') || 
+                                  filename.startsWith('locations/') || 
+                                  filename.startsWith('matrix/');
+            if (isDynamicPage) {
+              continue;
+            }
+
             (files as any)[filename] = content
               .replace(/\{\{city\}\}/g, generatorData.city || '')
               .replace(/\{\{state\}\}/g, generatorData.state || '')

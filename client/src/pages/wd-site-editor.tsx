@@ -1458,17 +1458,36 @@ export default function WDSiteEditor() {
             setGeneratedFiles(data.customFiles);
           }
         } else {
-          const processed: Record<string, string> = {};
+          // Generate fresh base files first to ensure dynamic pages (blog, services, locations, matrix) are up to date
+          let baseFiles: Record<string, string> = {};
+          try {
+            const domain = (loadedSiteData as any).urlSlug || ((loadedSiteData.businessName || 'my-site').toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+            baseFiles = generateLocalServiceWebsite(catId, siteDataToWDData(loadedSiteData as any), domain);
+          } catch (e) {
+            console.error('Failed to generate base files client-side:', e);
+          }
+
+          const processed: Record<string, string> = { ...baseFiles };
           if (data.customFiles) {
             for (const [filename, content] of Object.entries(data.customFiles)) {
               if (typeof content === 'string' && filename.endsWith('.html')) {
+                // Skip overwriting dynamic pages with legacy/stale custom files
+                const isDynamicPage = filename === 'blog.html' || 
+                                      filename.startsWith('blog/') || 
+                                      filename.startsWith('services/') || 
+                                      filename.startsWith('locations/') || 
+                                      filename.startsWith('matrix/');
+                if (isDynamicPage) {
+                  continue;
+                }
+
                 processed[filename] = content
                   .replace(/\{\{city\}\}/g, loadedSiteData.city || '')
                   .replace(/\{\{state\}\}/g, loadedSiteData.state || '')
                   .replace(/\{\{businessName\}\}/g, loadedSiteData.businessName || '')
                   .replace(/class="footer-inner has-two-cols"/g, 'class="footer-inner has-two-cols" style="grid-template-columns: 1fr 1fr;"')
                   .replace(/class="footer-phone"/g, 'class="footer-phone" style="white-space: nowrap;"');
-              } else {
+              } else if (!processed[filename]) {
                 processed[filename] = content as string;
               }
             }
