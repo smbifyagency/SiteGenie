@@ -664,8 +664,8 @@ export class MemStorage implements IStorage {
       };
     }
 
-    // Free users: hard cap at 3 (override any legacy DB value > 3)
-    const limit = Math.min(user.websiteLimit ?? 3, 3);
+    // Free users: hard cap at 1 (override any legacy DB value > 1)
+    const limit = Math.min(user.websiteLimit ?? 1, 1);
     const created = user.websitesCreated ?? 0;
     const remaining = limit - created;
     return {
@@ -1162,8 +1162,8 @@ export class DatabaseStorage implements IStorage {
     const currentWebsites = await db.select().from(websites).where(eq(websites.userId, userId));
     const currentCount = currentWebsites.length;
 
-    // Free users: hard cap at 3 (override any legacy DB value > 3)
-    const limit = Math.min(user.websiteLimit ?? 3, 3);
+    // Free users: hard cap at 1 (override any legacy DB value > 1)
+    const limit = Math.min(user.websiteLimit ?? 1, 1);
     const remaining = limit - currentCount;
     return {
       canCreate: remaining > 0,

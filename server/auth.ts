@@ -438,7 +438,7 @@ export async function setupAuth(app: Express) {
           profileImageUrl: sbUser.user_metadata?.avatar_url || sbUser.user_metadata?.picture || null,
           role: "user",
           isActive: true,
-          websiteLimit: 3,
+          websiteLimit: 1,
         });
       }
 
@@ -486,7 +486,7 @@ export async function setupAuth(app: Express) {
             lastName: lastName || null,
             role: "user",
             isActive: true,
-            websiteLimit: 3,
+            websiteLimit: 1,
           } as any);
         } catch (createErr) {
           console.error("Auto-create user failed:", createErr);
@@ -549,7 +549,7 @@ export async function setupAuth(app: Express) {
               lastName: reqUser.lastName || null,
               role: reqUser.role || "user",
               isActive: true,
-              websiteLimit: 3,
+              websiteLimit: 1,
             } as any);
           } catch (e) {
             // Might fail if email conflict, that's ok
@@ -565,7 +565,7 @@ export async function setupAuth(app: Express) {
             firstName: reqUser?.firstName || null,
             lastName: reqUser?.lastName || null,
             role: "user",
-            websiteLimit: 3,
+            websiteLimit: 1,
             websitesCreated: 0,
             isActive: true,
             lastLoginAt: new Date()

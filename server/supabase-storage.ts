@@ -79,7 +79,7 @@ export class SupabaseUsersStorage {
             last_name: user.lastName || null,
             profile_image_url: user.profileImageUrl || null,
             role: user.role || "user",
-            website_limit: user.websiteLimit ?? 3,
+            website_limit: user.websiteLimit ?? 1,
             websites_created: user.websitesCreated ?? 0,
             is_active: user.isActive ?? true,
             expiry_date: user.expiryDate || null,
@@ -148,15 +148,15 @@ export class SupabaseUsersStorage {
 
     async checkWebsiteLimit(userId: string) {
         const user = await this.getUser(userId);
-        if (!user) return { canCreate: true, remaining: 3, limit: 3 };
+        if (!user) return { canCreate: true, remaining: 1, limit: 1 };
 
         // Paid and admin users get unlimited
         if (user.role === "paid" || user.role === "admin" || userId === "admin") {
             return { canCreate: true, remaining: 999999, limit: 999999 };
         }
 
-        // Free users: hard cap at 3 (override any legacy DB value > 3)
-        const limit = Math.min(user.websiteLimit ?? 3, 3);
+        // Free users: hard cap at 1 (override any legacy DB value > 1)
+        const limit = Math.min(user.websiteLimit ?? 1, 1);
 
         // Fetch actual current count from websites table instead of lifetime created count
         const { count, error } = await getClient()

@@ -45,7 +45,7 @@ async function run() {
             lastName: "User",
             role: "manual_user",
             isActive: true,
-            websiteLimit: 3
+            websiteLimit: 1
         });
         console.log(`✅ Created Normal Test user: ${normalEmail} (password: ${normalPassword})`);
     } else {
