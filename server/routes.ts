@@ -7568,7 +7568,10 @@ Generated on: ${new Date().toISOString()}`;
       if (!skipCustomFiles) {
         for (const [filename, content] of Object.entries(storedCustomFiles)) {
           if (typeof content === 'string' && filename.endsWith('.html') && !seoProtectedFiles.has(filename)) {
-            (files as any)[filename] = content;
+            (files as any)[filename] = content
+              .replace(/\{\{city\}\}/g, generatorData.city || '')
+              .replace(/\{\{state\}\}/g, generatorData.state || '')
+              .replace(/\{\{businessName\}\}/g, generatorData.businessName || '');
           }
         }
       }

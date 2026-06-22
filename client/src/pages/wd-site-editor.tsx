@@ -1458,7 +1458,20 @@ export default function WDSiteEditor() {
             setGeneratedFiles(data.customFiles);
           }
         } else {
-          setGeneratedFiles(data.customFiles);
+          const processed: Record<string, string> = {};
+          if (data.customFiles) {
+            for (const [filename, content] of Object.entries(data.customFiles)) {
+              if (typeof content === 'string' && filename.endsWith('.html')) {
+                processed[filename] = content
+                  .replace(/\{\{city\}\}/g, loadedSiteData.city || '')
+                  .replace(/\{\{state\}\}/g, loadedSiteData.state || '')
+                  .replace(/\{\{businessName\}\}/g, loadedSiteData.businessName || '');
+              } else {
+                processed[filename] = content as string;
+              }
+            }
+          }
+          setGeneratedFiles(processed);
         }
         // Do NOT set visualEditorOverrides from customFiles — generatedFiles already contains
         // them and overrides should only be set during live Visual Editor edits this session.
