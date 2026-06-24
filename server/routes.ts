@@ -183,7 +183,7 @@ const extractNetlifySiteName = (website: any): string => {
 };
 
 const getNetlifySiteConflictMessage = (siteName: string): string =>
-  `The Netlify site name "${siteName}.netlify.app" is already in use. Choose a different site name.`;
+  `The Netlify site name "${siteName}.netlify.app" is already registered on Netlify under a different account/team. Please connect the Netlify token that owns this site, or choose a different site name.`;
 
 const getNetlifyErrorMessage = (error: unknown, siteName?: string): string => {
   const rawMessage = error instanceof Error ? error.message : String(error ?? "");

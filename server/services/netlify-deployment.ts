@@ -169,7 +169,7 @@ export async function deployToNetlify(
       } else if (error.message.includes('403') || error.message.includes('forbidden')) {
         throw new Error('Access denied. Please ensure your Netlify token has the required permissions.');
       } else if (error.message.includes('422') || error.message.includes('site name')) {
-        throw new Error('Site name is already taken or invalid. Please choose a different name.');
+        throw new Error(`The Netlify site name "${siteName}.netlify.app" is already registered on Netlify under a different account/team. Please connect the Netlify token that owns this site, or choose a different site name.`);
       }
     }
 
