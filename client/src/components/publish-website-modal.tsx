@@ -83,6 +83,7 @@ interface PublishWebsiteModalProps {
   onDownloadZip?: () => Promise<void> | void;
   customImages?: Record<string, string>;
   galleryImages?: any[];
+  skipDomainCheck?: boolean;
 }
 
 export function PublishWebsiteModal({
@@ -104,6 +105,7 @@ export function PublishWebsiteModal({
   onDownloadZip,
   customImages,
   galleryImages,
+  skipDomainCheck = false,
 }: PublishWebsiteModalProps) {
   const { user } = useAuth();
   const isPaid = (user as any)?.role === "paid" || (user as any)?.role === "admin" || (user as any)?.id === "admin";
@@ -205,8 +207,13 @@ export function PublishWebsiteModal({
     setStep(checklistNeedsAttention ? "checklist" : "api-check");
     setApiConnected(null);
     setIsCheckingApi(false);
-    setSlugAvailable(null);
-    setSlugMessage("");
+    if (skipDomainCheck) {
+      setSlugAvailable(true);
+      setSlugMessage("");
+    } else {
+      setSlugAvailable(null);
+      setSlugMessage("");
+    }
     setIsEditingUrl(false);
     setDeployProgress(0);
     setDeployPhase("");
@@ -248,7 +255,7 @@ export function PublishWebsiteModal({
         }
       })
       .catch(err => console.error("Error fetching status on load:", err));
-  }, [checklistNeedsAttention, currentSiteName, defaultSlug, isOpen, isRedeploy, publishTier, websiteId, startPollingStatus, isPaid]);
+  }, [checklistNeedsAttention, currentSiteName, defaultSlug, isOpen, isRedeploy, publishTier, websiteId, startPollingStatus, isPaid, skipDomainCheck]);
 
   useEffect(() => {
     if (!isPaid && localTier !== '1') {
@@ -268,6 +275,10 @@ export function PublishWebsiteModal({
         setApiConnected(true);
         setIsCheckingApi(false);
         setStep("url-search");
+        if (skipDomainCheck) {
+          setSlugAvailable(true);
+          setSlugMessage("");
+        }
         return;
       }
 
@@ -278,8 +289,11 @@ export function PublishWebsiteModal({
         if (data?.apiKey) {
           setApiConnected(true);
           setStep("url-search");
-          // If redeploy, auto-set availability for current site
-          if (isRedeploy && currentSiteName) {
+          // If redeploy or skip check, auto-set availability for current site
+          if (skipDomainCheck) {
+            setSlugAvailable(true);
+            setSlugMessage("");
+          } else if (isRedeploy && currentSiteName) {
             setSlugAvailable(true);
             setSlugMessage(`"${currentSiteName}.netlify.app" is your current site. Ready to update.`);
           }
@@ -303,6 +317,7 @@ export function PublishWebsiteModal({
 
   // ── Debounced slug availability check ──────────────────────────────
   const checkSlugAvailability = useCallback(async (slugToCheck: string) => {
+    if (skipDomainCheck) return;
     const cleaned = slugToCheck.toLowerCase().replace(/[^a-z0-9-]/g, "").trim();
     if (!cleaned || cleaned.length < 3) {
       setSlugAvailable(null);
@@ -342,10 +357,11 @@ export function PublishWebsiteModal({
     } finally {
       setIsCheckingSlug(false);
     }
-  }, [websiteId]);
+  }, [websiteId, skipDomainCheck]);
 
   // Debounce slug input
   function handleSlugChange(value: string) {
+    if (skipDomainCheck) return;
     const cleaned = value.toLowerCase().replace(/[^a-z0-9-]/g, "");
     setSlug(cleaned);
     setSlugAvailable(null);
@@ -451,7 +467,7 @@ export function PublishWebsiteModal({
         <DialogHeader className="p-5 pb-3 border-b border-gray-800">
           <DialogTitle className="flex items-center gap-2 text-white">
             <Rocket className="w-5 h-5 text-[#7C3AED]" />
-            {isRedeploy ? "Update Website" : "Publish Website"}
+            {skipDomainCheck ? "Update Website" : isRedeploy ? "Redeploy / Publish Website" : "Publish Website"}
           </DialogTitle>
           {/* Step indicator */}
           <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -609,14 +625,16 @@ export function PublishWebsiteModal({
                         {deployedUrl}
                       </a>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsEditingUrl(true)}
-                      className="text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 whitespace-nowrap"
-                    >
-                      Change URL
-                    </Button>
+                    {!skipDomainCheck && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsEditingUrl(true)}
+                        className="text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 whitespace-nowrap"
+                      >
+                        Change URL
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
@@ -640,7 +658,7 @@ export function PublishWebsiteModal({
               {/* URL input */}
               <div className="space-y-2">
                 <Label className="text-xs text-gray-400 font-medium">
-                  {isRedeploy && !isEditingUrl ? "Deploy to" : "Choose your site URL"}
+                  {skipDomainCheck || (isRedeploy && !isEditingUrl) ? "Deploy to" : "Choose your site URL"}
                 </Label>
                 <div className="flex items-center gap-0">
                   <div className="flex-1 relative">
@@ -648,7 +666,7 @@ export function PublishWebsiteModal({
                     <Input
                       value={slug}
                       onChange={(e) => handleSlugChange(e.target.value)}
-                      disabled={isRedeploy && !isEditingUrl}
+                      disabled={skipDomainCheck || (isRedeploy && !isEditingUrl)}
                       className="bg-gray-900 border-gray-700 text-white pl-9 pr-3 h-10 rounded-r-none border-r-0 focus-visible:ring-[#7C3AED]"
                       placeholder="your-business-name"
                       autoFocus={!isRedeploy}
@@ -764,7 +782,7 @@ export function PublishWebsiteModal({
                 className="w-full bg-[#7C3AED] hover:bg-[#9333EA] text-white font-medium h-11 text-sm disabled:opacity-40"
               >
                 <Rocket className="w-4 h-4 mr-2" />
-                {isRedeploy ? "Update Website" : "Publish Website"}
+                {skipDomainCheck ? "Update Website" : isRedeploy ? "Redeploy / Publish Website" : "Publish Website"}
               </Button>
 
               {/* Download ZIP button (only for paid users - Tier 2 and Tier 3) */}

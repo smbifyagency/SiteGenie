@@ -668,6 +668,10 @@ export function FullPagePreview({
           isOpen={showNetlifyModal}
           onClose={() => setShowNetlifyModal(false)}
           websiteId={websiteId}
+          defaultSlug={(businessData as any).urlSlug || ""}
+          deployedUrl={(businessData as any).netlifyUrl}
+          currentSiteName={(businessData as any).netlifySiteId}
+          skipDomainCheck={Boolean((businessData as any).netlifyUrl)}
           onDeploySuccess={(url, siteName) => {
             // handled by the modal
           }}

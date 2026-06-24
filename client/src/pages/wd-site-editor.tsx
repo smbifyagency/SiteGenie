@@ -1194,6 +1194,7 @@ export default function WDSiteEditor() {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [showVisualEditor, setShowVisualEditor] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [skipDomainCheck, setSkipDomainCheck] = useState(false);
   const [visualEditorOverrides, setVisualEditorOverrides] = useState<Record<string, string>>({});
   const [aiProvider, setAiProvider] = useState<AIProvider>("gemini");
   const [availableAIProviders, setAvailableAIProviders] = useState<AIProvider[]>([]);
@@ -2554,10 +2555,48 @@ export default function WDSiteEditor() {
               </Button>
             </a>
           )}
-          <Button size="sm" onClick={() => setShowPublishModal(true)} disabled={isDeploying} className="bg-[#7C3AED] hover:bg-[#9333EA] text-black font-bold shadow-md">
-            {isDeploying ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Rocket className="w-4 h-4 mr-1" />}
-            {isDeploying ? "Deploying..." : deployedUrl ? "Update to Netlify" : "Publish to Netlify"}
-          </Button>
+          {deployedUrl ? (
+            <>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setSkipDomainCheck(true);
+                  setShowPublishModal(true);
+                }}
+                disabled={isDeploying}
+                className="bg-green-600 hover:bg-green-700 text-white font-bold shadow-md"
+              >
+                {isDeploying ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Rocket className="w-4 h-4 mr-1" />}
+                {isDeploying ? "Deploying..." : "Update Website"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSkipDomainCheck(false);
+                  setShowPublishModal(true);
+                }}
+                disabled={isDeploying}
+                className="border-[#7C3AED] text-[#7C3AED] hover:bg-[#7C3AED]/10 font-bold shadow-md"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Fresh Deployment
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => {
+                setSkipDomainCheck(false);
+                setShowPublishModal(true);
+              }}
+              disabled={isDeploying}
+              className="bg-[#7C3AED] hover:bg-[#9333EA] text-black font-bold shadow-md"
+            >
+              {isDeploying ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Rocket className="w-4 h-4 mr-1" />}
+              {isDeploying ? "Deploying..." : "Publish Website"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -4284,6 +4323,7 @@ export default function WDSiteEditor() {
               <Button
                 onClick={() => {
                   if (desiredSlug) updateField("urlSlug", desiredSlug);
+                  setSkipDomainCheck(false);
                   setShowPublishModal(true);
                 }}
                 disabled={isDeploying || !netlifyToken || !tokenValid}
@@ -4292,7 +4332,7 @@ export default function WDSiteEditor() {
                 {isDeploying ? (
                   <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Deploying...</>
                 ) : (
-                  <><Rocket className="w-4 h-4 mr-2" /> {deployedUrl ? "Update to Netlify" : "Publish to Netlify"}</>
+                  <><Rocket className="w-4 h-4 mr-2" /> {deployedUrl ? "Configure / Redeploy" : "Publish to Netlify"}</>
                 )}
               </Button>
               {!netlifyToken && <p className="text-xs text-center text-gray-600">Enter and verify your Netlify token to publish</p>}
@@ -4515,6 +4555,7 @@ export default function WDSiteEditor() {
         onDownloadZip={downloadZip}
         customImages={siteData.customImages}
         galleryImages={siteData.galleryImages}
+        skipDomainCheck={skipDomainCheck}
         onBeforeDeploy={async () => {
           const currentSiteData = siteDataRef.current;
           if (!currentSiteData) {
