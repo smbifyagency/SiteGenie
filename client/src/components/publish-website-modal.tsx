@@ -106,14 +106,17 @@ const compressBase64Image = (base64Str: string, maxWidth = 900, maxHeight = 900,
 
 async function compressDeploymentPayload(
   customImages: Record<string, string> | undefined,
-  galleryImages: any[] | undefined
+  galleryImages: any[] | undefined,
+  maxWidth = 800,
+  maxHeight = 800,
+  quality = 0.7
 ): Promise<{ customImages?: Record<string, string>; galleryImages?: any[] }> {
   const compressedCustom: Record<string, string> = {};
   if (customImages) {
     for (const [key, val] of Object.entries(customImages)) {
       if (val && val.startsWith("data:image/")) {
         try {
-          compressedCustom[key] = await compressBase64Image(val, 900, 900, 0.75);
+          compressedCustom[key] = await compressBase64Image(val, maxWidth, maxHeight, quality);
         } catch (e) {
           console.warn(`[PublishWebsiteModal] Failed to compress customImage ${key}:`, e);
           compressedCustom[key] = val;
@@ -130,7 +133,7 @@ async function compressDeploymentPayload(
       galleryImages.map(async (img) => {
         if (img && img.src && img.src.startsWith("data:image/")) {
           try {
-            const compressedSrc = await compressBase64Image(img.src, 900, 900, 0.75);
+            const compressedSrc = await compressBase64Image(img.src, maxWidth, maxHeight, quality);
             return { ...img, src: compressedSrc };
           } catch (e) {
             console.warn("[PublishWebsiteModal] Failed to compress galleryImage:", e);
@@ -500,8 +503,70 @@ export function PublishWebsiteModal({
 
       setDeployProgress(15);
       setDeployPhase("Compressing custom images...");
-      const { customImages: compressedCustom, galleryImages: compressedGallery } = 
-        await compressDeploymentPayload(customImages, galleryImages);
+
+      // Multi-pass payload compression to fit under Vercel's 4.5MB request limit
+      let currentWidth = 800;
+      let currentQuality = 0.70;
+      let compressedCustom = customImages;
+      let compressedGallery = galleryImages;
+
+      // Pass 1: Try default compression (800x800, 0.70 quality)
+      const p1 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
+      compressedCustom = p1.customImages;
+      compressedGallery = p1.galleryImages;
+
+      let payload = {
+        netlifyApiKey: netlifyToken || "masked",
+        siteName: targetSlug,
+        publishTier: localTier,
+        customImages: compressedCustom,
+        galleryImages: compressedGallery,
+      };
+
+      let payloadSize = new Blob([JSON.stringify(payload)]).size;
+      console.log(`[PublishWebsiteModal] Payload size after Pass 1: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
+
+      // Pass 2: If size exceeds 3.8 MB, compress more aggressively (600x600, 0.65 quality)
+      if (payloadSize > 3.8 * 1024 * 1024) {
+        setDeployPhase("Compressing images further (Pass 2)...");
+        currentWidth = 600;
+        currentQuality = 0.65;
+        const p2 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
+        compressedCustom = p2.customImages;
+        compressedGallery = p2.galleryImages;
+        payload.customImages = compressedCustom;
+        payload.galleryImages = compressedGallery;
+        payloadSize = new Blob([JSON.stringify(payload)]).size;
+        console.log(`[PublishWebsiteModal] Payload size after Pass 2: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
+      }
+
+      // Pass 3: If size still exceeds 3.8 MB, compress even more aggressively (450x450, 0.50 quality)
+      if (payloadSize > 3.8 * 1024 * 1024) {
+        setDeployPhase("Compressing images further (Pass 3)...");
+        currentWidth = 450;
+        currentQuality = 0.50;
+        const p3 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
+        compressedCustom = p3.customImages;
+        compressedGallery = p3.galleryImages;
+        payload.customImages = compressedCustom;
+        payload.galleryImages = compressedGallery;
+        payloadSize = new Blob([JSON.stringify(payload)]).size;
+        console.log(`[PublishWebsiteModal] Payload size after Pass 3: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
+      }
+
+      // Pass 4: If size still exceeds 3.8 MB, compress extremely aggressively (300x300, 0.40 quality)
+      if (payloadSize > 3.8 * 1024 * 1024) {
+        setDeployPhase("Compressing images further (Pass 4)...");
+        currentWidth = 300;
+        currentQuality = 0.40;
+        const p4 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
+        compressedCustom = p4.customImages;
+        compressedGallery = p4.galleryImages;
+        payload.customImages = compressedCustom;
+        payload.galleryImages = compressedGallery;
+        payloadSize = new Blob([JSON.stringify(payload)]).size;
+        console.log(`[PublishWebsiteModal] Payload size after Pass 4: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
+      }
 
       setDeployProgress(20);
       setDeployPhase("Initiating deployment...");
