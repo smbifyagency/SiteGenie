@@ -94,7 +94,7 @@ const compressBase64Image = (base64Str: string, maxWidth = 900, maxHeight = 900,
       }
 
       ctx.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      const dataUrl = canvas.toDataURL("image/webp", quality);
       resolve(dataUrl);
     };
     img.onerror = () => {
@@ -505,12 +505,12 @@ export function PublishWebsiteModal({
       setDeployPhase("Compressing custom images...");
 
       // Multi-pass payload compression to fit under Vercel's 4.5MB request limit
-      let currentWidth = 800;
-      let currentQuality = 0.70;
+      let currentWidth = 1000;
+      let currentQuality = 0.80;
       let compressedCustom = customImages;
       let compressedGallery = galleryImages;
 
-      // Pass 1: Try default compression (800x800, 0.70 quality)
+      // Pass 1: Try default WebP compression (1000x1000, 0.80 quality)
       const p1 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
       compressedCustom = p1.customImages;
       compressedGallery = p1.galleryImages;
@@ -526,11 +526,11 @@ export function PublishWebsiteModal({
       let payloadSize = new Blob([JSON.stringify(payload)]).size;
       console.log(`[PublishWebsiteModal] Payload size after Pass 1: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
 
-      // Pass 2: If size exceeds 3.8 MB, compress more aggressively (600x600, 0.65 quality)
+      // Pass 2: If size exceeds 3.8 MB, compress more (800x800, 0.75 quality WebP)
       if (payloadSize > 3.8 * 1024 * 1024) {
         setDeployPhase("Compressing images further (Pass 2)...");
-        currentWidth = 600;
-        currentQuality = 0.65;
+        currentWidth = 800;
+        currentQuality = 0.75;
         const p2 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
         compressedCustom = p2.customImages;
         compressedGallery = p2.galleryImages;
@@ -540,11 +540,11 @@ export function PublishWebsiteModal({
         console.log(`[PublishWebsiteModal] Payload size after Pass 2: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
       }
 
-      // Pass 3: If size still exceeds 3.8 MB, compress even more aggressively (450x450, 0.50 quality)
+      // Pass 3: If size still exceeds 3.8 MB, compress further (600x600, 0.70 quality WebP)
       if (payloadSize > 3.8 * 1024 * 1024) {
         setDeployPhase("Compressing images further (Pass 3)...");
-        currentWidth = 450;
-        currentQuality = 0.50;
+        currentWidth = 600;
+        currentQuality = 0.70;
         const p3 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
         compressedCustom = p3.customImages;
         compressedGallery = p3.galleryImages;
@@ -554,11 +554,11 @@ export function PublishWebsiteModal({
         console.log(`[PublishWebsiteModal] Payload size after Pass 3: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
       }
 
-      // Pass 4: If size still exceeds 3.8 MB, compress extremely aggressively (300x300, 0.40 quality)
+      // Pass 4: If size still exceeds 3.8 MB, compress aggressively (450x450, 0.60 quality WebP)
       if (payloadSize > 3.8 * 1024 * 1024) {
         setDeployPhase("Compressing images further (Pass 4)...");
-        currentWidth = 300;
-        currentQuality = 0.40;
+        currentWidth = 450;
+        currentQuality = 0.60;
         const p4 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
         compressedCustom = p4.customImages;
         compressedGallery = p4.galleryImages;

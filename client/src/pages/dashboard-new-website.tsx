@@ -70,7 +70,7 @@ const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 
         }
 
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        const dataUrl = canvas.toDataURL("image/webp", quality);
         resolve(dataUrl);
       };
       img.onerror = () => resolve(e.target?.result as string);
