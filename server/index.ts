@@ -11,8 +11,8 @@ import { setupVite, serveStatic, log } from "./vite.js";
 
 const app = express();
 // Increase body size limits for large website data and blog posts
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ extended: false, limit: '200mb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
