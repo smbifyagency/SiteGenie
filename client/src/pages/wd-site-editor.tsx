@@ -2182,7 +2182,7 @@ export default function WDSiteEditor() {
 
   async function handleCustomImageUpload(key: string, file: File) {
     try {
-      const dataUrl = await compressImage(file, 1200, 1200, 0.85);
+      const dataUrl = await compressImage(file, 1000, 1000, 0.75);
       const current = siteDataRef.current || siteData;
       const updatedImages = { ...(current?.customImages || {}), [key]: dataUrl };
       const blogSlug = getBlogImageSlugFromKey(key);
@@ -2271,7 +2271,7 @@ export default function WDSiteEditor() {
 
   async function uploadPairImage(pairId: string, type: 'before' | 'after', file: File) {
     try {
-      const src = await compressImage(file, 1200, 1200, 0.85);
+      const src = await compressImage(file, 1000, 1000, 0.75);
       const current = siteDataRef.current || siteData;
       if (!current) return;
       const next = {
@@ -2333,7 +2333,7 @@ export default function WDSiteEditor() {
 
   async function uploadGalleryPhoto(index: number, file: File) {
     try {
-      const src = await compressImage(file, 1200, 1200, 0.85);
+      const src = await compressImage(file, 1000, 1000, 0.75);
       const current = siteDataRef.current || siteData;
       if (!current) return;
       const normals = (current.galleryImages || []).filter(i => i.type === 'normal');
@@ -2369,7 +2369,7 @@ export default function WDSiteEditor() {
 
     for (const file of filesArray) {
       try {
-        const src = await compressImage(file, 1200, 1200, 0.85);
+        const src = await compressImage(file, 1000, 1000, 0.75);
         nextImages.push({ src, alt: 'Gallery photo', type: 'normal' });
       } catch (err) {
         console.error("Bulk upload image compression error:", err);

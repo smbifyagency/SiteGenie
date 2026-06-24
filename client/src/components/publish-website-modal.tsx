@@ -55,6 +55,99 @@ const modalStepLabels: Record<Exclude<PublishStep, "success">, string> = {
   deploying: "Deploy",
 };
 
+const compressBase64Image = (base64Str: string, maxWidth = 900, maxHeight = 900, quality = 0.75): Promise<string> => {
+  return new Promise((resolve) => {
+    if (!base64Str || typeof base64Str !== 'string' || !base64Str.startsWith("data:image/")) {
+      resolve(base64Str);
+      return;
+    }
+    if (base64Str.startsWith("data:image/svg+xml")) {
+      resolve(base64Str);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(base64Str);
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      resolve(dataUrl);
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+    img.src = base64Str;
+  });
+};
+
+async function compressDeploymentPayload(
+  customImages: Record<string, string> | undefined,
+  galleryImages: any[] | undefined
+): Promise<{ customImages?: Record<string, string>; galleryImages?: any[] }> {
+  const compressedCustom: Record<string, string> = {};
+  if (customImages) {
+    for (const [key, val] of Object.entries(customImages)) {
+      if (val && val.startsWith("data:image/")) {
+        try {
+          compressedCustom[key] = await compressBase64Image(val, 900, 900, 0.75);
+        } catch (e) {
+          console.warn(`[PublishWebsiteModal] Failed to compress customImage ${key}:`, e);
+          compressedCustom[key] = val;
+        }
+      } else {
+        compressedCustom[key] = val;
+      }
+    }
+  }
+
+  let compressedGallery: any[] = [];
+  if (galleryImages && Array.isArray(galleryImages)) {
+    compressedGallery = await Promise.all(
+      galleryImages.map(async (img) => {
+        if (img && img.src && img.src.startsWith("data:image/")) {
+          try {
+            const compressedSrc = await compressBase64Image(img.src, 900, 900, 0.75);
+            return { ...img, src: compressedSrc };
+          } catch (e) {
+            console.warn("[PublishWebsiteModal] Failed to compress galleryImage:", e);
+            return img;
+          }
+        }
+        return img;
+      })
+    );
+  }
+
+  return {
+    customImages: customImages ? compressedCustom : undefined,
+    galleryImages: galleryImages ? compressedGallery : undefined
+  };
+}
+
 interface PublishWebsiteModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -406,6 +499,11 @@ export function PublishWebsiteModal({
       console.log("[PublishWebsiteModal] onBeforeDeploy completed.");
 
       setDeployProgress(15);
+      setDeployPhase("Compressing custom images...");
+      const { customImages: compressedCustom, galleryImages: compressedGallery } = 
+        await compressDeploymentPayload(customImages, galleryImages);
+
+      setDeployProgress(20);
       setDeployPhase("Initiating deployment...");
 
       // Phase 2: Deploy via the WD endpoint
@@ -418,8 +516,8 @@ export function PublishWebsiteModal({
           netlifyApiKey: netlifyToken || "masked",
           siteName: targetSlug,
           publishTier: localTier,
-          customImages,
-          galleryImages,
+          customImages: compressedCustom,
+          galleryImages: compressedGallery,
         }),
       });
 
