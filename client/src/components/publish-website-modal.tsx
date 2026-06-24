@@ -184,6 +184,18 @@ export function PublishWebsiteModal({
     }, 2000);
   }, [websiteId, slug, resultSiteName, currentSiteName, defaultSlug, onDeploySuccess, toast]);
 
+  const wasOpenRef = useRef(false);
+  const hasAutoDeployedRef = useRef(false);
+
+  // ── Auto-deploy on open if skipDomainCheck is active ────────────────
+  useEffect(() => {
+    const targetSlug = slug || currentSiteName || defaultSlug;
+    if (isOpen && skipDomainCheck && !hasAutoDeployedRef.current && targetSlug) {
+      hasAutoDeployedRef.current = true;
+      void handlePublish();
+    }
+  }, [isOpen, skipDomainCheck, slug, currentSiteName, defaultSlug]);
+
   useEffect(() => {
     return () => {
       if (pollingIntervalRef.current) {
@@ -192,25 +204,23 @@ export function PublishWebsiteModal({
     };
   }, []);
 
-  const wasOpenRef = useRef(false);
-
   // ── Initialize on open ─────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) {
       wasOpenRef.current = false;
+      hasAutoDeployedRef.current = false;
       return;
     }
     if (wasOpenRef.current) return;
     wasOpenRef.current = true;
 
     // Reset state
-    setStep(checklistNeedsAttention ? "checklist" : "api-check");
-    setApiConnected(null);
-    setIsCheckingApi(false);
     if (skipDomainCheck) {
+      setStep("deploying");
       setSlugAvailable(true);
       setSlugMessage("");
     } else {
+      setStep(checklistNeedsAttention ? "checklist" : "api-check");
       setSlugAvailable(null);
       setSlugMessage("");
     }
@@ -233,7 +243,7 @@ export function PublishWebsiteModal({
 
     if (checkTimeoutRef.current) clearTimeout(checkTimeoutRef.current);
 
-    if (!checklistNeedsAttention) {
+    if (!skipDomainCheck && !checklistNeedsAttention) {
       void checkApiStatus();
     }
 
@@ -377,8 +387,9 @@ export function PublishWebsiteModal({
 
   // ── Deploy ────────────────────────────────────────────────────────
   async function handlePublish() {
-    console.log("[PublishWebsiteModal] handlePublish clicked.", { slug, slugAvailable, localTier });
-    if (!slug || slugAvailable !== true) {
+    const targetSlug = slug || currentSiteName || defaultSlug;
+    console.log("[PublishWebsiteModal] handlePublish clicked.", { targetSlug, slug, slugAvailable, localTier, skipDomainCheck });
+    if (!targetSlug || (slugAvailable !== true && !skipDomainCheck)) {
       console.warn("[PublishWebsiteModal] Cannot publish: slug is empty or not available.");
       return;
     }
@@ -405,7 +416,7 @@ export function PublishWebsiteModal({
         credentials: "include",
         body: JSON.stringify({
           netlifyApiKey: netlifyToken || "masked",
-          siteName: slug,
+          siteName: targetSlug,
           publishTier: localTier,
           customImages,
           galleryImages,
@@ -427,13 +438,13 @@ export function PublishWebsiteModal({
         setDeployPhase("Generating website pages copy...");
         startPollingStatus();
       } else {
-        const url = data.url || `https://${slug}.netlify.app`;
+        const url = data.url || `https://${targetSlug}.netlify.app`;
         setDeployProgress(100);
         setDeployPhase("Website is live!");
         setResultUrl(url);
-        setResultSiteName(slug);
+        setResultSiteName(targetSlug);
         setStep("success");
-        onDeploySuccess?.(url, slug);
+        onDeploySuccess?.(url, targetSlug);
         setIsDeploying(false);
       }
     } catch (err) {
@@ -470,25 +481,27 @@ export function PublishWebsiteModal({
             {skipDomainCheck ? "Update Website" : isRedeploy ? "Redeploy / Publish Website" : "Publish Website"}
           </DialogTitle>
           {/* Step indicator */}
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            {modalSteps.map((modalStep, index) => {
-              const isActive = currentStepIndex === index;
-              const isPast = currentStepIndex > index;
-              return (
-                <div key={modalStep} className="flex items-center gap-2">
-                  {index > 0 && <div className={`w-8 h-px ${isPast || isActive ? 'bg-[#7C3AED]' : 'bg-gray-700'}`} />}
-                  <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-colors ${
-                    isActive ? 'bg-[#7C3AED]/20 text-[#7C3AED]' :
-                    isPast ? 'bg-green-900/30 text-green-400' :
-                    'bg-gray-800 text-gray-500'
-                  }`}>
-                    {isPast ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3 flex items-center justify-center text-[10px]">{index + 1}</span>}
-                    {modalStepLabels[modalStep as Exclude<PublishStep, "success">]}
+          {!skipDomainCheck && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {modalSteps.map((modalStep, index) => {
+                const isActive = currentStepIndex === index;
+                const isPast = currentStepIndex > index;
+                return (
+                  <div key={modalStep} className="flex items-center gap-2">
+                    {index > 0 && <div className={`w-8 h-px ${isPast || isActive ? 'bg-[#7C3AED]' : 'bg-gray-700'}`} />}
+                    <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-colors ${
+                      isActive ? 'bg-[#7C3AED]/20 text-[#7C3AED]' :
+                      isPast ? 'bg-green-900/30 text-green-400' :
+                      'bg-gray-800 text-gray-500'
+                    }`}>
+                      {isPast ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3 flex items-center justify-center text-[10px]">{index + 1}</span>}
+                      {modalStepLabels[modalStep as Exclude<PublishStep, "success">]}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </DialogHeader>
 
         {/* Content */}
@@ -822,34 +835,66 @@ export function PublishWebsiteModal({
             <div className="space-y-6 py-4">
               <div className="text-center">
                 <div className="relative inline-flex">
-                  <Loader2 className="w-12 h-12 animate-spin text-[#7C3AED]" />
+                  {isDeploying ? (
+                    <Loader2 className="w-12 h-12 animate-spin text-[#7C3AED]" />
+                  ) : (
+                    <XCircle className="w-12 h-12 text-red-500" />
+                  )}
                 </div>
-                <p className="text-sm font-medium text-white mt-4">{deployPhase}</p>
-                <p className="text-xs text-gray-500 mt-1">{slug}.netlify.app</p>
+                <p className="text-sm font-medium text-white mt-4">
+                  {isDeploying ? deployPhase : "Deployment Failed"}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">{(slug || currentSiteName || defaultSlug)}.netlify.app</p>
               </div>
 
-              <div className="space-y-2">
-                <Progress value={deployProgress} className="h-2 bg-gray-800" />
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>Deploying</span>
-                  <span>{deployProgress}%</span>
-                </div>
-              </div>
+              {isDeploying ? (
+                <>
+                  <div className="space-y-2">
+                    <Progress value={deployProgress} className="h-2 bg-gray-800" />
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>Deploying</span>
+                      <span>{deployProgress}%</span>
+                    </div>
+                  </div>
 
-              <div className="space-y-2 text-xs text-gray-600">
-                <div className={`flex items-center gap-2 ${deployProgress >= 15 ? 'text-gray-400' : ''}`}>
-                  {deployProgress >= 30 ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : deployProgress >= 15 ? <Loader2 className="w-3 h-3 animate-spin text-[#7C3AED]" /> : <span className="w-3 h-3" />}
-                  Generating website files
+                  <div className="space-y-2 text-xs text-gray-600">
+                    <div className={`flex items-center gap-2 ${deployProgress >= 15 ? 'text-gray-400' : ''}`}>
+                      {deployProgress >= 30 ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : deployProgress >= 15 ? <Loader2 className="w-3 h-3 animate-spin text-[#7C3AED]" /> : <span className="w-3 h-3" />}
+                      Generating website files
+                    </div>
+                    <div className={`flex items-center gap-2 ${deployProgress >= 30 ? 'text-gray-400' : ''}`}>
+                      {deployProgress >= 70 ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : deployProgress >= 30 ? <Loader2 className="w-3 h-3 animate-spin text-[#7C3AED]" /> : <span className="w-3 h-3" />}
+                      Uploading to Netlify
+                    </div>
+                    <div className={`flex items-center gap-2 ${deployProgress >= 85 ? 'text-gray-400' : ''}`}>
+                      {deployProgress >= 100 ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : deployProgress >= 85 ? <Loader2 className="w-3 h-3 animate-spin text-[#7C3AED]" /> : <span className="w-3 h-3" />}
+                      CDN propagation
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <Button
+                    onClick={handlePublish}
+                    className="w-full bg-[#7C3AED] hover:bg-[#9333EA] text-white font-medium"
+                  >
+                    Retry Deployment
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (skipDomainCheck) {
+                        handleClose();
+                      } else {
+                        setStep("url-search");
+                      }
+                    }}
+                    className="w-full border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800"
+                  >
+                    {skipDomainCheck ? "Close" : "Change Settings"}
+                  </Button>
                 </div>
-                <div className={`flex items-center gap-2 ${deployProgress >= 30 ? 'text-gray-400' : ''}`}>
-                  {deployProgress >= 70 ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : deployProgress >= 30 ? <Loader2 className="w-3 h-3 animate-spin text-[#7C3AED]" /> : <span className="w-3 h-3" />}
-                  Uploading to Netlify
-                </div>
-                <div className={`flex items-center gap-2 ${deployProgress >= 85 ? 'text-gray-400' : ''}`}>
-                  {deployProgress >= 100 ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : deployProgress >= 85 ? <Loader2 className="w-3 h-3 animate-spin text-[#7C3AED]" /> : <span className="w-3 h-3" />}
-                  CDN propagation
-                </div>
-              </div>
+              )}
             </div>
           )}
 
