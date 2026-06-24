@@ -45,13 +45,7 @@ export async function deployToNetlify(
     const netlify = new NetlifyAPI(accessToken);
 
     // Check if site already exists by name
-    let site;
-    try {
-      const sites = await netlify.listSites({ filter: 'all', per_page: 100 });
-      site = sites.find((s: any) => s.name === siteName);
-    } catch (error) {
-      console.log("Could not list sites, will create new one");
-    }
+    let site = await getSiteByName(accessToken, siteName);
 
     // Create site if it doesn't exist
     if (!site) {
@@ -196,6 +190,14 @@ export async function validateNetlifyToken(accessToken: string): Promise<boolean
 export async function getSiteByName(accessToken: string, siteName: string): Promise<any> {
   try {
     const netlify = new NetlifyAPI(accessToken);
+    // 1. Try direct domain get lookup
+    try {
+      const site = await netlify.getSite({ site_id: `${siteName}.netlify.app` });
+      if (site) return site;
+    } catch (err) {
+      console.warn(`[getSiteByName] Direct getSite by domain name failed, falling back:`, err);
+    }
+    // 2. Fallback to listSites
     const sites = await netlify.listSites({ filter: 'all', per_page: 100 });
     return sites.find((site: any) => site.name === siteName);
   } catch (error) {

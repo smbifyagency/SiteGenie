@@ -7683,13 +7683,44 @@ Generated on: ${new Date().toISOString()}`;
     const { NetlifyAPI } = await import('netlify');
     const netlify = new NetlifyAPI(netlifyApiKey);
     let site: any;
-    try {
-      const sites = await netlify.listSites({ filter: 'all', per_page: 100 });
-      site = (sites as any[]).find((s: any) => s.name === domain);
-    } catch { /* will create */ }
 
+    // 1. Try direct UUID lookup if we have it in DB
+    if (website.netlifySiteId) {
+      try {
+        console.log(`[performNetlifyDeploy] Attempting direct Netlify site lookup by ID: ${website.netlifySiteId}`);
+        site = await netlify.getSite({ site_id: website.netlifySiteId });
+      } catch (err) {
+        console.warn(`[performNetlifyDeploy] Netlify getSite by ID failed:`, err);
+      }
+    }
+
+    // 2. Try direct domain name lookup (Netlify API allows site name or domain as site_id)
     if (!site) {
       try {
+        console.log(`[performNetlifyDeploy] Attempting direct Netlify site lookup by domain: ${domain}.netlify.app`);
+        site = await netlify.getSite({ site_id: `${domain}.netlify.app` });
+      } catch (err) {
+        console.warn(`[performNetlifyDeploy] Netlify getSite by domain failed:`, err);
+      }
+    }
+
+    // 3. Fallback to listSites
+    if (!site) {
+      try {
+        console.log(`[performNetlifyDeploy] Falling back to Netlify listSites...`);
+        const sites = await netlify.listSites({ filter: 'all', per_page: 100 });
+        if (Array.isArray(sites)) {
+          site = sites.find((s: any) => s.name === domain);
+        }
+      } catch (err) {
+        console.warn(`[performNetlifyDeploy] Netlify listSites fallback failed:`, err);
+      }
+    }
+
+    // 4. Create site if it doesn't exist at all
+    if (!site) {
+      try {
+        console.log(`[performNetlifyDeploy] Site not found. Creating new Netlify site: ${domain}`);
         site = await netlify.createSite({ body: { name: domain } });
       } catch (error) {
         throw new Error(getNetlifyErrorMessage(error, domain));
@@ -7712,6 +7743,7 @@ Generated on: ${new Date().toISOString()}`;
     // Update DB
     await storage.updateWebsite(websiteId, {
       netlifyUrl: siteUrl,
+      netlifySiteId: site?.id || undefined,
       netlifyDeploymentStatus: 'deployed',
       lastDeployedAt: new Date(),
     });
