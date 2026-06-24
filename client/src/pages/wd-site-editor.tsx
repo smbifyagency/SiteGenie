@@ -1583,6 +1583,7 @@ export default function WDSiteEditor() {
                   .replace(/\{\{state\}\}/g, loadedSiteData.state || '')
                   .replace(/\{\{businessName\}\}/g, loadedSiteData.businessName || '')
                   .replace(/class="footer-inner has-two-cols"/g, 'class="footer-inner has-two-cols" style="grid-template-columns: 1fr 1fr;"')
+                  .replace(/class="footer-inner has-three-cols"/g, 'class="footer-inner has-three-cols"')
                   .replace(/class="footer-phone"/g, 'class="footer-phone" style="white-space: nowrap;"');
               } else if (!processed[filename]) {
                 processed[filename] = content as string;

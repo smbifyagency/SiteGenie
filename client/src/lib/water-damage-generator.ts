@@ -806,20 +806,11 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
   return `
   ${mapSection}
   <footer class="site-footer" role="contentinfo">
-    <div class="footer-inner ${showServicesLocations ? 'has-four-cols' : 'has-two-cols'}">
+    <div class="footer-inner ${showServicesLocations ? 'has-four-cols' : 'has-three-cols'}">
       <div class="footer-brand">
         ${brandBlock}
         <p class="footer-brand-desc">${data.businessName} provides professional ${kwBase(data.primaryKeyword).toLowerCase()} services in ${data.city}, ${data.state} and surrounding areas.</p>
         ${socialLinksHTML}
-        <div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:0.35rem 0.75rem;">
-          <a href="${prefix}about.html" style="color:#94a3b8;font-size:.85rem;">About</a>
-          <a href="${prefix}faq.html" style="color:#94a3b8;font-size:.85rem;">FAQ</a>
-          <a href="${prefix}gallery.html" style="color:#94a3b8;font-size:.85rem;">Gallery</a>
-          <a href="${prefix}calculator.html" style="color:#94a3b8;font-size:.85rem;">Calculators</a>
-          <a href="${prefix}contact.html" style="color:#94a3b8;font-size:.85rem;">Contact</a>
-          <a href="${prefix}privacy.html" style="color:#94a3b8;font-size:.85rem;">Privacy</a>
-          <a href="${prefix}terms.html" style="color:#94a3b8;font-size:.85rem;">Terms</a>
-        </div>
       </div>
 
       ${showServicesLocations ? `
@@ -832,7 +823,20 @@ function generateFooter(data: WDBusinessData, currentPath: string = ''): string 
         <h3>Service Areas</h3>
         <ul>${locationLinks}</ul>
       </div>
-      ` : ''}
+      ` : `
+      <div class="footer-links">
+        <h3>Quick Links</h3>
+        <ul>
+          <li><a href="${prefix}about.html">About Us</a></li>
+          <li><a href="${prefix}gallery.html">Gallery</a></li>
+          <li><a href="${prefix}faq.html">FAQ</a></li>
+          <li><a href="${prefix}calculator.html">Calculators</a></li>
+          <li><a href="${prefix}contact.html">Contact</a></li>
+          <li><a href="${prefix}privacy.html">Privacy Policy</a></li>
+          <li><a href="${prefix}terms.html">Terms of Service</a></li>
+        </ul>
+      </div>
+      `}
 
       <div class="footer-contact">
         <h3>Contact Us</h3>
@@ -2237,6 +2241,10 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
   grid-template-columns: 2fr 1fr 1fr 1.5fr;
 }
 
+.footer-inner.has-three-cols {
+  grid-template-columns: 1.8fr 1fr 1.5fr;
+}
+
 .footer-inner.has-two-cols {
   grid-template-columns: 1fr 1fr;
 }
@@ -2382,7 +2390,9 @@ section:nth-child(even):not(.cta-section):not(.page-hero):not(.hero-section):not
 @media (max-width: 1024px) {
   .hero-inner { grid-template-columns: 1fr; }
   .hero-cta-card { max-width: 500px; }
-  .footer-inner { grid-template-columns: 1fr 1fr; }
+  .footer-inner.has-four-cols { grid-template-columns: 1fr 1fr; }
+  .footer-inner.has-three-cols { grid-template-columns: 1fr 1fr; }
+  .footer-inner.has-two-cols { grid-template-columns: 1fr 1fr; }
   .contact-grid { grid-template-columns: 1fr; }
   .intro-grid { grid-template-columns: 1fr; gap: 2rem; }
 }

@@ -7609,6 +7609,7 @@ Generated on: ${new Date().toISOString()}`;
       if (typeof content === 'string' && filename.endsWith('.html')) {
         (files as any)[filename] = content
           .replace(/class="footer-inner has-two-cols"/g, 'class="footer-inner has-two-cols" style="grid-template-columns: 1fr 1fr;"')
+          .replace(/class="footer-inner has-three-cols"/g, 'class="footer-inner has-three-cols"')
           .replace(/class="footer-phone"/g, 'class="footer-phone" style="white-space: nowrap;"');
       }
     }
