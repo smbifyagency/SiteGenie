@@ -192,7 +192,7 @@ export async function getSiteByName(accessToken: string, siteName: string): Prom
     const netlify = new NetlifyAPI(accessToken);
     // 1. Try direct domain get lookup
     try {
-      const site = await netlify.getSite({ site_id: `${siteName}.netlify.app` });
+      const site = await netlify.getSite({ siteId: `${siteName}.netlify.app` });
       if (site) return site;
     } catch (err) {
       console.warn(`[getSiteByName] Direct getSite by domain name failed, falling back:`, err);

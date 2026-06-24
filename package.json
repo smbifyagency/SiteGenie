@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "generate:saas-sitemap": "npx tsx scripts/generate-saas-sitemap.ts",
-    "dev": "npm run generate:saas-sitemap && cross-env NODE_ENV=development npx tsx server/index.ts",
+    "dev": "npm run generate:saas-sitemap && cross-env NODE_ENV=development npx tsx watch server/index.ts",
     "build": "npm run generate:saas-sitemap && vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "vercel-build": "npm run generate:saas-sitemap && vite build",
     "start": "cross-env NODE_ENV=production node dist/index.js",

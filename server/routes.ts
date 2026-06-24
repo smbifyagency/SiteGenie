@@ -7688,7 +7688,7 @@ Generated on: ${new Date().toISOString()}`;
     if (website.netlifySiteId) {
       try {
         console.log(`[performNetlifyDeploy] Attempting direct Netlify site lookup by ID: ${website.netlifySiteId}`);
-        site = await netlify.getSite({ site_id: website.netlifySiteId });
+        site = await netlify.getSite({ siteId: website.netlifySiteId });
       } catch (err) {
         console.warn(`[performNetlifyDeploy] Netlify getSite by ID failed:`, err);
       }
@@ -7698,7 +7698,7 @@ Generated on: ${new Date().toISOString()}`;
     if (!site) {
       try {
         console.log(`[performNetlifyDeploy] Attempting direct Netlify site lookup by domain: ${domain}.netlify.app`);
-        site = await netlify.getSite({ site_id: `${domain}.netlify.app` });
+        site = await netlify.getSite({ siteId: `${domain}.netlify.app` });
       } catch (err) {
         console.warn(`[performNetlifyDeploy] Netlify getSite by domain failed:`, err);
       }
