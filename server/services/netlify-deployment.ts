@@ -47,7 +47,7 @@ export async function deployToNetlify(
     // Check if site already exists by name
     let site;
     try {
-      const sites = await netlify.listSites();
+      const sites = await netlify.listSites({ filter: 'all', per_page: 100 });
       site = sites.find((s: any) => s.name === siteName);
     } catch (error) {
       console.log("Could not list sites, will create new one");
@@ -196,7 +196,7 @@ export async function validateNetlifyToken(accessToken: string): Promise<boolean
 export async function getSiteByName(accessToken: string, siteName: string): Promise<any> {
   try {
     const netlify = new NetlifyAPI(accessToken);
-    const sites = await netlify.listSites();
+    const sites = await netlify.listSites({ filter: 'all', per_page: 100 });
     return sites.find((site: any) => site.name === siteName);
   } catch (error) {
     console.error('Error getting site by name:', error);

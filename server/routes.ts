@@ -6932,7 +6932,7 @@ Generated on: ${new Date().toISOString()}`;
 
       let ownedSite: any = null;
       try {
-        const sites = await netlify.listSites();
+        const sites = await netlify.listSites({ filter: 'all', per_page: 100 });
         if (Array.isArray(sites)) {
           ownedSite = sites.find((site: any) => site?.name === siteName) || null;
         }
@@ -7684,7 +7684,7 @@ Generated on: ${new Date().toISOString()}`;
     const netlify = new NetlifyAPI(netlifyApiKey);
     let site: any;
     try {
-      const sites = await netlify.listSites();
+      const sites = await netlify.listSites({ filter: 'all', per_page: 100 });
       site = (sites as any[]).find((s: any) => s.name === domain);
     } catch { /* will create */ }
 
