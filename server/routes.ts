@@ -188,6 +188,8 @@ const getNetlifySiteConflictMessage = (siteName: string): string =>
 const getNetlifyErrorMessage = (error: unknown, siteName?: string): string => {
   const rawMessage = error instanceof Error ? error.message : String(error ?? "");
   const normalizedMessage = rawMessage.toLowerCase();
+  const errObj = error as any;
+  const has422Status = errObj?.status === 422 || errObj?.statusCode === 422 || errObj?.response?.status === 422;
 
   if (
     siteName &&
@@ -197,7 +199,9 @@ const getNetlifyErrorMessage = (error: unknown, siteName?: string): string => {
       normalizedMessage.includes("in use") ||
       normalizedMessage.includes("not unique") ||
       normalizedMessage.includes("duplicate") ||
-      normalizedMessage.includes("422")
+      normalizedMessage.includes("422") ||
+      normalizedMessage.includes("unprocessable") ||
+      has422Status
     )
   ) {
     return getNetlifySiteConflictMessage(siteName);
