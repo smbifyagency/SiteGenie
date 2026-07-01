@@ -101,6 +101,7 @@ export function Navigation() {
     <>
       {navLink("/dashboard", "Dashboard")}
       {navLink("/dashboard/websites", "Websites")}
+      {navLink("/dashboard/articles", "Articles")}
 
       {/* Settings Dropdown */}
       <div className="relative">
@@ -194,6 +195,7 @@ export function Navigation() {
   const mobileDashboardItems = [
     { path: "/dashboard", label: "Dashboard" },
     { path: "/dashboard/websites", label: "Websites" },
+    { path: "/dashboard/articles", label: "Articles" },
     { path: "/dashboard/exports", label: "Exports" },
     { path: "/dashboard/settings/profile", label: "Profile" },
     { path: "/dashboard/settings/api-keys", label: "API Keys" },

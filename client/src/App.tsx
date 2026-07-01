@@ -65,6 +65,7 @@ import AuthCallback from "@/pages/auth-callback";
 // Dashboard Pages
 import DashboardHome from "@/pages/dashboard-home";
 import DashboardWebsites from "@/pages/dashboard-websites";
+import ArticlesDashboard from "@/pages/articles-dashboard";
 import DashboardNewWebsite from "@/pages/dashboard-new-website";
 import WDSiteEditor from "@/pages/wd-site-editor";
 
@@ -289,6 +290,9 @@ function Router() {
           </Route>
           <Route path="/dashboard/websites">
             <AuthRoute><DashboardWebsites /></AuthRoute>
+          </Route>
+          <Route path="/dashboard/articles">
+            <AuthRoute><ArticlesDashboard /></AuthRoute>
           </Route>
 
 
