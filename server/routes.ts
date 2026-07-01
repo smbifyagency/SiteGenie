@@ -5403,11 +5403,10 @@ Total Websites: ${validatedData.businesses.length}
       void (async () => {
         try {
           console.log(`[articles] Starting generation for campaign: ${campaignId} using ${activeProvider}`);
-          for (let i = 0; i < providersToDeploy.length; i++) {
-            const pName = providersToDeploy[i];
+          for (let i = 1; i <= 22; i++) {
             
             // Wait 1.5 seconds to space out requests and respect rate limits
-            if (i > 0) {
+            if (i > 1) {
               await new Promise(resolve => setTimeout(resolve, 1500));
             }
 
@@ -5418,17 +5417,17 @@ Total Websites: ${validatedData.businesses.length}
                 businessDetails,
                 keywords,
                 dofollowLinks || [],
-                i + 1,
+                i,
                 parsedWordCount
               );
               
               const currentCampaign = getArticles().find(c => c.id === campaignId);
               if (currentCampaign) {
-                currentCampaign.articles[pName] = html;
+                currentCampaign.articles[`art-${i}`] = html;
                 saveArticle(currentCampaign);
               }
             } catch (err: any) {
-              console.error(`[articles] Failed to generate variation for ${pName}:`, err);
+              console.error(`[articles] Failed to generate variation #${i}:`, err);
             }
           }
           console.log(`[articles] Generation completed for campaign: ${campaignId}`);
@@ -5460,13 +5459,6 @@ Total Websites: ${validatedData.businesses.length}
 
         const providersToDeploy = Object.keys(deployRegistry);
         for (const pName of providersToDeploy) {
-          const htmlContent = freshCampaign.articles[pName];
-          if (!htmlContent) {
-            freshCampaign.deployments[pName] = { status: "failed", error: "No generated article found" };
-            saveArticle(freshCampaign);
-            continue;
-          }
-
           // Fetch stored settings
           const setting = await storage.getApiSetting(userId, pName);
           if (!setting || !setting.isActive) {
@@ -5487,7 +5479,19 @@ Total Websites: ${validatedData.businesses.length}
 
           const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `deploy-${pName}-`));
           try {
-            fs.writeFileSync(path.join(tempDir, "index.html"), htmlContent);
+            const keys = Object.keys(freshCampaign.articles);
+            if (keys.length === 0) {
+              freshCampaign.deployments[pName] = { status: "failed", error: "No generated articles found" };
+              saveArticle(freshCampaign);
+              continue;
+            }
+
+            for (const key of keys) {
+              const num = key.split("-")[1];
+              const fileName = num === "1" ? "index.html" : `article-${num}.html`;
+              fs.writeFileSync(path.join(tempDir, fileName), freshCampaign.articles[key]);
+            }
+
             const handler = deployRegistry[pName];
             console.log(`[articles] Deploying campaign ${campaignId} to provider ${pName}`);
             
@@ -5535,6 +5539,28 @@ Total Websites: ${validatedData.businesses.length}
     } catch (err: any) {
       console.error("[routes] Failed to delete article:", err);
       res.status(500).json({ message: "Failed to delete article" });
+    }
+  });
+
+  app.put("/api/articles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const campaignId = req.params.id;
+      const { articles } = req.body;
+
+      const campaign = getArticles().find(c => c.id === campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "Article campaign not found" });
+      }
+
+      if (articles && typeof articles === "object") {
+        campaign.articles = articles;
+        saveArticle(campaign);
+      }
+
+      res.json(campaign);
+    } catch (err: any) {
+      console.error("[routes] Failed to update articles:", err);
+      res.status(500).json({ message: "Failed to update articles" });
     }
   });
 

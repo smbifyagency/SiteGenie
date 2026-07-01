@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Send, Trash, Plus, FileText, Link, Sparkles, CheckCircle2, AlertTriangle, ExternalLink } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Send, Trash, Plus, FileText, Link, Sparkles, CheckCircle2, AlertTriangle, ExternalLink, Eye, Code, Download, FileCode } from "lucide-react";
 
 interface DofollowLink {
   url: string;
@@ -20,6 +23,7 @@ interface ArticleCampaign {
   keywords: string[];
   dofollowLinks: DofollowLink[];
   provider: string;
+  wordCount: number;
   articles: Record<string, string>;
   deployments: Record<string, { status: "pending" | "deploying" | "completed" | "failed"; url?: string; error?: string }>;
   createdAt: string;
@@ -37,6 +41,20 @@ export default function ArticlesDashboard() {
   const [aiProvider, setAiProvider] = useState<string>("gemini");
   const [wordCount, setWordCount] = useState<string>("800");
 
+  // Review & Edit Modal States
+  const [reviewCampaign, setReviewCampaign] = useState<ArticleCampaign | null>(null);
+  const [selectedArtKey, setSelectedArtKey] = useState<string>("art-1");
+  const [editorContent, setEditorContent] = useState<string>("");
+
+  // Update editor content when active article changes
+  useEffect(() => {
+    if (reviewCampaign && reviewCampaign.articles[selectedArtKey]) {
+      setEditorContent(reviewCampaign.articles[selectedArtKey]);
+    } else {
+      setEditorContent("");
+    }
+  }, [selectedArtKey, reviewCampaign]);
+
   // Fetch campaigns
   const { data: campaigns = [], isLoading } = useQuery<ArticleCampaign[]>({
     queryKey: ["/api/articles"],
@@ -45,7 +63,7 @@ export default function ArticlesDashboard() {
       if (!res.ok) throw new Error("Failed to load article campaigns");
       return res.json();
     },
-    refetchInterval: 5000 // Poll every 5 seconds to get real-time generation/deployment status
+    refetchInterval: 3000 // Poll every 3 seconds for real-time progress update
   });
 
   // Generate mutation
@@ -77,6 +95,34 @@ export default function ArticlesDashboard() {
     onError: (err) => {
       toast({
         title: "Generation Failed",
+        description: err.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Save edits mutation
+  const saveEditsMutation = useMutation<ArticleCampaign, Error, { id: string; articles: Record<string, string> }>({
+    mutationFn: async ({ id, articles }) => {
+      const res = await fetch(`/api/articles/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articles })
+      });
+      if (!res.ok) throw new Error("Failed to save changes");
+      return res.json();
+    },
+    onSuccess: (updatedCampaign) => {
+      toast({
+        title: "Changes Saved",
+        description: "Article content updated successfully."
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/articles"] });
+      setReviewCampaign(updatedCampaign);
+    },
+    onError: (err) => {
+      toast({
+        title: "Error Saving",
         description: err.message,
         variant: "destructive"
       });
@@ -160,6 +206,24 @@ export default function ArticlesDashboard() {
       provider: aiProvider,
       wordCount: parseInt(wordCount) || 800
     });
+  };
+
+  const downloadArticle = (fileName: string, htmlContent: string) => {
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSaveChanges = () => {
+    if (!reviewCampaign) return;
+    const updatedArticles = { ...reviewCampaign.articles, [selectedArtKey]: editorContent };
+    saveEditsMutation.mutate({ id: reviewCampaign.id, articles: updatedArticles });
   };
 
   return (
@@ -348,6 +412,7 @@ export default function ArticlesDashboard() {
                   const generatedCount = Object.keys(campaign.articles).length;
                   const completedCount = Object.values(campaign.deployments).filter(d => d.status === "completed").length;
                   const failedCount = Object.values(campaign.deployments).filter(d => d.status === "failed").length;
+                  const isGenerating = generatedCount < 22;
 
                   return (
                     <div key={campaign.id} className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-4">
@@ -368,7 +433,19 @@ export default function ArticlesDashboard() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            disabled={generatedCount === 0 || deployMutation.isPending}
+                            onClick={() => {
+                              setReviewCampaign(campaign);
+                              setSelectedArtKey(Object.keys(campaign.articles)[0] || "art-1");
+                            }}
+                            className="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/40 border border-indigo-500/30"
+                          >
+                            <Eye className="h-4 w-4 mr-1.5" />
+                            Review Articles
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={isGenerating || deployMutation.isPending}
                             onClick={() => deployMutation.mutate(campaign.id)}
                             className="bg-purple-600/20 text-purple-400 hover:bg-purple-600/40 border border-purple-500/30"
                           >
@@ -386,50 +463,53 @@ export default function ArticlesDashboard() {
                         </div>
                       </div>
 
-                      {/* Content generation progress */}
-                      <div className="grid grid-cols-3 gap-4 text-xs text-gray-400 bg-black/20 p-3 rounded-lg border border-white/5">
-                        <div>
-                          <p className="text-gray-500">Articles Generated</p>
-                          <p className="text-lg font-bold text-white">
-                            {generatedCount} / {providers.length}
-                          </p>
+                      {/* Real-time progress bar/status */}
+                      {isGenerating ? (
+                        <div className="space-y-2 bg-purple-950/20 border border-purple-900/40 p-3 rounded-lg">
+                          <div className="flex justify-between text-xs text-purple-300">
+                            <span className="flex items-center gap-2 font-semibold">
+                              <Loader2 className="h-3.. w-3 animate-spin text-purple-400" />
+                              Generating 22 unique articles...
+                            </span>
+                            <span>{generatedCount} / 22 generated</span>
+                          </div>
+                          <Progress value={(generatedCount / 22) * 100} className="h-2 bg-black/40 [&>div]:bg-purple-500" />
                         </div>
-                        <div>
-                          <p className="text-gray-500">Deploy Status</p>
-                          <p className="text-lg font-bold text-emerald-400">
-                            {completedCount} Success
-                          </p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-4 text-xs text-gray-400 bg-black/20 p-3 rounded-lg border border-white/5">
+                          <div>
+                            <p className="text-gray-500">Articles Generated</p>
+                            <p className="text-lg font-bold text-white">
+                              {generatedCount} / 22
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Deploy Status</p>
+                            <p className="text-lg font-bold text-emerald-400">
+                              {completedCount} Success
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Failures</p>
+                            <p className="text-lg font-bold text-red-400">
+                              {failedCount} Failed
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-gray-500">Failures</p>
-                          <p className="text-lg font-bold text-red-400">
-                            {failedCount} Failed
-                          </p>
-                        </div>
-                      </div>
+                      )}
 
                       {/* Provider deployments grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                         {providers.map((pName) => {
                           const dep = campaign.deployments[pName];
-                          const hasArticle = Boolean(campaign.articles[pName]);
+                          const statusColor = dep?.status === "completed" ? "text-emerald-400 border-emerald-950 bg-emerald-950/20" :
+                                              dep?.status === "deploying" ? "text-blue-400 border-blue-950 bg-blue-950/20 animate-pulse" :
+                                              dep?.status === "failed" ? "text-red-400 border-red-950 bg-red-950/20" :
+                                              "text-gray-500 border-gray-800";
                           
-                          let statusColor = "text-gray-500 border-gray-800";
-                          let badgeText = "Pending Article";
-
-                          if (hasArticle && (!dep || dep.status === "pending")) {
-                            statusColor = "text-purple-400 border-purple-950 bg-purple-950/20";
-                            badgeText = "Ready to deploy";
-                          } else if (dep?.status === "deploying") {
-                            statusColor = "text-blue-400 border-blue-950 bg-blue-950/20 animate-pulse";
-                            badgeText = "Publishing...";
-                          } else if (dep?.status === "completed") {
-                            statusColor = "text-emerald-400 border-emerald-950 bg-emerald-950/20";
-                            badgeText = "Live";
-                          } else if (dep?.status === "failed") {
-                            statusColor = "text-red-400 border-red-950 bg-red-950/20";
-                            badgeText = "Failed";
-                          }
+                          const badgeText = dep?.status === "completed" ? "Live" :
+                                            dep?.status === "deploying" ? "Publishing..." :
+                                            dep?.status === "failed" ? "Failed" : "Pending";
 
                           return (
                             <div 
@@ -464,6 +544,114 @@ export default function ArticlesDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Review & Edit Dialog */}
+      <Dialog open={!!reviewCampaign} onOpenChange={(open) => !open && setReviewCampaign(null)}>
+        <DialogContent className="max-w-5xl bg-gray-950 border-white/10 text-white h-[85vh] flex flex-col p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <FileCode className="h-6 w-6 text-purple-500" />
+              Review Generated Articles — {reviewCampaign?.title}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Preview styled layouts, edit HTML code, or download articles before deploying.
+            </DialogDescription>
+          </DialogHeader>
+
+          {reviewCampaign && (
+            <div className="flex-1 grid grid-cols-4 gap-6 min-h-0">
+              {/* Left sidebar: articles list */}
+              <div className="col-span-1 border border-white/10 rounded-lg p-2 overflow-y-auto space-y-1 bg-black/20">
+                {Array.from({ length: 22 }, (_, idx) => {
+                  const key = `art-${idx + 1}`;
+                  const isAvailable = Boolean(reviewCampaign.articles[key]);
+                  const isSelected = selectedArtKey === key;
+
+                  return (
+                    <button
+                      key={key}
+                      disabled={!isAvailable}
+                      onClick={() => setSelectedArtKey(key)}
+                      className={`w-full text-left p-2 rounded-lg text-xs flex justify-between items-center transition-all ${
+                        isSelected ? "bg-purple-600 text-white font-bold" :
+                        isAvailable ? "hover:bg-white/5 text-gray-300" : "opacity-40 text-gray-600 cursor-not-allowed"
+                      }`}
+                    >
+                      <span>Variation #{idx + 1}</span>
+                      {isAvailable ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      ) : (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-500" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right main panel: tabs */}
+              <div className="col-span-3 border border-white/10 rounded-lg p-4 bg-black/40 flex flex-col min-h-0">
+                <Tabs defaultValue="preview" className="w-full flex-1 flex flex-col min-h-0">
+                  <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+                    <TabsList className="bg-white/5 border border-white/10">
+                      <TabsTrigger value="preview" className="text-xs flex items-center gap-1">
+                        <Eye className="h-3.5 w-3.5" /> Preview
+                      </TabsTrigger>
+                      <TabsTrigger value="editor" className="text-xs flex items-center gap-1">
+                        <Code className="h-3.5 w-3.5" /> Editor
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => downloadArticle(`article-${selectedArtKey.split("-")[1]}.html`, editorContent)}
+                        className="bg-white/10 text-white hover:bg-white/20 text-xs"
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+
+                  <TabsContent value="preview" className="flex-1 min-h-0">
+                    <iframe
+                      title="Article Preview"
+                      srcDoc={editorContent}
+                      className="w-full h-full border-0 rounded-lg bg-white"
+                      sandbox="allow-scripts"
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="editor" className="flex-1 flex flex-col min-h-0 space-y-4">
+                    <textarea
+                      value={editorContent}
+                      onChange={(e) => setEditorContent(e.target.value)}
+                      className="flex-1 w-full bg-black/40 border border-white/10 text-white rounded-lg p-3 text-xs font-mono focus:outline-none focus:border-purple-500 resize-none overflow-y-auto"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        onClick={handleSaveChanges}
+                        disabled={saveEditsMutation.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
+                      >
+                        {saveEditsMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save Changes"
+                        )}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
