@@ -35,6 +35,7 @@ export default function ArticlesDashboard() {
   const [keywordsInput, setKeywordsInput] = useState("");
   const [links, setLinks] = useState<DofollowLink[]>([{ url: "", anchor: "" }]);
   const [aiProvider, setAiProvider] = useState<string>("gemini");
+  const [wordCount, setWordCount] = useState<string>("800");
 
   // Fetch campaigns
   const { data: campaigns = [], isLoading } = useQuery<ArticleCampaign[]>({
@@ -156,7 +157,8 @@ export default function ArticlesDashboard() {
       businessDetails,
       keywords,
       dofollowLinks: validLinks,
-      provider: aiProvider
+      provider: aiProvider,
+      wordCount: parseInt(wordCount) || 800
     });
   };
 
@@ -209,6 +211,22 @@ export default function ArticlesDashboard() {
                       <SelectItem value="openai">OpenAI API</SelectItem>
                       <SelectItem value="deepseek">DeepSeek API</SelectItem>
                       <SelectItem value="openrouter">OpenRouter (Gemini/OpenAI/etc.)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-gray-300">Target Word Count (Per Article)</Label>
+                  <Select value={wordCount} onValueChange={setWordCount}>
+                    <SelectTrigger className="bg-white/5 border-white/10 text-white focus:border-[#7C3AED] h-10">
+                      <SelectValue placeholder="Select length" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-950 border-white/10 text-white">
+                      <SelectItem value="300">Short (~300 words)</SelectItem>
+                      <SelectItem value="500">Medium (~500 words)</SelectItem>
+                      <SelectItem value="800">Standard (~800 words)</SelectItem>
+                      <SelectItem value="1200">Long (~1200 words)</SelectItem>
+                      <SelectItem value="1500">In-Depth (~1500 words)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -5339,11 +5339,13 @@ Total Websites: ${validatedData.businesses.length}
   app.post("/api/articles/generate", isAuthenticated, async (req, res) => {
     try {
       const userId = (req as any).user.id;
-      const { title, businessDetails, keywords, dofollowLinks, provider } = req.body;
+      const { title, businessDetails, keywords, dofollowLinks, provider, wordCount } = req.body;
 
       if (!title || !businessDetails || !keywords || !Array.isArray(keywords)) {
         return res.status(400).json({ message: "Title, businessDetails, and keywords are required" });
       }
+
+      const parsedWordCount = parseInt(wordCount) || 800;
 
       // Check active provider from user settings
       let activeProvider: 'openai' | 'gemini' | 'openrouter' | 'deepseek' | null = null;
@@ -5384,6 +5386,7 @@ Total Websites: ${validatedData.businesses.length}
         keywords,
         dofollowLinks: dofollowLinks || [],
         provider: activeProvider,
+        wordCount: parsedWordCount,
         articles: {},
         deployments: {},
         createdAt: new Date().toISOString()
@@ -5402,6 +5405,12 @@ Total Websites: ${validatedData.businesses.length}
           console.log(`[articles] Starting generation for campaign: ${campaignId} using ${activeProvider}`);
           for (let i = 0; i < providersToDeploy.length; i++) {
             const pName = providersToDeploy[i];
+            
+            // Wait 1.5 seconds to space out requests and respect rate limits
+            if (i > 0) {
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+
             try {
               const html = await generateArticle(
                 activeProvider!,
@@ -5409,7 +5418,8 @@ Total Websites: ${validatedData.businesses.length}
                 businessDetails,
                 keywords,
                 dofollowLinks || [],
-                i + 1
+                i + 1,
+                parsedWordCount
               );
               
               const currentCampaign = getArticles().find(c => c.id === campaignId);
