@@ -241,6 +241,13 @@ function websiteFromDB(row: any): any {
     if (bd._generatedBlogPosts !== undefined) base.generatedBlogPosts = bd._generatedBlogPosts;
     if (bd._blogPosts !== undefined) base.blogPosts = bd._blogPosts;
     if (bd._isActive !== undefined) base.isActive = bd._isActive;
+    
+    // Cloudflare mapping support
+    if (bd._cloudflareAccountId !== undefined) base.cloudflareAccountId = bd._cloudflareAccountId;
+    if (bd._cloudflareProjectName !== undefined) base.cloudflareProjectName = bd._cloudflareProjectName;
+    if (bd._cloudflareUrl !== undefined) base.cloudflareUrl = bd._cloudflareUrl;
+    if (bd._cloudflareDeploymentStatus !== undefined) base.cloudflareDeploymentStatus = bd._cloudflareDeploymentStatus;
+    if (bd._lastDeployedProvider !== undefined) base.lastDeployedProvider = bd._lastDeployedProvider;
 
     return base;
 }
@@ -379,6 +386,13 @@ function websiteToDB(website: any): any {
     if (website.generatedBlogPosts !== undefined) extras._generatedBlogPosts = website.generatedBlogPosts;
     if (website.blogPosts !== undefined) extras._blogPosts = website.blogPosts;
     if (website.isActive !== undefined) extras._isActive = website.isActive;
+
+    // Cloudflare mapping support
+    if (website.cloudflareAccountId !== undefined) extras._cloudflareAccountId = website.cloudflareAccountId;
+    if (website.cloudflareProjectName !== undefined) extras._cloudflareProjectName = website.cloudflareProjectName;
+    if (website.cloudflareUrl !== undefined) extras._cloudflareUrl = website.cloudflareUrl;
+    if (website.cloudflareDeploymentStatus !== undefined) extras._cloudflareDeploymentStatus = website.cloudflareDeploymentStatus;
+    if (website.lastDeployedProvider !== undefined) extras._lastDeployedProvider = website.lastDeployedProvider;
 
     if (website.businessData !== undefined || Object.keys(extras).length > 0) {
         const mergedBD = { ...existingBD, ...extras };

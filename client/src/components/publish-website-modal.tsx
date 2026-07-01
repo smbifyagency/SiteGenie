@@ -209,6 +209,12 @@ export function PublishWebsiteModal({
   const isRedeploy = Boolean(deployedUrl);
 
   // ── State ─────────────────────────────────────────────────────────────
+  const [provider, setProvider] = useState<'netlify' | 'cloudflare'>('netlify');
+  const [cfToken, setCfToken] = useState("");
+  const [cfAccountId, setCfAccountId] = useState("");
+  const [cfChecking, setCfChecking] = useState(false);
+  const [cfConnected, setCfConnected] = useState<boolean | null>(null);
+
   const [step, setStep] = useState<PublishStep>("api-check");
   const [apiConnected, setApiConnected] = useState<boolean | null>(null);
   const [isCheckingApi, setIsCheckingApi] = useState(false);
@@ -258,7 +264,8 @@ export function PublishWebsiteModal({
           if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
           setDeployProgress(100);
           setDeployPhase("Website is live!");
-          const finalUrl = `https://${slug || data.siteName || resultSiteName || currentSiteName || defaultSlug}.netlify.app`;
+          const domainSuffix = provider === 'cloudflare' ? 'pages.dev' : 'netlify.app';
+          const finalUrl = `https://${slug || data.siteName || resultSiteName || currentSiteName || defaultSlug}.${domainSuffix}`;
           setResultUrl(finalUrl);
           setResultSiteName(slug || data.siteName || resultSiteName || currentSiteName || defaultSlug);
           setStep("success");
@@ -355,7 +362,7 @@ export function PublishWebsiteModal({
             setStep('deploying');
             setIsDeploying(true);
             setDeployProgress(d.progress || 0);
-            setDeployPhase(d.status === 'deploying' ? 'Publishing to Netlify CDN...' : 'Generating website pages copy...');
+            setDeployPhase(d.status === 'deploying' ? 'Publishing...' : 'Generating website pages copy...');
             startPollingStatus();
           }
         }
@@ -374,43 +381,64 @@ export function PublishWebsiteModal({
   async function checkApiStatus() {
     setIsCheckingApi(true);
     setApiConnected(null);
+    setCfConnected(null);
 
     try {
-      // If token was already verified externally
-      if (tokenVerified && netlifyToken) {
-        setApiConnected(true);
-        setIsCheckingApi(false);
-        setStep("url-search");
-        if (skipDomainCheck) {
-          setSlugAvailable(true);
-          setSlugMessage("");
-        }
-        return;
-      }
-
-      // Check from server settings
-      const res = await fetch("/api/settings/netlify", { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.apiKey) {
+      if (provider === 'netlify') {
+        if (tokenVerified && netlifyToken) {
           setApiConnected(true);
+          setIsCheckingApi(false);
           setStep("url-search");
-          // If redeploy or skip check, auto-set availability for current site
           if (skipDomainCheck) {
             setSlugAvailable(true);
             setSlugMessage("");
-          } else if (isRedeploy && currentSiteName) {
-            setSlugAvailable(true);
-            setSlugMessage(`"${currentSiteName}.netlify.app" is your current site. Ready to update.`);
+          }
+          return;
+        }
+
+        const res = await fetch("/api/settings/netlify", { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.apiKey) {
+            setApiConnected(true);
+            setStep("url-search");
+            if (skipDomainCheck) {
+              setSlugAvailable(true);
+              setSlugMessage("");
+            } else if (isRedeploy && currentSiteName) {
+              setSlugAvailable(true);
+              setSlugMessage(`"${currentSiteName}.netlify.app" is your current site. Ready to update.`);
+            }
+          } else {
+            setApiConnected(false);
           }
         } else {
           setApiConnected(false);
         }
       } else {
-        setApiConnected(false);
+        const res = await fetch("/api/settings/cloudflare", { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.apiKey && data?.accessKey) {
+            setCfConnected(true);
+            setStep("url-search");
+            if (skipDomainCheck) {
+              setSlugAvailable(true);
+              setSlugMessage("");
+            } else if (isRedeploy && currentSiteName) {
+              setSlugAvailable(true);
+              setSlugMessage(`"${currentSiteName}.pages.dev" is your current site. Ready to update.`);
+            }
+          } else {
+            setCfConnected(false);
+          }
+        } else {
+          setCfConnected(false);
+        }
       }
     } catch {
-      setApiConnected(false);
+      if (provider === 'netlify') setApiConnected(false);
+      else setCfConnected(false);
     } finally {
       setIsCheckingApi(false);
     }
@@ -436,7 +464,8 @@ export function PublishWebsiteModal({
     setSlugMessage("");
 
     try {
-      const res = await fetch("/api/netlify/check-site-availability", {
+      const endpoint = provider === 'cloudflare' ? "/api/cloudflare/check-site-availability" : "/api/netlify/check-site-availability";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -455,15 +484,15 @@ export function PublishWebsiteModal({
 
       setSlugAvailable(Boolean(data?.available));
       setSlugMessage(data?.message || (data?.available
-        ? `"${cleaned}.netlify.app" is available!`
-        : `"${cleaned}.netlify.app" is not available.`));
+        ? `"${cleaned}.${provider === 'cloudflare' ? 'pages.dev' : 'netlify.app'}" is available!`
+        : `"${cleaned}.${provider === 'cloudflare' ? 'pages.dev' : 'netlify.app'}" is not available.`));
     } catch {
       setSlugAvailable(null);
       setSlugMessage("Network error. Could not check availability.");
     } finally {
       setIsCheckingSlug(false);
     }
-  }, [websiteId, skipDomainCheck]);
+  }, [websiteId, skipDomainCheck, provider]);
 
   // Debounce slug input
   function handleSlugChange(value: string) {
@@ -472,6 +501,12 @@ export function PublishWebsiteModal({
     setSlug(cleaned);
     setSlugAvailable(null);
     setSlugMessage("");
+
+    if (provider === 'cloudflare') {
+      setSlugAvailable(true);
+      setSlugMessage(`Your site will be created as "${cleaned}.pages.dev"`);
+      return;
+    }
 
     if (checkTimeoutRef.current) clearTimeout(checkTimeoutRef.current);
     if (cleaned.length >= 3) {
@@ -497,111 +532,64 @@ export function PublishWebsiteModal({
 
     try {
       // Phase 1: Save latest content
-      console.log("[PublishWebsiteModal] Calling onBeforeDeploy...");
       await onBeforeDeploy?.();
-      console.log("[PublishWebsiteModal] onBeforeDeploy completed.");
 
       setDeployProgress(15);
       setDeployPhase("Compressing custom images...");
 
-      // Multi-pass payload compression to fit under Vercel's 4.5MB request limit
+      // Multi-pass payload compression
       let currentWidth = 1000;
       let currentQuality = 0.80;
       let compressedCustom = customImages;
       let compressedGallery = galleryImages;
 
-      // Pass 1: Try default WebP compression (1000x1000, 0.80 quality)
       const p1 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
       compressedCustom = p1.customImages;
       compressedGallery = p1.galleryImages;
 
-      let payload = {
+      let payload: any = {
         netlifyApiKey: netlifyToken || "masked",
+        cloudflareApiToken: cfToken || "masked",
+        cloudflareAccountId: cfAccountId || "masked",
         siteName: targetSlug,
         publishTier: localTier,
         customImages: compressedCustom,
         galleryImages: compressedGallery,
       };
 
-      let payloadSize = new Blob([JSON.stringify(payload)]).size;
-      console.log(`[PublishWebsiteModal] Payload size after Pass 1: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
-
-      // Pass 2: If size exceeds 3.8 MB, compress more (800x800, 0.75 quality WebP)
-      if (payloadSize > 3.8 * 1024 * 1024) {
-        setDeployPhase("Compressing images further (Pass 2)...");
-        currentWidth = 800;
-        currentQuality = 0.75;
-        const p2 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
-        compressedCustom = p2.customImages;
-        compressedGallery = p2.galleryImages;
-        payload.customImages = compressedCustom;
-        payload.galleryImages = compressedGallery;
-        payloadSize = new Blob([JSON.stringify(payload)]).size;
-        console.log(`[PublishWebsiteModal] Payload size after Pass 2: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
-      }
-
-      // Pass 3: If size still exceeds 3.8 MB, compress further (600x600, 0.70 quality WebP)
-      if (payloadSize > 3.8 * 1024 * 1024) {
-        setDeployPhase("Compressing images further (Pass 3)...");
-        currentWidth = 600;
-        currentQuality = 0.70;
-        const p3 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
-        compressedCustom = p3.customImages;
-        compressedGallery = p3.galleryImages;
-        payload.customImages = compressedCustom;
-        payload.galleryImages = compressedGallery;
-        payloadSize = new Blob([JSON.stringify(payload)]).size;
-        console.log(`[PublishWebsiteModal] Payload size after Pass 3: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
-      }
-
-      // Pass 4: If size still exceeds 3.8 MB, compress aggressively (450x450, 0.60 quality WebP)
-      if (payloadSize > 3.8 * 1024 * 1024) {
-        setDeployPhase("Compressing images further (Pass 4)...");
-        currentWidth = 450;
-        currentQuality = 0.60;
-        const p4 = await compressDeploymentPayload(customImages, galleryImages, currentWidth, currentWidth, currentQuality);
-        compressedCustom = p4.customImages;
-        compressedGallery = p4.galleryImages;
-        payload.customImages = compressedCustom;
-        payload.galleryImages = compressedGallery;
-        payloadSize = new Blob([JSON.stringify(payload)]).size;
-        console.log(`[PublishWebsiteModal] Payload size after Pass 4: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
-      }
-
       setDeployProgress(20);
       setDeployPhase("Initiating deployment...");
 
-      // Phase 2: Deploy via the WD endpoint
-      console.log("[PublishWebsiteModal] Sending deploy-wd POST request...");
-      const res = await fetch(`/api/websites/${websiteId}/deploy-wd`, {
+      // Phase 2: Deploy via the correct endpoint
+      console.log(`[PublishWebsiteModal] Sending deploy request to provider ${provider}...`);
+      const deployEndpoint = provider === 'cloudflare'
+        ? `/api/websites/${websiteId}/deploy-cloudflare`
+        : `/api/websites/${websiteId}/deploy-wd`;
+
+      const res = await fetch(deployEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          netlifyApiKey: netlifyToken || "masked",
-          siteName: targetSlug,
-          publishTier: localTier,
-          customImages: compressedCustom,
-          galleryImages: compressedGallery,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      console.log("[PublishWebsiteModal] deploy-wd response status:", res.status);
+      console.log("[PublishWebsiteModal] deploy response status:", res.status);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        console.error("[PublishWebsiteModal] deploy-wd error response data:", errData);
+        console.error("[PublishWebsiteModal] deploy error response data:", errData);
         throw new Error(errData.error || errData.message || `Server error ${res.status}`);
       }
 
       const data = await res.json();
-      console.log("[PublishWebsiteModal] deploy-wd response data:", data);
+      console.log("[PublishWebsiteModal] deploy response data:", data);
       
       if (data.status === 'generating') {
         setDeployProgress(15);
         setDeployPhase("Generating website pages copy...");
         startPollingStatus();
       } else {
-        const url = data.url || `https://${targetSlug}.netlify.app`;
+        const domainSuffix = provider === 'cloudflare' ? 'pages.dev' : 'netlify.app';
+        const url = data.url || `https://${targetSlug}.${domainSuffix}`;
         setDeployProgress(100);
         setDeployPhase("Website is live!");
         setResultUrl(url);
@@ -615,7 +603,6 @@ export function PublishWebsiteModal({
       toast({
         title: "Deployment Failed",
         description: err instanceof Error ? err.message : String(err),
-
         variant: "destructive",
       });
       setStep("url-search");
@@ -665,6 +652,39 @@ export function PublishWebsiteModal({
               })}
             </div>
           )}
+          
+          <div className="flex gap-2 p-1 bg-gray-950 rounded-lg border border-gray-800/80 mt-3 mx-2">
+            <button
+              onClick={() => {
+                setProvider('netlify');
+                setStep("api-check");
+                setSlugAvailable(null);
+                setSlugMessage("");
+              }}
+              className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all ${
+                provider === 'netlify' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Netlify
+            </button>
+            <button
+              onClick={() => {
+                setProvider('cloudflare');
+                setStep("api-check");
+                setSlugAvailable(true);
+                setSlugMessage("");
+              }}
+              className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all ${
+                provider === 'cloudflare' 
+                  ? 'bg-orange-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Cloudflare Pages
+            </button>
+          </div>
         </DialogHeader>
 
         {/* Content */}
@@ -734,20 +754,20 @@ export function PublishWebsiteModal({
                 {isCheckingApi ? (
                   <>
                     <Loader2 className="w-10 h-10 animate-spin text-[#7C3AED] mx-auto mb-3" />
-                    <p className="text-sm text-gray-400">Checking Netlify connection...</p>
+                    <p className="text-sm text-gray-400">Checking {provider === 'netlify' ? 'Netlify' : 'Cloudflare'} connection...</p>
                   </>
-                ) : apiConnected === true ? (
+                ) : (apiConnected === true || cfConnected === true) ? (
                   <>
                     <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
-                    <p className="text-sm text-green-400 font-medium">Netlify API Connected</p>
+                    <p className="text-sm text-green-400 font-medium">{provider === 'netlify' ? 'Netlify' : 'Cloudflare'} API Connected</p>
                     <p className="text-xs text-gray-500 mt-1">Your API token is configured and ready.</p>
                   </>
-                ) : apiConnected === false ? (
+                ) : (apiConnected === false || cfConnected === false) ? (
                   <>
                     <XCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-                    <p className="text-sm text-red-400 font-medium">Netlify Not Connected</p>
+                    <p className="text-sm text-red-400 font-medium">{provider === 'netlify' ? 'Netlify' : 'Cloudflare'} Not Connected</p>
                     <p className="text-xs text-gray-500 mt-2">
-                      Add your Netlify Personal Access Token in the Deploy tab or API Settings page.
+                      Add your API credentials in the Deploy tab or API Settings page.
                     </p>
                     <div className="flex gap-2 justify-center mt-4">
                       <Button
@@ -774,7 +794,7 @@ export function PublishWebsiteModal({
                 ) : null}
               </div>
 
-              {apiConnected === true && (
+              {(apiConnected === true || cfConnected === true) && (
                 <Button
                   onClick={() => setStep("url-search")}
                   className="w-full bg-[#7C3AED] hover:bg-[#9333EA] text-white font-medium"
@@ -823,8 +843,7 @@ export function PublishWebsiteModal({
                     <div className="text-xs">
                       <p className="text-amber-300 font-medium">URL Change Warning</p>
                       <p className="text-amber-400/80 mt-1">
-                        Changing the URL will create a new Netlify site. The old site ({currentSiteName}.netlify.app) 
-                        will remain active separately. Google may need to re-index the new URL.
+                        Changing the URL will create a new site. The old site will remain active separately.
                       </p>
                     </div>
                   </div>
@@ -849,7 +868,7 @@ export function PublishWebsiteModal({
                     />
                   </div>
                   <span className="text-xs text-gray-500 bg-gray-900 border border-gray-700 border-l-0 px-3 h-10 flex items-center rounded-r-md">
-                    .netlify.app
+                    {provider === 'cloudflare' ? '.pages.dev' : '.netlify.app'}
                   </span>
                 </div>
 

@@ -21,7 +21,13 @@ import {
 } from "../shared/schema.js";
 import JSZip from "jszip";
 import path from "path";
+import fs from "fs";
+import os from "os";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { generateAllWebsiteFiles } from "../client/src/lib/dynamic-website-generator.js";
+
+const execAsync = promisify(exec);
 import { generateMultipleBlogPosts, generateBlogPost, fetchUnsplashImage, generateSEOContent, generateFAQContent, generateTestimonials, generateServicePageContent, generateLocationPageContent } from "./services/openai.js";
 import { generateMultipleBlogPostsWithOpenRouter, generateBlogPostWithOpenRouter } from "./services/openrouter.js";
 import { generateSEOContentWithGemini, generateFAQContentWithGemini, generateTestimonialsWithGemini, generateBlogPostWithGemini } from "./services/gemini.js";
@@ -2423,6 +2429,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ success: true, message: "Netlify API key is valid!", details: "Successfully connected to Netlify API." });
       } else {
         res.status(400).json({ error: "Invalid Netlify token", details: `Status: ${response.status}` });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: "Connection failed", details: error.message });
+    }
+  });
+
+  app.post("/api/test-cloudflare", async (req, res) => {
+    try {
+      let { apiKey, accountId } = req.body;
+      const userId = (req as any).user?.id || req.session?.userId;
+      
+      if (userId && (!apiKey || apiKey.includes('••') || !accountId || accountId.includes('••'))) {
+        const setting = await storage.getApiSetting(userId, 'cloudflare');
+        if (setting) {
+          if (!apiKey || apiKey.includes('••')) {
+            try { apiKey = setting.apiKey ? decrypt(setting.apiKey) : ""; } catch { apiKey = setting.apiKey || ""; }
+          }
+          if (!accountId || accountId.includes('••')) {
+            try { accountId = setting.accessKey ? decrypt(setting.accessKey) : ""; } catch { accountId = setting.accessKey || ""; }
+          }
+        }
+      }
+
+      if (!apiKey) return res.status(400).json({ error: "API token required" });
+      if (!accountId) return res.status(400).json({ error: "Account ID required" });
+      const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects`, {
+        headers: { 
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+      });
+      if (response.ok) {
+        res.json({ success: true, message: "Cloudflare connection successful!", details: "Successfully connected to Cloudflare Pages API." });
+      } else {
+        res.status(400).json({ error: "Invalid Cloudflare token or Account ID", details: `Status: ${response.status}` });
       }
     } catch (error: any) {
       res.status(500).json({ error: "Connection failed", details: error.message });
@@ -5100,6 +5141,64 @@ Total Websites: ${validatedData.businesses.length}
     }
   });
 
+  app.get("/api/settings/cloudflare", async (req, res) => {
+    try {
+      if ((req as any).user?.id) {
+        const userId = (req as any).user.id;
+        const setting = await storage.getApiSetting(userId, 'cloudflare');
+        if (!setting) {
+          return res.json({ name: "cloudflare", displayName: "Cloudflare Pages API", apiKey: "", accessKey: "", isActive: false });
+        }
+        return res.json({ 
+          ...setting, 
+          apiKey: setting.apiKey ? "•••••••••••" : null,
+          accessKey: setting.accessKey ? "•••••••••••" : null
+        });
+      }
+      return res.json({ name: "cloudflare", displayName: "Cloudflare Pages API", apiKey: "", accessKey: "", isActive: false });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get Cloudflare setting" });
+    }
+  });
+
+  app.put("/api/settings/cloudflare", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      let { apiKey, accessKey, isActive } = req.body;
+
+      const { encrypt } = await import('./crypto.js').catch(() => ({ encrypt: (k: string) => k }));
+
+      if (apiKey && apiKey.includes('••••••••')) {
+        apiKey = undefined;
+      } else if (apiKey) {
+        apiKey = encrypt(apiKey);
+      }
+
+      if (accessKey && accessKey.includes('••••••••')) {
+        accessKey = undefined;
+      } else if (accessKey) {
+        accessKey = encrypt(accessKey);
+      }
+
+      const setting = await storage.upsertApiSetting(userId, {
+        name: 'cloudflare',
+        displayName: 'Cloudflare Pages API',
+        apiKey,
+        accessKey,
+        isActive: isActive ?? true
+      });
+
+      res.json({ 
+        ...setting, 
+        apiKey: setting.apiKey ? "•••••••••••" : null,
+        accessKey: setting.accessKey ? "•••••••••••" : null
+      });
+    } catch (error) {
+      console.error("Failed to update Cloudflare setting:", error);
+      res.status(500).json({ message: "Failed to update Cloudflare setting" });
+    }
+  });
+
   // Generic API settings routes (MUST come after specific routes)
   app.get("/api/settings", isAuthenticated, async (req, res) => {
     try {
@@ -7759,6 +7858,326 @@ Generated on: ${new Date().toISOString()}`;
     return { url: siteUrl, siteName: domain };
   }
 
+  async function performCloudflareDeploy(
+    websiteId: string,
+    userId: string,
+    cloudflareApiToken: string,
+    cloudflareAccountId: string,
+    projectName: string,
+    publishTier: '1' | '2' | '3',
+    customImages?: any,
+    galleryImages?: any
+  ): Promise<{ url: string; projectName: string }> {
+    const website = await storage.getWebsite(websiteId);
+    if (!website || website.userId !== userId) {
+      throw new Error("Website not found");
+    }
+
+    const bd = { ...((website.businessData || {}) as any) };
+    bd.publishTier = publishTier;
+
+    if (customImages) {
+      bd.customImages = { ...(bd.customImages || {}), ...customImages };
+    }
+    if (galleryImages) {
+      bd.galleryImages = galleryImages;
+    }
+
+    // Fallbacks for missing/empty required fields to protect performCloudflareDeploy from crashing
+    if (!bd.businessName) bd.businessName = website.title || "My Business";
+    if (!bd.phone) bd.phone = "(555) 555-5555";
+    if (!bd.city) bd.city = "Toledo";
+    if (!bd.state) bd.state = "OH";
+
+    bd.services = uniqueValues([
+      ...parseDeployList(bd.services),
+      ...parseDeployList(bd.additionalServices),
+    ]);
+    if (bd.services.length === 0) {
+      bd.services = ["Service 1", "Service 2", "Service 3"];
+    }
+
+    bd.serviceAreas = uniqueValues([
+      ...parseDeployList(bd.serviceAreas, { locationMode: true, preferredState: stringValue(bd.state) }),
+      ...parseDeployList(bd.additionalLocations, { locationMode: true, preferredState: stringValue(bd.state) }),
+    ]);
+    if (bd.serviceAreas.length === 0) {
+      bd.serviceAreas = [bd.city];
+    }
+
+    const domain = projectName; // Use projectName as domain/slug for directory generation
+    const categoryId = bd.categoryId || website.template || 'water-damage';
+    const { getCategoryConfig: getCC2, generateLocalServiceWebsite: genLS } = await import('../client/src/lib/local-service-engine.js');
+
+    // Homepage content check (fallback)
+    const hasLegacyHomepageContent = bd.homepageContent && 
+                                     typeof bd.homepageContent === 'object' && 
+                                     Object.keys(bd.homepageContent).length > 0;
+    const hasAiContent = hasLegacyHomepageContent || bd._aiIntroParas || bd._aiFaqs || bd._aiSeoBody || bd._aiProcessSteps;
+    if (!hasAiContent) {
+      try {
+        const catConfig = getCC2(categoryId);
+        const aiContent = await generateLocalServiceAIContent(
+          bd, userId, catConfig.name, catConfig.defaultPrimaryKeyword
+        );
+        if (aiContent) {
+          if (aiContent.introParas) bd._aiIntroParas = aiContent.introParas;
+          if (aiContent.faqs) bd._aiFaqs = aiContent.faqs;
+          if (aiContent.seoBody) bd._aiSeoBody = aiContent.seoBody;
+          if (aiContent.processSteps) bd._aiProcessSteps = aiContent.processSteps;
+        }
+      } catch (aiErr) {
+        console.error('AI content injection skipped in deploy:', aiErr);
+      }
+    }
+
+    // Favicon conversion
+    let faviconBinary: Buffer | null = null;
+    let faviconFilename: string | null = null;
+    if (bd.faviconUrl && typeof bd.faviconUrl === 'string' && bd.faviconUrl.startsWith('data:')) {
+      const fmatch = bd.faviconUrl.match(/^data:([^;]+);base64,([A-Za-z0-9+/=\n]+)$/);
+      if (fmatch) {
+        const rawType = fmatch[1];
+        const ext = /x-icon|vnd\.microsoft\.icon/.test(rawType) ? 'ico'
+          : rawType === 'image/svg+xml' ? 'svg'
+            : rawType === 'image/jpeg' ? 'jpg' : 'png';
+        faviconFilename = `favicon.${ext}`;
+        faviconBinary = Buffer.from(fmatch[2].replace(/\n/g, ''), 'base64');
+        bd.faviconUrl = `/${faviconFilename}`;
+      }
+    }
+
+    const deployedServiceAreas = uniqueValues(
+      (bd.serviceAreas as string[])
+        .map((location: string) => normalizeLocationLabel(location, stringValue(bd.state)))
+        .filter(Boolean)
+    );
+    const deployedCity =
+      normalizeLocationLabel(
+        stringValue(bd.city) || stringValue(bd.heroLocation) || deployedServiceAreas[0],
+        stringValue(bd.state)
+      ) ||
+      stringValue(bd.city) ||
+      deployedServiceAreas[0] ||
+      "";
+
+    const generatorData = {
+      ...bd,
+      city: deployedCity,
+      serviceAreas: deployedServiceAreas,
+      locationContent: normalizeLocationContentMap(bd.locationContent, stringValue(bd.state)),
+    };
+
+    const files = genLS(categoryId, generatorData, domain);
+
+    // Apply custom files overrides
+    const seoProtectedFiles = new Set(['sitemap.html']);
+    const storedCustomFiles = website.customFiles as Record<string, string> | null;
+    if (storedCustomFiles && typeof storedCustomFiles === 'object') {
+      const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(categoryId);
+      let skipCustomFiles = false;
+
+      if (!isRestoration) {
+        const indexHtml = storedCustomFiles['index.html'] || '';
+        if (
+          indexHtml.includes('Water Extraction & Cleanup') ||
+          indexHtml.includes('Rapid Structural Drying') ||
+          indexHtml.includes('Mold Containment & Removal')
+        ) {
+          console.log(`[deploy] Stale water damage content detected in stored custom files for category ${categoryId}. Skipping overrides.`);
+          skipCustomFiles = true;
+        }
+      }
+
+      if (!skipCustomFiles) {
+        for (const [filename, content] of Object.entries(storedCustomFiles)) {
+          if (typeof content === 'string' && filename.endsWith('.html') && !seoProtectedFiles.has(filename)) {
+            const isDynamicPage = filename === 'blog.html' || 
+                                  filename.startsWith('blog/') || 
+                                  filename.startsWith('services/') || 
+                                  filename.startsWith('locations/') || 
+                                  filename.startsWith('matrix/');
+            if (isDynamicPage) {
+              continue;
+            }
+
+            (files as any)[filename] = content
+              .replace(/\{\{city\}\}/g, generatorData.city || '')
+              .replace(/\{\{state\}\}/g, generatorData.state || '')
+              .replace(/\{\{businessName\}\}/g, generatorData.businessName || '');
+          }
+        }
+      }
+    }
+
+    // Ensure footer style fixes are applied
+    for (const [filename, content] of Object.entries(files)) {
+      if (typeof content === 'string' && filename.endsWith('.html')) {
+        (files as any)[filename] = content
+          .replace(/class="footer-inner has-two-cols"/g, 'class="footer-inner has-two-cols" style="grid-template-columns: 1fr 1fr;"')
+          .replace(/class="footer-inner has-three-cols"/g, 'class="footer-inner has-three-cols"')
+          .replace(/class="footer-phone"/g, 'class="footer-phone" style="white-space: nowrap;"');
+      }
+    }
+
+    // Apply customImages
+    if (bd.customImages && typeof bd.customImages === 'object' && Object.keys(bd.customImages).length > 0) {
+      for (const [filename, html] of Object.entries(files as Record<string, string>)) {
+        if (!filename.endsWith('.html') || typeof html !== 'string') continue;
+        let updated = html as string;
+        for (const [key, customSrc] of Object.entries(bd.customImages as Record<string, string>)) {
+          if (!customSrc) continue;
+          updated = updated.replace(
+            new RegExp(`(<img[^>]*data-placeholder="${key}"[^>]*)src="[^"]*"`, 'gs'),
+            `$1src="${customSrc}"`
+          );
+          updated = updated.replace(
+            new RegExp(`(<img[^>]*)src="[^"]*"([^>]*data-placeholder="${key}")`, 'gs'),
+            `$1src="${customSrc}"$2`
+          );
+        }
+        (files as any)[filename] = updated;
+      }
+    }
+
+    // Correct base domain (using Cloudflare pages.dev URL)
+    const correctBase = `https://${projectName}.pages.dev`;
+    for (const [filename, content] of Object.entries(files)) {
+      if (typeof content !== 'string') continue;
+      const fixed = (content as string).replace(
+        /https:\/\/[a-z0-9][-a-z0-9]*\.netlify\.app/gi,
+        correctBase
+      );
+      if (fixed !== content) {
+        (files as any)[filename] = fixed;
+      }
+    }
+
+    // Extract base64 image data-urls
+    const extractedImages = new Map<string, string>();
+    let imgIndex = 0;
+    const processedFiles: Record<string, string> = {};
+    for (const [filename, rawContent] of Object.entries(files)) {
+      const processed = (rawContent as string).replace(
+        /data:image\/(jpeg|png|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+/g,
+        (match) => {
+          if (extractedImages.has(match)) return extractedImages.get(match)!;
+          const typeStr = match.match(/^data:image\/([^;]+);/)?.[1] ?? 'jpeg';
+          const ext = typeStr === 'svg+xml' ? 'svg' : typeStr === 'jpeg' ? 'jpg' : typeStr;
+          const imgPath = `/images/custom-${imgIndex++}.${ext}`;
+          extractedImages.set(match, imgPath);
+          return imgPath;
+        }
+      );
+      processedFiles[filename] = processed;
+    }
+
+    // Prepare temp directory
+    const tempDir = path.join(os.tmpdir(), `cloudflare-deploy-${websiteId}-${Date.now()}`);
+    await fs.promises.mkdir(tempDir, { recursive: true });
+
+    try {
+      // Write processed files to disk
+      for (const [filename, content] of Object.entries(processedFiles)) {
+        const filePath = path.join(tempDir, filename);
+        await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.promises.writeFile(filePath, content, 'utf8');
+      }
+
+      // Write extracted images
+      for (const [dataUrl, imgPath] of extractedImages.entries()) {
+        const base64 = dataUrl.split(',')[1];
+        const imgFilePath = path.join(tempDir, imgPath.slice(1));
+        await fs.promises.mkdir(path.dirname(imgFilePath), { recursive: true });
+        await fs.promises.writeFile(imgFilePath, Buffer.from(base64, 'base64'));
+      }
+
+      // Write favicon
+      if (faviconFilename && faviconBinary) {
+        const favPath = path.join(tempDir, faviconFilename);
+        await fs.promises.mkdir(path.dirname(favPath), { recursive: true });
+        await fs.promises.writeFile(favPath, faviconBinary);
+      }
+
+      // Check/Create Cloudflare Project via REST API
+      console.log(`[performCloudflareDeploy] Checking project existence for: ${projectName}`);
+      const checkRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/pages/projects/${projectName}`, {
+        headers: { 'Authorization': `Bearer ${cloudflareApiToken}`, 'Content-Type': 'application/json' }
+      });
+
+      if (checkRes.status === 404) {
+        console.log(`[performCloudflareDeploy] Project not found. Creating Pages project: ${projectName}`);
+        const createRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/pages/projects`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${cloudflareApiToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: projectName,
+            production_branch: 'main'
+          })
+        });
+
+        if (!createRes.ok) {
+          const errText = await createRes.text();
+          throw new Error(`Failed to create Cloudflare Pages project: ${createRes.statusText}. Details: ${errText}`);
+        }
+      } else if (!checkRes.ok) {
+        const errText = await checkRes.text();
+        throw new Error(`Cloudflare project lookup failed: ${checkRes.statusText}. Details: ${errText}`);
+      }
+
+      // Deploy using Wrangler
+      console.log(`[performCloudflareDeploy] Deploying directory ${tempDir} to Cloudflare project: ${projectName}`);
+      const env = {
+        ...process.env,
+        CLOUDFLARE_API_TOKEN: cloudflareApiToken,
+        CLOUDFLARE_ACCOUNT_ID: cloudflareAccountId,
+        WRANGLER_SEND_METRICS: "false"
+      };
+
+      const { stdout, stderr } = await execAsync(`npx wrangler pages deploy "${tempDir}" --project-name="${projectName}" --branch="main"`, { env });
+      console.log(`[performCloudflareDeploy] Wrangler stdout:`, stdout);
+      if (stderr) console.warn(`[performCloudflareDeploy] Wrangler stderr:`, stderr);
+
+    } finally {
+      // Clean up temp directory
+      try {
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
+      } catch (cleanupErr) {
+        console.error(`[performCloudflareDeploy] Failed to clean up temp dir:`, cleanupErr);
+      }
+    }
+
+    const siteUrl = `https://${projectName}.pages.dev`;
+
+    // Save Cloudflare specific variables folded in businessData
+    const updatedBD = {
+      ...bd,
+      _cloudflareUrl: siteUrl,
+      _cloudflareProjectName: projectName,
+      _cloudflareDeploymentStatus: 'deployed',
+      _lastDeployedProvider: 'cloudflare',
+      _lastDeployedAt: new Date().toISOString()
+    };
+
+    // Update DB
+    await storage.updateWebsite(websiteId, {
+      businessData: updatedBD,
+      // Re-use standard netlifyUrl/deployed_url and netlifyDeploymentStatus/status columns to not break common interfaces
+      netlifyUrl: siteUrl,
+      netlifyDeploymentStatus: 'deployed',
+      lastDeployedAt: new Date(),
+    });
+
+    // Ping search engines
+    const sitemapUrl = encodeURIComponent(`${siteUrl}/sitemap.xml`);
+    Promise.all([
+      fetch(`https://www.google.com/ping?sitemap=${sitemapUrl}`).catch(() => { }),
+      fetch(`https://www.bing.com/ping?sitemap=${sitemapUrl}`).catch(() => { }),
+    ]).catch(() => { });
+
+    return { url: siteUrl, projectName };
+  }
+
   async function runBackgroundGenerationAndDeploy(
     websiteId: string,
     userId: string,
@@ -7767,7 +8186,11 @@ Generated on: ${new Date().toISOString()}`;
     siteName?: string,
     force?: boolean,
     customImages?: any,
-    galleryImages?: any
+    galleryImages?: any,
+    deployProvider?: 'netlify' | 'cloudflare',
+    cloudflareApiToken?: string,
+    cloudflareAccountId?: string,
+    cloudflareProjectName?: string
   ) {
     try {
       const website = await storage.getWebsite(websiteId);
@@ -8112,7 +8535,23 @@ Generated on: ${new Date().toISOString()}`;
       await storage.updateWebsite(websiteId, { businessData: bd });
 
       // 3. Compile and Deploy
-      if (netlifyApiKey && siteName) {
+      const activeProvider = deployProvider || (netlifyApiKey ? 'netlify' : undefined);
+      if (activeProvider === 'cloudflare' && cloudflareApiToken && cloudflareAccountId && cloudflareProjectName) {
+        console.log(`[Background Job] Deploying to Cloudflare...`);
+        bd.generationStatus = 'deploying';
+        await storage.updateWebsite(websiteId, { businessData: bd });
+
+        await performCloudflareDeploy(
+          websiteId,
+          userId,
+          cloudflareApiToken,
+          cloudflareAccountId,
+          cloudflareProjectName,
+          publishTier,
+          customImages,
+          galleryImages
+        );
+      } else if (activeProvider === 'netlify' && netlifyApiKey && siteName) {
         console.log(`[Background Job] Deploying to Netlify...`);
         bd.generationStatus = 'deploying';
         await storage.updateWebsite(websiteId, { businessData: bd });
@@ -8329,6 +8768,115 @@ Generated on: ${new Date().toISOString()}`;
       return res.json({ url: result.url, siteName: result.siteName, status: 'deployed' });
     } catch (err: any) {
       console.error("WD deploy error:", err);
+      res.status(500).json({ error: err.message || "Deployment failed" });
+    }
+  });
+
+  app.post("/api/websites/:id/deploy-cloudflare", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      let { cloudflareApiToken, cloudflareAccountId, projectName, publishTier: reqTier, customImages, galleryImages } = req.body;
+
+      const website = await storage.getWebsite(id);
+      if (!website || website.userId !== userId) {
+        return res.status(404).json({ error: "Website not found" });
+      }
+
+      // Resolve cloudflare token: body → DB settings
+      if (!cloudflareApiToken || cloudflareApiToken.includes('•')) {
+        const setting = await storage.getApiSetting(userId, 'cloudflare');
+        if (setting?.apiKey) {
+          try { cloudflareApiToken = decrypt(setting.apiKey); } catch { cloudflareApiToken = setting.apiKey; }
+        }
+      }
+      if (!cloudflareApiToken) {
+        return res.status(400).json({ error: "Cloudflare API token required. Verify it in the Deploy tab." });
+      }
+
+      // Resolve cloudflare account ID: body → DB settings
+      if (!cloudflareAccountId || cloudflareAccountId.includes('•')) {
+        const setting = await storage.getApiSetting(userId, 'cloudflare');
+        if (setting?.accessKey) {
+          try { cloudflareAccountId = decrypt(setting.accessKey); } catch { cloudflareAccountId = setting.accessKey; }
+        }
+      }
+      if (!cloudflareAccountId) {
+        return res.status(400).json({ error: "Cloudflare Account ID required. Verify it in the Deploy tab." });
+      }
+
+      const isPaidOrAdmin = req.user.role === 'paid' || req.user.role === 'admin';
+      const bd = { ...((website.businessData || {}) as any) };
+      
+      let publishTier = reqTier || bd.publishTier || '1';
+      if (!isPaidOrAdmin) {
+        publishTier = '1';
+      }
+      bd.publishTier = publishTier;
+      
+      // Update basic fields in storage
+      await storage.updateWebsite(id, { businessData: bd });
+
+      // Merge client overrides in memory
+      if (customImages) {
+        bd.customImages = { ...(bd.customImages || {}), ...customImages };
+      }
+      if (galleryImages) {
+        bd.galleryImages = galleryImages;
+      }
+
+      const services = uniqueValues([
+        ...parseDeployList(bd.services),
+        ...parseDeployList(bd.additionalServices),
+      ]);
+      const locations = uniqueValues([
+        ...parseDeployList(bd.serviceAreas, { locationMode: true, preferredState: stringValue(bd.state) }),
+        ...parseDeployList(bd.additionalLocations, { locationMode: true, preferredState: stringValue(bd.state) }),
+      ]);
+
+      const rawProjectName = projectName || bd.urlSlug || (bd.businessName || website.title || 'my-site');
+      const cleanProjectName = rawProjectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 63);
+
+      if (!cleanProjectName) {
+        return res.status(400).json({ error: "Project name is required." });
+      }
+
+      // Check if we need to generate homepage AI content or subpage AI content.
+      const hasLegacyHomepageContent = bd.homepageContent && 
+                                       typeof bd.homepageContent === 'object' && 
+                                       Object.keys(bd.homepageContent).length > 0;
+      const needsHomepage = !hasLegacyHomepageContent && (!bd._aiIntroParas || !bd._aiFaqs || !bd._aiSeoBody || !bd._aiProcessSteps);
+      
+      let needsDynamicPages = false;
+      if (publishTier === '2' || publishTier === '3') {
+        bd.serviceContent = bd.serviceContent || {};
+        bd.locationContent = bd.locationContent || {};
+        const pendingServices = services.filter((s: string) => !bd.serviceContent[s]);
+        const pendingLocations = locations.filter((l: string) => !bd.locationContent[l]);
+        if (pendingServices.length > 0 || pendingLocations.length > 0) {
+          needsDynamicPages = true;
+        }
+      }
+
+      const provider = bd.contentAiProvider || 'openai';
+      const hasApiKey = await getAIProviderConfig(userId, provider);
+
+      if ((needsHomepage || needsDynamicPages) && hasApiKey) {
+        // Trigger background generation and deploy
+        runBackgroundGenerationAndDeploy(
+          id, userId, publishTier, undefined, undefined, false, customImages, galleryImages,
+          'cloudflare', cloudflareApiToken, cloudflareAccountId, cleanProjectName
+        );
+        return res.json({ success: true, status: 'generating', message: "Content generation running in background." });
+      }
+
+      // Fast path: deploy synchronously
+      const result = await performCloudflareDeploy(
+        id, userId, cloudflareApiToken, cloudflareAccountId, cleanProjectName, publishTier, customImages, galleryImages
+      );
+      return res.json({ url: result.url, projectName: result.projectName, status: 'deployed' });
+    } catch (err: any) {
+      console.error("Cloudflare deploy error:", err);
       res.status(500).json({ error: err.message || "Deployment failed" });
     }
   });

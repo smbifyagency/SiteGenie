@@ -50,6 +50,11 @@ export const websites = pgTable("websites", {
   netlifySiteId: text("netlify_site_id"), // Netlify site ID
   netlifyDeploymentStatus: text("netlify_deployment_status").default("not_deployed"), // not_deployed, deploying, deployed, failed
   lastDeployedAt: timestamp("last_deployed_at"), // Last deployment timestamp
+  cloudflareAccountId: text("cloudflare_account_id"), // Cloudflare Account ID
+  cloudflareProjectName: text("cloudflare_project_name"), // Cloudflare Pages Project Name
+  cloudflareUrl: text("cloudflare_url"), // Cloudflare Deployed URL
+  cloudflareDeploymentStatus: text("cloudflare_deployment_status").default("not_deployed"), // not_deployed, deploying, deployed, failed
+  lastDeployedProvider: text("last_deployed_provider").default("netlify"), // netlify, cloudflare
 
   title: text("title").notNull(), // Website title for CMS display
   description: text("description"), // Website description

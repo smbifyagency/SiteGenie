@@ -251,6 +251,186 @@ function NetlifyDeployDialog({ website, onSuccess }: NetlifyDeployDialogProps) {
   );
 }
 
+interface CloudflareDeployDialogProps {
+  website: Website;
+  onSuccess: () => void;
+}
+
+function CloudflareDeployDialog({ website, onSuccess }: CloudflareDeployDialogProps) {
+  const [cloudflareApiToken, setCloudflareApiToken] = useState("");
+  const [cloudflareAccountId, setCloudflareAccountId] = useState("");
+  const [projectName, setProjectName] = useState(
+    website.cloudflareProjectName || 
+    website.title.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 63) || 
+    ""
+  );
+  const { toast } = useToast();
+
+  const { data: cloudflareSetting } = useQuery<any>({
+    queryKey: ["/api/settings/cloudflare"],
+    queryFn: async () => {
+      const res = await fetch("/api/settings/cloudflare");
+      if (!res.ok) return null;
+      return res.json();
+    }
+  });
+
+  useEffect(() => {
+    if (cloudflareSetting) {
+      if (cloudflareSetting.apiKey && !cloudflareApiToken) {
+        setCloudflareApiToken("•••••••••••");
+      }
+      if (cloudflareSetting.accessKey && !cloudflareAccountId) {
+        setCloudflareAccountId("•••••••••••");
+      }
+    }
+  }, [cloudflareSetting]);
+
+  const deployMutation = useMutation({
+    mutationFn: async () => {
+      if (
+        (cloudflareApiToken && cloudflareApiToken !== "•••••••••••") ||
+        (cloudflareAccountId && cloudflareAccountId !== "•••••••••••")
+      ) {
+        await apiRequest("PUT", "/api/settings/cloudflare", {
+          apiKey: cloudflareApiToken !== "•••••••••••" ? cloudflareApiToken : undefined,
+          accessKey: cloudflareAccountId !== "•••••••••••" ? cloudflareAccountId : undefined,
+          isActive: true
+        });
+      }
+
+      return apiRequest("POST", `/api/websites/${website.id}/deploy-cloudflare`, {
+        cloudflareApiToken,
+        cloudflareAccountId,
+        projectName: projectName || website.title,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Deployment Started",
+        description: "Your website is being deployed to Cloudflare Pages. This may take a few minutes.",
+      });
+      onSuccess();
+    },
+    onError: (error) => {
+      toast({
+        title: "Deployment Failed",
+        description: error instanceof Error ? error.message : "Failed to deploy website",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const testCloudflareMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("/api/test-cloudflare", "POST", { 
+        apiKey: cloudflareApiToken, 
+        accountId: cloudflareAccountId 
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Connection Successful",
+        description: "Cloudflare credentials are valid and ready to use.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Connection Failed",
+        description: error instanceof Error ? error.message : "Invalid Cloudflare credentials",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isAlreadyDeployed = website.lastDeployedProvider === "cloudflare" && website.cloudflareUrl;
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          className={isAlreadyDeployed ? "bg-orange-600 hover:bg-orange-700 text-white" : "bg-zinc-700 hover:bg-zinc-800 text-white"}
+          data-testid={`button-deploy-cloudflare-${website.id}`}
+        >
+          <Rocket className="w-4 h-4 mr-2" />
+          {isAlreadyDeployed ? "Redeploy (CF)" : "Deploy CF"}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {isAlreadyDeployed ? "Redeploy to Cloudflare Pages" : "Deploy to Cloudflare Pages"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="cf-token">Cloudflare API Token</Label>
+            <Input
+              id="cf-token"
+              type="password"
+              placeholder="Enter your Cloudflare API Token"
+              value={cloudflareApiToken}
+              onChange={(e) => setCloudflareApiToken(e.target.value)}
+              data-testid="input-cf-token"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cf-account-id">Cloudflare Account ID</Label>
+            <Input
+              id="cf-account-id"
+              placeholder="Enter your Cloudflare Account ID"
+              value={cloudflareAccountId}
+              onChange={(e) => setCloudflareAccountId(e.target.value)}
+              data-testid="input-cf-account-id"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => testCloudflareMutation.mutate()}
+              disabled={!cloudflareApiToken || !cloudflareAccountId || testCloudflareMutation.isPending}
+              data-testid="button-test-cloudflare"
+            >
+              {testCloudflareMutation.isPending ? "Testing..." : "Test Connection"}
+            </Button>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cf-project-name">Project Name (optional)</Label>
+            <Input
+              id="cf-project-name"
+              placeholder="Enter custom project name"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              data-testid="input-cf-project-name"
+            />
+            <p className="text-xs text-gray-500">
+              {projectName ? `Site will be at: ${projectName.toLowerCase().replace(/[^a-z0-9-]/g, "-")}.pages.dev` : ""}
+            </p>
+          </div>
+
+          {isAlreadyDeployed && (
+            <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200/30">
+              <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                Current URL: <a href={website.cloudflareUrl || '#'} target="_blank" className="underline">{website.cloudflareUrl}</a>
+              </p>
+            </div>
+          )}
+
+          <Button
+            onClick={() => deployMutation.mutate()}
+            disabled={deployMutation.isPending || !cloudflareApiToken || !cloudflareAccountId || !projectName.trim()}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+            data-testid={`button-confirm-cf-deploy`}
+          >
+            {deployMutation.isPending ? "Deploying..." : (isAlreadyDeployed ? "Redeploy Now" : "Deploy Now")}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function WebsiteCard({ website }: { website: Website }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -278,11 +458,15 @@ function WebsiteCard({ website }: { website: Website }) {
   });
 
   const getStatusBadge = () => {
-    if (!website.netlifyDeploymentStatus || website.netlifyDeploymentStatus === "not_deployed") {
+    const status = website.lastDeployedProvider === "cloudflare"
+      ? website.cloudflareDeploymentStatus
+      : website.netlifyDeploymentStatus;
+
+    if (!status || status === "not_deployed") {
       return <Badge variant="secondary" data-testid={`status-${website.id}`}>Not Deployed</Badge>;
     }
 
-    switch (website.netlifyDeploymentStatus) {
+    switch (status) {
       case "deployed":
         return <Badge variant="default" className="bg-green-600" data-testid={`status-${website.id}`}>Deployed</Badge>;
       case "deploying":
@@ -327,16 +511,16 @@ function WebsiteCard({ website }: { website: Website }) {
             </div>
           )}
 
-          {website.netlifyUrl && (
+          {(website.cloudflareUrl || website.netlifyUrl) && (
             <div className="flex items-center gap-2 text-sm">
               <Globe className="w-4 h-4 text-green-600" />
               <a
-                href={website.netlifyUrl}
+                href={(website.cloudflareUrl || website.netlifyUrl) ?? undefined}
                 target="_blank"
                 className="text-blue-600 hover:underline truncate"
                 data-testid={`link-live-${website.id}`}
               >
-                {website.netlifyUrl}
+                {website.cloudflareUrl || website.netlifyUrl}
               </a>
             </div>
           )}
@@ -368,9 +552,17 @@ function WebsiteCard({ website }: { website: Website }) {
             }}
           />
 
-          {website.netlifyUrl && (
+          <CloudflareDeployDialog
+            website={website}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/websites"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/user/website-limits"] });
+            }}
+          />
+
+          {(website.cloudflareUrl || website.netlifyUrl) && (
             <Button variant="outline" size="sm" asChild data-testid={`button-view-${website.id}`}>
-              <a href={website.netlifyUrl} target="_blank">
+              <a href={(website.cloudflareUrl || website.netlifyUrl) ?? undefined} target="_blank">
                 <Eye className="w-4 h-4 mr-2" />
                 View Live
               </a>
