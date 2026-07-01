@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, Loader2, Key, TestTube2, ExternalLink, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-type Provider = "openai" | "gemini" | "openrouter" | "deepseek" | "netlify" | "unsplash" | "cloudflare";
+type Provider = "openai" | "gemini" | "openrouter" | "deepseek" | "netlify" | "unsplash" | "cloudflare" | "vercel" | "firebase" | "surge";
 
 interface ApiSetting {
   name: string;
@@ -83,6 +83,27 @@ const providerConfigs: ProviderConfig[] = [
     description: "Deploy generated websites directly to Cloudflare Pages",
     docsUrl: "https://dash.cloudflare.com/",
     placeholder: "API Token"
+  },
+  {
+    service: "vercel",
+    title: "Vercel API",
+    description: "Deploy generated websites directly to Vercel",
+    docsUrl: "https://vercel.com/docs",
+    placeholder: "Vercel Token"
+  },
+  {
+    service: "firebase",
+    title: "Firebase Hosting API",
+    description: "Deploy generated websites directly to Google Firebase Hosting",
+    docsUrl: "https://firebase.google.com/docs/hosting",
+    placeholder: "Firebase Token"
+  },
+  {
+    service: "surge",
+    title: "Surge.sh API",
+    description: "Deploy generated websites directly to Surge.sh",
+    docsUrl: "https://surge.sh/help",
+    placeholder: "Surge Token"
   }
 ];
 
@@ -93,7 +114,10 @@ const emptyProviderState = {
   deepseek: "",
   netlify: "",
   unsplash: "",
-  cloudflare: ""
+  cloudflare: "",
+  vercel: "",
+  firebase: "",
+  surge: ""
 } as const;
 
 export default function ApiSetup() {
@@ -108,7 +132,10 @@ export default function ApiSetup() {
     deepseek: null,
     netlify: null,
     unsplash: null,
-    cloudflare: null
+    cloudflare: null,
+    vercel: null,
+    firebase: null,
+    surge: null
   });
   const [testingStates, setTestingStates] = useState<Record<Provider, boolean>>({
     openai: false,
@@ -117,10 +144,15 @@ export default function ApiSetup() {
     deepseek: false,
     netlify: false,
     unsplash: false,
-    cloudflare: false
+    cloudflare: false,
+    vercel: false,
+    firebase: false,
+    surge: false
   });
 
   const [cfAccountId, setCfAccountId] = useState("");
+  const [firebaseProjectId, setFirebaseProjectId] = useState("");
+  const [surgeDomain, setSurgeDomain] = useState("");
 
   // Fetch existing API settings
   const { data: openaiSetting } = useQuery({ queryKey: ["/api/settings/openai"], enabled: true });
@@ -130,6 +162,9 @@ export default function ApiSetup() {
   const { data: netlifySetting } = useQuery({ queryKey: ["/api/settings/netlify"], enabled: true });
   const { data: unsplashSetting } = useQuery({ queryKey: ["/api/settings/unsplash"], enabled: true });
   const { data: cloudflareSetting } = useQuery({ queryKey: ["/api/settings/cloudflare"], enabled: true });
+  const { data: vercelSetting } = useQuery({ queryKey: ["/api/settings/vercel"], enabled: true });
+  const { data: firebaseSetting } = useQuery({ queryKey: ["/api/settings/firebase"], enabled: true });
+  const { data: surgeSetting } = useQuery({ queryKey: ["/api/settings/surge"], enabled: true });
 
   const settingsByProvider: Record<Provider, ApiSetting | undefined> = {
     openai: openaiSetting as ApiSetting | undefined,
@@ -139,15 +174,22 @@ export default function ApiSetup() {
     netlify: netlifySetting as ApiSetting | undefined,
     unsplash: unsplashSetting as ApiSetting | undefined,
     cloudflare: cloudflareSetting as ApiSetting | undefined,
+    vercel: vercelSetting as ApiSetting | undefined,
+    firebase: firebaseSetting as ApiSetting | undefined,
+    surge: surgeSetting as ApiSetting | undefined,
   };
 
   useEffect(() => {
-    if (cloudflareSetting) {
-      if ((cloudflareSetting as any).accessKey && !cfAccountId) {
-        setCfAccountId("•••••••••••");
-      }
+    if (cloudflareSetting && (cloudflareSetting as any).accessKey && !cfAccountId) {
+      setCfAccountId("•••••••••••");
     }
-  }, [cloudflareSetting]);
+    if (firebaseSetting && (firebaseSetting as any).accessKey && !firebaseProjectId) {
+      setFirebaseProjectId("•••••••••••");
+    }
+    if (surgeSetting && (surgeSetting as any).accessKey && !surgeDomain) {
+      setSurgeDomain("•••••••••••");
+    }
+  }, [cloudflareSetting, firebaseSetting, surgeSetting]);
 
   const updateApiKeyMutation = useMutation<
     { service: Provider; apiKey?: string; accessKey?: string },
@@ -155,7 +197,9 @@ export default function ApiSetup() {
     { service: Provider; apiKey?: string; accessKey?: string }
   >({
     mutationFn: async ({ service, apiKey, accessKey }) => {
-      const response = await fetch(`/api/settings/${service}`, {
+      const isGeneric = service === 'vercel' || service === 'firebase' || service === 'surge';
+      const endpoint = isGeneric ? `/api/settings/generic/${service}` : `/api/settings/${service}`;
+      const response = await fetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey, accessKey, isActive: true })
@@ -260,6 +304,15 @@ export default function ApiSetup() {
         case "cloudflare":
           testResult = await testViaEndpoint("/api/test-cloudflare", { apiKey, accountId: cfAccountId }, "Cloudflare API connection successful");
           break;
+        case "vercel":
+          testResult = await testViaEndpoint("/api/test-generic-connection", { provider: service, apiKey }, "Vercel API connection successful");
+          break;
+        case "firebase":
+          testResult = await testViaEndpoint("/api/test-generic-connection", { provider: service, apiKey, accessKey: firebaseProjectId }, "Firebase Hosting connection successful");
+          break;
+        case "surge":
+          testResult = await testViaEndpoint("/api/test-generic-connection", { provider: service, apiKey, accessKey: surgeDomain }, "Surge connection successful");
+          break;
         default:
           testResult = { success: false, message: "Unknown service" };
       }
@@ -272,8 +325,17 @@ export default function ApiSetup() {
 
   const handleSaveKey = (service: Provider) => {
     const apiKey = apiKeys[service];
+    
+    let accessKey: string | undefined = undefined;
+    if (service === "cloudflare") accessKey = cfAccountId;
+    else if (service === "firebase") accessKey = firebaseProjectId;
+    else if (service === "surge") accessKey = surgeDomain;
 
-    if (!apiKey.trim() && (service !== "cloudflare" || !cfAccountId.trim())) {
+    const isMissingAccessKey = (service === "cloudflare" && !cfAccountId.trim()) || 
+                             (service === "firebase" && !firebaseProjectId.trim()) || 
+                             (service === "surge" && !surgeDomain.trim());
+
+    if (!apiKey.trim() && isMissingAccessKey) {
       toast({
         title: "API Key Required",
         description: "Enter an API key before saving.",
@@ -285,11 +347,12 @@ export default function ApiSetup() {
     setTestResults((prev) => ({ ...prev, [service]: null }));
     setApiKeys((prev) => ({ ...prev, [service]: "" }));
     
-    if (service === "cloudflare") {
+    const isGenericOrCF = service === "cloudflare" || service === "vercel" || service === "firebase" || service === "surge";
+    if (isGenericOrCF) {
       updateApiKeyMutation.mutate({ 
         service, 
         apiKey: apiKey !== "•••••••••••" ? apiKey : undefined, 
-        accessKey: cfAccountId !== "•••••••••••" ? cfAccountId : undefined 
+        accessKey: accessKey !== "•••••••••••" ? accessKey : undefined 
       });
     } else {
       updateApiKeyMutation.mutate({ service, apiKey });
@@ -365,10 +428,12 @@ export default function ApiSetup() {
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {service === "cloudflare" ? (
+                {service === "cloudflare" || service === "firebase" || service === "surge" ? (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor={`${service}-key`} className="text-gray-300">API Token</Label>
+                      <Label htmlFor={`${service}-key`} className="text-gray-300">
+                        {service === "cloudflare" ? "API Token" : "Access Token"}
+                      </Label>
                       <Input
                         id={`${service}-key`}
                         type="password"
@@ -388,13 +453,27 @@ export default function ApiSetup() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`${service}-account-id`} className="text-gray-300">Account ID</Label>
+                      <Label htmlFor={`${service}-access-key`} className="text-gray-300">
+                        {service === "cloudflare" ? "Account ID" : service === "firebase" ? "Project ID" : "Surge Domain (optional)"}
+                      </Label>
                       <Input
-                        id={`${service}-account-id`}
-                        placeholder={settingsByProvider[service]?.accessKey ? "•••••••••••••••••••••" : "Enter Account ID"}
-                        value={cfAccountId}
-                        onChange={(e) => setCfAccountId(e.target.value)}
-                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${settingsByProvider[service]?.accessKey && !cfAccountId
+                        id={`${service}-access-key`}
+                        placeholder={
+                          settingsByProvider[service]?.accessKey 
+                            ? "•••••••••••••••••••••" 
+                            : service === "cloudflare" ? "Enter Account ID" : service === "firebase" ? "Enter Project ID" : "mysite.surge.sh"
+                        }
+                        value={
+                          service === "cloudflare" ? cfAccountId : service === "firebase" ? firebaseProjectId : surgeDomain
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (service === "cloudflare") setCfAccountId(val);
+                          else if (service === "firebase") setFirebaseProjectId(val);
+                          else if (service === "surge") setSurgeDomain(val);
+                        }}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${settingsByProvider[service]?.accessKey && 
+                          !(service === "cloudflare" ? cfAccountId : service === "firebase" ? firebaseProjectId : surgeDomain)
                             ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700"
                             : "bg-white/5"
                           }`}
@@ -456,14 +535,17 @@ export default function ApiSetup() {
                       const userEnteredKey = apiKeys[service];
 
                       if (userEnteredKey && userEnteredKey.trim()) {
-                        // User entered a new key — test it directly  
                         testConnection(service, userEnteredKey);
                       } else if (hasCurrentKey) {
-                        // Key is saved on server — test via stored key endpoint
                         setTestingStates((prev) => ({ ...prev, [service]: true }));
                         try {
-                          const res = await fetch(`/api/test-stored-key/${service}`, {
+                          const isGeneric = service === 'vercel' || service === 'firebase' || service === 'surge';
+                          const endpoint = isGeneric ? `/api/test-generic-connection` : `/api/test-stored-key/${service}`;
+                          const body = isGeneric ? JSON.stringify({ provider: service }) : undefined;
+                          const res = await fetch(endpoint, {
                             method: "POST",
+                            headers: isGeneric ? { "Content-Type": "application/json" } : undefined,
+                            body,
                             credentials: "include",
                           });
                           const data = await res.json();

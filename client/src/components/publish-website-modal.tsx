@@ -209,7 +209,7 @@ export function PublishWebsiteModal({
   const isRedeploy = Boolean(deployedUrl);
 
   // ── State ─────────────────────────────────────────────────────────────
-  const [provider, setProvider] = useState<'netlify' | 'cloudflare'>('netlify');
+  const [provider, setProvider] = useState<'netlify' | 'cloudflare' | 'vercel' | 'firebase' | 'surge'>('netlify');
   const [cfToken, setCfToken] = useState("");
   const [cfAccountId, setCfAccountId] = useState("");
   const [cfChecking, setCfChecking] = useState(false);
@@ -264,7 +264,11 @@ export function PublishWebsiteModal({
           if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
           setDeployProgress(100);
           setDeployPhase("Website is live!");
-          const domainSuffix = provider === 'cloudflare' ? 'pages.dev' : 'netlify.app';
+          const domainSuffix = 
+            provider === 'cloudflare' ? 'pages.dev' : 
+            provider === 'vercel' ? 'vercel.app' : 
+            provider === 'firebase' ? 'web.app' : 
+            provider === 'surge' ? 'surge.sh' : 'netlify.app';
           const finalUrl = `https://${slug || data.siteName || resultSiteName || currentSiteName || defaultSlug}.${domainSuffix}`;
           setResultUrl(finalUrl);
           setResultSiteName(slug || data.siteName || resultSiteName || currentSiteName || defaultSlug);
@@ -384,61 +388,34 @@ export function PublishWebsiteModal({
     setCfConnected(null);
 
     try {
-      if (provider === 'netlify') {
-        if (tokenVerified && netlifyToken) {
+      const isGeneric = provider === 'vercel' || provider === 'firebase' || provider === 'surge';
+      const endpoint = isGeneric ? `/api/settings/generic/${provider}` : `/api/settings/${provider}`;
+      const res = await fetch(endpoint, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.apiKey) {
           setApiConnected(true);
-          setIsCheckingApi(false);
           setStep("url-search");
           if (skipDomainCheck) {
             setSlugAvailable(true);
             setSlugMessage("");
-          }
-          return;
-        }
-
-        const res = await fetch("/api/settings/netlify", { credentials: "include" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.apiKey) {
-            setApiConnected(true);
-            setStep("url-search");
-            if (skipDomainCheck) {
-              setSlugAvailable(true);
-              setSlugMessage("");
-            } else if (isRedeploy && currentSiteName) {
-              setSlugAvailable(true);
-              setSlugMessage(`"${currentSiteName}.netlify.app" is your current site. Ready to update.`);
-            }
-          } else {
-            setApiConnected(false);
+          } else if (isRedeploy && currentSiteName) {
+            setSlugAvailable(true);
+            const domainSuffix = 
+              provider === 'cloudflare' ? 'pages.dev' : 
+              provider === 'vercel' ? 'vercel.app' : 
+              provider === 'firebase' ? 'web.app' : 
+              provider === 'surge' ? 'surge.sh' : 'netlify.app';
+            setSlugMessage(`"${currentSiteName}.${domainSuffix}" is your current site. Ready to update.`);
           }
         } else {
           setApiConnected(false);
         }
       } else {
-        const res = await fetch("/api/settings/cloudflare", { credentials: "include" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.apiKey && data?.accessKey) {
-            setCfConnected(true);
-            setStep("url-search");
-            if (skipDomainCheck) {
-              setSlugAvailable(true);
-              setSlugMessage("");
-            } else if (isRedeploy && currentSiteName) {
-              setSlugAvailable(true);
-              setSlugMessage(`"${currentSiteName}.pages.dev" is your current site. Ready to update.`);
-            }
-          } else {
-            setCfConnected(false);
-          }
-        } else {
-          setCfConnected(false);
-        }
+        setApiConnected(false);
       }
     } catch {
-      if (provider === 'netlify') setApiConnected(false);
-      else setCfConnected(false);
+      setApiConnected(false);
     } finally {
       setIsCheckingApi(false);
     }
@@ -562,9 +539,16 @@ export function PublishWebsiteModal({
 
       // Phase 2: Deploy via the correct endpoint
       console.log(`[PublishWebsiteModal] Sending deploy request to provider ${provider}...`);
-      const deployEndpoint = provider === 'cloudflare'
-        ? `/api/websites/${websiteId}/deploy-cloudflare`
-        : `/api/websites/${websiteId}/deploy-wd`;
+      const isGeneric = provider === 'vercel' || provider === 'firebase' || provider === 'surge';
+      const deployEndpoint = isGeneric
+        ? `/api/websites/${websiteId}/deploy-generic`
+        : provider === 'cloudflare'
+          ? `/api/websites/${websiteId}/deploy-cloudflare`
+          : `/api/websites/${websiteId}/deploy-wd`;
+
+      if (isGeneric) {
+        payload.provider = provider;
+      }
 
       const res = await fetch(deployEndpoint, {
         method: "POST",
@@ -588,7 +572,11 @@ export function PublishWebsiteModal({
         setDeployPhase("Generating website pages copy...");
         startPollingStatus();
       } else {
-        const domainSuffix = provider === 'cloudflare' ? 'pages.dev' : 'netlify.app';
+        const domainSuffix = 
+          provider === 'cloudflare' ? 'pages.dev' : 
+          provider === 'vercel' ? 'vercel.app' : 
+          provider === 'firebase' ? 'web.app' : 
+          provider === 'surge' ? 'surge.sh' : 'netlify.app';
         const url = data.url || `https://${targetSlug}.${domainSuffix}`;
         setDeployProgress(100);
         setDeployPhase("Website is live!");
@@ -653,37 +641,25 @@ export function PublishWebsiteModal({
             </div>
           )}
           
-          <div className="flex gap-2 p-1 bg-gray-950 rounded-lg border border-gray-800/80 mt-3 mx-2">
-            <button
-              onClick={() => {
-                setProvider('netlify');
+          <div className="mt-3">
+            <Label className="text-xs text-gray-400 font-semibold mb-1 block">Deploy Provider</Label>
+            <select
+              value={provider}
+              onChange={(e) => {
+                const val = e.target.value as any;
+                setProvider(val);
                 setStep("api-check");
-                setSlugAvailable(null);
+                setSlugAvailable(val === 'netlify' ? null : true);
                 setSlugMessage("");
               }}
-              className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all ${
-                provider === 'netlify' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className="w-full bg-gray-900 border-gray-800 text-white text-xs rounded-lg p-2 focus:ring-1 focus:ring-[#7C3AED]"
             >
-              Netlify
-            </button>
-            <button
-              onClick={() => {
-                setProvider('cloudflare');
-                setStep("api-check");
-                setSlugAvailable(true);
-                setSlugMessage("");
-              }}
-              className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all ${
-                provider === 'cloudflare' 
-                  ? 'bg-orange-600 text-white' 
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Cloudflare Pages
-            </button>
+              <option value="netlify">Netlify</option>
+              <option value="cloudflare">Cloudflare Pages</option>
+              <option value="vercel">Vercel</option>
+              <option value="firebase">Firebase Hosting</option>
+              <option value="surge">Surge.sh</option>
+            </select>
           </div>
         </DialogHeader>
 
@@ -868,7 +844,10 @@ export function PublishWebsiteModal({
                     />
                   </div>
                   <span className="text-xs text-gray-500 bg-gray-900 border border-gray-700 border-l-0 px-3 h-10 flex items-center rounded-r-md">
-                    {provider === 'cloudflare' ? '.pages.dev' : '.netlify.app'}
+                    {provider === 'cloudflare' ? '.pages.dev' : 
+                     provider === 'vercel' ? '.vercel.app' : 
+                     provider === 'firebase' ? '.web.app' : 
+                     provider === 'surge' ? '.surge.sh' : '.netlify.app'}
                   </span>
                 </div>
 

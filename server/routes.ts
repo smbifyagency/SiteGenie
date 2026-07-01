@@ -8205,10 +8205,12 @@ Generated on: ${new Date().toISOString()}`;
     force?: boolean,
     customImages?: any,
     galleryImages?: any,
-    deployProvider?: 'netlify' | 'cloudflare',
+    deployProvider?: string,
     cloudflareApiToken?: string,
     cloudflareAccountId?: string,
-    cloudflareProjectName?: string
+    cloudflareProjectName?: string,
+    genericCredentials?: Record<string, string>,
+    genericProjectName?: string
   ) {
     try {
       const website = await storage.getWebsite(websiteId);
@@ -8575,6 +8577,32 @@ Generated on: ${new Date().toISOString()}`;
         await storage.updateWebsite(websiteId, { businessData: bd });
 
         await performNetlifyDeploy(websiteId, userId, netlifyApiKey, siteName, publishTier, customImages, galleryImages);
+      } else if (activeProvider && activeProvider !== 'netlify' && activeProvider !== 'cloudflare') {
+        console.log(`[Background Job] Deploying to generic provider ${activeProvider}...`);
+        bd.generationStatus = 'deploying';
+        await storage.updateWebsite(websiteId, { businessData: bd });
+
+        let creds = genericCredentials;
+        if (!creds || Object.keys(creds).length === 0) {
+          const setting = await storage.getApiSetting(userId, activeProvider);
+          const { decrypt } = await import('./crypto.js').catch(() => ({ decrypt: (k: string) => k }));
+          creds = {
+            apiKey: setting?.apiKey ? decrypt(setting.apiKey) : "",
+            accessKey: setting?.accessKey ? decrypt(setting.accessKey) : "",
+            secretKey: setting?.secretKey ? decrypt(setting.secretKey) : ""
+          };
+        }
+
+        await performGenericDeploy(
+          activeProvider,
+          websiteId,
+          userId,
+          creds,
+          genericProjectName || siteName || "my-site",
+          publishTier,
+          customImages,
+          galleryImages
+        );
       }
 
       bd.generationStatus = 'completed';
@@ -8895,6 +8923,484 @@ Generated on: ${new Date().toISOString()}`;
       return res.json({ url: result.url, projectName: result.projectName, status: 'deployed' });
     } catch (err: any) {
       console.error("Cloudflare deploy error:", err);
+      res.status(500).json({ error: err.message || "Deployment failed" });
+    }
+  });
+
+  async function performGenericDeploy(
+    provider: string,
+    websiteId: string,
+    userId: string,
+    credentials: Record<string, string>,
+    projectName: string,
+    publishTier: '1' | '2' | '3',
+    customImages?: any,
+    galleryImages?: any
+  ): Promise<{ url: string; projectId: string }> {
+    const { deployRegistry } = await import("./services/deploy-registry.js");
+    const handler = deployRegistry[provider];
+    if (!handler) {
+      throw new Error(`Provider ${provider} is not supported in the registry`);
+    }
+
+    const website = await storage.getWebsite(websiteId);
+    if (!website || website.userId !== userId) {
+      throw new Error("Website not found");
+    }
+
+    const bd = { ...((website.businessData || {}) as any) };
+    bd.publishTier = publishTier;
+
+    if (customImages) {
+      bd.customImages = { ...(bd.customImages || {}), ...customImages };
+    }
+    if (galleryImages) {
+      bd.galleryImages = galleryImages;
+    }
+
+    // Fallbacks for missing/empty required fields
+    if (!bd.businessName) bd.businessName = website.title || "My Business";
+    if (!bd.phone) bd.phone = "(555) 555-5555";
+    if (!bd.city) bd.city = "Toledo";
+    if (!bd.state) bd.state = "OH";
+
+    bd.services = uniqueValues([
+      ...parseDeployList(bd.services),
+      ...parseDeployList(bd.additionalServices),
+    ]);
+    if (bd.services.length === 0) {
+      bd.services = ["Service 1", "Service 2", "Service 3"];
+    }
+
+    bd.serviceAreas = uniqueValues([
+      ...parseDeployList(bd.serviceAreas, { locationMode: true, preferredState: stringValue(bd.state) }),
+      ...parseDeployList(bd.additionalLocations, { locationMode: true, preferredState: stringValue(bd.state) }),
+    ]);
+    if (bd.serviceAreas.length === 0) {
+      bd.serviceAreas = [bd.city];
+    }
+
+    const domain = projectName;
+    const categoryId = bd.categoryId || website.template || 'water-damage';
+    const { getCategoryConfig: getCC2, generateLocalServiceWebsite: genLS } = await import('../client/src/lib/local-service-engine.js');
+
+    // Homepage content check (fallback)
+    const hasLegacyHomepageContent = bd.homepageContent && 
+                                     typeof bd.homepageContent === 'object' && 
+                                     Object.keys(bd.homepageContent).length > 0;
+    const hasAiContent = hasLegacyHomepageContent || bd._aiIntroParas || bd._aiFaqs || bd._aiSeoBody || bd._aiProcessSteps;
+    if (!hasAiContent) {
+      try {
+        const catConfig = getCC2(categoryId);
+        const aiContent = await generateLocalServiceAIContent(
+          bd, userId, catConfig.name, catConfig.defaultPrimaryKeyword
+        );
+        if (aiContent) {
+          if (aiContent.introParas) bd._aiIntroParas = aiContent.introParas;
+          if (aiContent.faqs) bd._aiFaqs = aiContent.faqs;
+          if (aiContent.seoBody) bd._aiSeoBody = aiContent.seoBody;
+          if (aiContent.processSteps) bd._aiProcessSteps = aiContent.processSteps;
+        }
+      } catch (aiErr) {
+        console.error('AI content injection skipped in deploy:', aiErr);
+      }
+    }
+
+    // Favicon conversion
+    let faviconBinary: Buffer | null = null;
+    let faviconFilename: string | null = null;
+    if (bd.faviconUrl && typeof bd.faviconUrl === 'string' && bd.faviconUrl.startsWith('data:')) {
+      const fmatch = bd.faviconUrl.match(/^data:([^;]+);base64,([A-Za-z0-9+/=\n]+)$/);
+      if (fmatch) {
+        const rawType = fmatch[1];
+        const ext = /x-icon|vnd\.microsoft\.icon/.test(rawType) ? 'ico'
+          : rawType === 'image/svg+xml' ? 'svg'
+            : rawType === 'image/jpeg' ? 'jpg' : 'png';
+        faviconFilename = `favicon.${ext}`;
+        faviconBinary = Buffer.from(fmatch[2].replace(/\n/g, ''), 'base64');
+        bd.faviconUrl = `/${faviconFilename}`;
+      }
+    }
+
+    const deployedServiceAreas = uniqueValues(
+      (bd.serviceAreas as string[])
+        .map((location: string) => normalizeLocationLabel(location, stringValue(bd.state)))
+        .filter(Boolean)
+    );
+    const deployedCity =
+      normalizeLocationLabel(
+        stringValue(bd.city) || stringValue(bd.heroLocation) || deployedServiceAreas[0],
+        stringValue(bd.state)
+      ) ||
+      stringValue(bd.city) ||
+      deployedServiceAreas[0] ||
+      "";
+
+    const generatorData = {
+      ...bd,
+      city: deployedCity,
+      serviceAreas: deployedServiceAreas,
+      locationContent: normalizeLocationContentMap(bd.locationContent, stringValue(bd.state)),
+    };
+
+    const files = genLS(categoryId, generatorData, domain);
+
+    // Apply custom files overrides
+    const seoProtectedFiles = new Set(['sitemap.html']);
+    const storedCustomFiles = website.customFiles as Record<string, string> | null;
+    if (storedCustomFiles && typeof storedCustomFiles === 'object') {
+      const isRestoration = ['water-damage', 'mold-remediation', 'fire-damage'].includes(categoryId);
+      let skipCustomFiles = false;
+
+      if (!isRestoration) {
+        const indexHtml = storedCustomFiles['index.html'] || '';
+        if (
+          indexHtml.includes('Water Extraction & Cleanup') ||
+          indexHtml.includes('Rapid Structural Drying') ||
+          indexHtml.includes('Mold Containment & Removal')
+        ) {
+          console.log(`[deploy] Stale water damage content detected in stored custom files for category ${categoryId}. Skipping overrides.`);
+          skipCustomFiles = true;
+        }
+      }
+
+      if (!skipCustomFiles) {
+        for (const [filename, content] of Object.entries(storedCustomFiles)) {
+          if (typeof content === 'string' && filename.endsWith('.html') && !seoProtectedFiles.has(filename)) {
+            const isDynamicPage = filename === 'blog.html' || 
+                                  filename.startsWith('blog/') || 
+                                  filename.startsWith('services/') || 
+                                  filename.startsWith('locations/') || 
+                                  filename.startsWith('matrix/');
+            if (isDynamicPage) {
+              continue;
+            }
+            (files as any)[filename] = content
+              .replace(/\{\{city\}\}/g, generatorData.city || '')
+              .replace(/\{\{state\}\}/g, generatorData.state || '')
+              .replace(/\{\{businessName\}\}/g, generatorData.businessName || '');
+          }
+        }
+      }
+    }
+
+    // Ensure footer style fixes are applied
+    for (const [filename, content] of Object.entries(files)) {
+      if (typeof content === 'string' && filename.endsWith('.html')) {
+        (files as any)[filename] = content
+          .replace(/class="footer-inner has-two-cols"/g, 'class="footer-inner has-two-cols" style="grid-template-columns: 1fr 1fr;"')
+          .replace(/class="footer-inner has-three-cols"/g, 'class="footer-inner has-three-cols"')
+          .replace(/class="footer-phone"/g, 'class="footer-phone" style="white-space: nowrap;"');
+      }
+    }
+
+    // Extract base64 image data-urls
+    const extractedImages = new Map<string, string>();
+    let imgIndex = 0;
+    const processedFiles: Record<string, string> = {};
+    for (const [filename, rawContent] of Object.entries(files)) {
+      const processed = (rawContent as string).replace(
+        /data:image\/(jpeg|png|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+/g,
+        (match) => {
+          if (extractedImages.has(match)) return extractedImages.get(match)!;
+          const typeStr = match.match(/^data:image\/([^;]+);/)?.[1] ?? 'jpeg';
+          const ext = typeStr === 'svg+xml' ? 'svg' : typeStr === 'jpeg' ? 'jpg' : typeStr;
+          const imgPath = `/images/custom-${imgIndex++}.${ext}`;
+          extractedImages.set(match, imgPath);
+          return imgPath;
+        }
+      );
+      processedFiles[filename] = processed;
+    }
+
+    // Prepare temp directory
+    const tempDir = path.join(os.tmpdir(), `generic-deploy-${provider}-${websiteId}-${Date.now()}`);
+    await fs.promises.mkdir(tempDir, { recursive: true });
+
+    try {
+      // Write processed files to disk
+      for (const [filename, content] of Object.entries(processedFiles)) {
+        const filePath = path.join(tempDir, filename);
+        await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.promises.writeFile(filePath, content, 'utf8');
+      }
+
+      // Write extracted images
+      for (const [dataUrl, imgPath] of extractedImages.entries()) {
+        const base64 = dataUrl.split(',')[1];
+        const imgFilePath = path.join(tempDir, imgPath.slice(1));
+        await fs.promises.mkdir(path.dirname(imgFilePath), { recursive: true });
+        await fs.promises.writeFile(imgFilePath, Buffer.from(base64, 'base64'));
+      }
+
+      // Write favicon
+      if (faviconFilename && faviconBinary) {
+        const favPath = path.join(tempDir, faviconFilename);
+        await fs.promises.mkdir(path.dirname(favPath), { recursive: true });
+        await fs.promises.writeFile(favPath, faviconBinary);
+      }
+
+      // Execute deployment via registry
+      const deployResult = await handler.deploy(tempDir, credentials, { projectName });
+
+      const siteUrl = deployResult.url;
+
+      // Save generic deployments history folded in businessData
+      const updatedBD = {
+        ...bd,
+        _deployments: {
+          ...(bd._deployments || {}),
+          [provider]: {
+            url: siteUrl,
+            projectId: deployResult.projectId || projectName,
+            status: 'deployed',
+            lastDeployedAt: new Date().toISOString()
+          }
+        },
+        _lastDeployedProvider: provider,
+        _lastDeployedAt: new Date().toISOString()
+      };
+
+      // Update DB
+      await storage.updateWebsite(websiteId, {
+        businessData: updatedBD,
+        // Keep netlifyUrl & status for UI compatibility
+        netlifyUrl: siteUrl,
+        netlifyDeploymentStatus: 'deployed',
+        lastDeployedAt: new Date(),
+      });
+
+      // Ping search engines
+      const sitemapUrl = encodeURIComponent(`${siteUrl}/sitemap.xml`);
+      Promise.all([
+        fetch(`https://www.google.com/ping?sitemap=${sitemapUrl}`).catch(() => { }),
+        fetch(`https://www.bing.com/ping?sitemap=${sitemapUrl}`).catch(() => { }),
+      ]).catch(() => { });
+
+      return { url: siteUrl, projectId: deployResult.projectId || projectName };
+    } finally {
+      // Clean up temp directory
+      try {
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
+      } catch (cleanupErr) {
+        console.error(`[performGenericDeploy] Failed to clean up temp dir:`, cleanupErr);
+      }
+    }
+  }
+
+  app.post("/api/test-generic-connection", isAuthenticated, async (req, res) => {
+    try {
+      const { provider, apiKey, accessKey, secretKey } = req.body;
+      const userId = (req as any).user.id;
+
+      let resolvedApiKey = apiKey;
+      let resolvedAccessKey = accessKey;
+      let resolvedSecretKey = secretKey;
+
+      const { decrypt } = await import('./crypto.js').catch(() => ({ decrypt: (k: string) => k }));
+
+      // If masked, load from database
+      if (
+        (apiKey && apiKey.includes('••')) || 
+        (accessKey && accessKey.includes('••')) || 
+        (secretKey && secretKey.includes('••')) ||
+        !apiKey
+      ) {
+        const setting = await storage.getApiSetting(userId, provider);
+        if (setting) {
+          if (!apiKey || apiKey.includes('••')) {
+            resolvedApiKey = setting.apiKey ? decrypt(setting.apiKey) : "";
+          }
+          if (!accessKey || accessKey.includes('••')) {
+            resolvedAccessKey = setting.accessKey ? decrypt(setting.accessKey) : "";
+          }
+          if (!secretKey || secretKey.includes('••')) {
+            resolvedSecretKey = setting.secretKey ? decrypt(setting.secretKey) : "";
+          }
+        }
+      }
+
+      // Check if provider is supported in registry
+      const { deployRegistry } = await import("./services/deploy-registry.js");
+      const handler = deployRegistry[provider];
+      if (!handler) {
+        return res.status(400).json({ error: `Provider ${provider} is not supported in the registry` });
+      }
+
+      const isValid = await handler.validate({
+        apiKey: resolvedApiKey,
+        accessKey: resolvedAccessKey,
+        secretKey: resolvedSecretKey
+      });
+
+      if (isValid) {
+        res.json({ success: true, message: `${provider.charAt(0).toUpperCase() + provider.slice(1)} connection successful!` });
+      } else {
+        res.status(400).json({ error: "Invalid credentials or connection check failed" });
+      }
+    } catch (error: any) {
+      console.error("Generic connection test failed:", error);
+      res.status(500).json({ error: "Connection test failed", details: error.message });
+    }
+  });
+
+  app.put("/api/settings/generic/:name", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { name } = req.params;
+      let { apiKey, accessKey, secretKey, isActive } = req.body;
+
+      const { encrypt } = await import('./crypto.js').catch(() => ({ encrypt: (k: string) => k }));
+
+      if (apiKey && apiKey.includes('••••••••')) {
+        apiKey = undefined;
+      } else if (apiKey) {
+        apiKey = encrypt(apiKey);
+      }
+
+      if (accessKey && accessKey.includes('••••••••')) {
+        accessKey = undefined;
+      } else if (accessKey) {
+        accessKey = encrypt(accessKey);
+      }
+
+      if (secretKey && secretKey.includes('••••••••')) {
+        secretKey = undefined;
+      } else if (secretKey) {
+        secretKey = encrypt(secretKey);
+      }
+
+      const setting = await storage.upsertApiSetting(userId, {
+        name,
+        displayName: `${name.charAt(0).toUpperCase() + name.slice(1)} API`,
+        apiKey,
+        accessKey,
+        secretKey,
+        isActive: isActive ?? true
+      });
+
+      res.json({
+        ...setting,
+        apiKey: setting.apiKey ? "•••••••••••" : null,
+        accessKey: setting.accessKey ? "•••••••••••" : null,
+        secretKey: setting.secretKey ? "•••••••••••" : null,
+      });
+    } catch (error) {
+      console.error(`Failed to update settings for ${req.params.name}:`, error);
+      res.status(500).json({ message: `Failed to update settings for ${req.params.name}` });
+    }
+  });
+
+  app.post("/api/websites/:id/deploy-generic", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      let { provider, apiKey, accessKey, secretKey, projectName, publishTier: reqTier, customImages, galleryImages } = req.body;
+
+      const website = await storage.getWebsite(id);
+      if (!website || website.userId !== userId) {
+        return res.status(404).json({ error: "Website not found" });
+      }
+
+      // Load generic registry credentials: body → DB settings
+      const { decrypt } = await import('./crypto.js').catch(() => ({ decrypt: (k: string) => k }));
+
+      if (!apiKey || apiKey.includes('•')) {
+        const setting = await storage.getApiSetting(userId, provider);
+        if (setting?.apiKey) {
+          try { apiKey = decrypt(setting.apiKey); } catch { apiKey = setting.apiKey; }
+        }
+      }
+      if (!accessKey || accessKey.includes('•')) {
+        const setting = await storage.getApiSetting(userId, provider);
+        if (setting?.accessKey) {
+          try { accessKey = decrypt(setting.accessKey); } catch { accessKey = setting.accessKey; }
+        }
+      }
+      if (!secretKey || secretKey.includes('•')) {
+        const setting = await storage.getApiSetting(userId, provider);
+        if (setting?.secretKey) {
+          try { secretKey = decrypt(setting.secretKey); } catch { secretKey = setting.secretKey; }
+        }
+      }
+
+      if (!apiKey) {
+        return res.status(400).json({ error: `${provider.toUpperCase()} API key/token required.` });
+      }
+
+      const isPaidOrAdmin = req.user.role === 'paid' || req.user.role === 'admin';
+      const bd = { ...((website.businessData || {}) as any) };
+      
+      let publishTier = reqTier || bd.publishTier || '1';
+      if (!isPaidOrAdmin) {
+        publishTier = '1';
+      }
+      bd.publishTier = publishTier;
+      
+      // Update basic fields in storage
+      await storage.updateWebsite(id, { businessData: bd });
+
+      // Merge client overrides in memory
+      if (customImages) {
+        bd.customImages = { ...(bd.customImages || {}), ...customImages };
+      }
+      if (galleryImages) {
+        bd.galleryImages = galleryImages;
+      }
+
+      const services = uniqueValues([
+        ...parseDeployList(bd.services),
+        ...parseDeployList(bd.additionalServices),
+      ]);
+      const locations = uniqueValues([
+        ...parseDeployList(bd.serviceAreas, { locationMode: true, preferredState: stringValue(bd.state) }),
+        ...parseDeployList(bd.additionalLocations, { locationMode: true, preferredState: stringValue(bd.state) }),
+      ]);
+
+      const rawProjectName = projectName || bd.urlSlug || (bd.businessName || website.title || 'my-site');
+      const cleanProjectName = rawProjectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 63);
+
+      if (!cleanProjectName) {
+        return res.status(400).json({ error: "Project name is required." });
+      }
+
+      // Check if we need to generate homepage AI content or subpage AI content.
+      const hasLegacyHomepageContent = bd.homepageContent && 
+                                       typeof bd.homepageContent === 'object' && 
+                                       Object.keys(bd.homepageContent).length > 0;
+      const needsHomepage = !hasLegacyHomepageContent && (!bd._aiIntroParas || !bd._aiFaqs || !bd._aiSeoBody || !bd._aiProcessSteps);
+      
+      let needsDynamicPages = false;
+      if (publishTier === '2' || publishTier === '3') {
+        bd.serviceContent = bd.serviceContent || {};
+        bd.locationContent = bd.locationContent || {};
+        const pendingServices = services.filter((s: string) => !bd.serviceContent[s]);
+        const pendingLocations = locations.filter((l: string) => !bd.locationContent[l]);
+        if (pendingServices.length > 0 || pendingLocations.length > 0) {
+          needsDynamicPages = true;
+        }
+      }
+
+      const aiProvider = bd.contentAiProvider || 'openai';
+      const hasApiKey = await getAIProviderConfig(userId, aiProvider);
+
+      if ((needsHomepage || needsDynamicPages) && hasApiKey) {
+        // Trigger background generation and deploy
+        runBackgroundGenerationAndDeploy(
+          id, userId, publishTier, undefined, undefined, false, customImages, galleryImages,
+          provider, undefined, undefined, undefined,
+          { apiKey, accessKey, secretKey }, cleanProjectName
+        );
+        return res.json({ success: true, status: 'generating', message: "Content generation running in background." });
+      }
+
+      // Fast path: deploy synchronously
+      const result = await performGenericDeploy(
+        provider, id, userId, { apiKey, accessKey, secretKey }, cleanProjectName, publishTier, customImages, galleryImages
+      );
+      return res.json({ url: result.url, projectId: result.projectId, status: 'deployed' });
+    } catch (err: any) {
+      console.error("Generic deploy error:", err);
       res.status(500).json({ error: err.message || "Deployment failed" });
     }
   });
