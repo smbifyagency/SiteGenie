@@ -22,6 +22,7 @@ import {
 import JSZip from "jszip";
 import path from "path";
 import fs from "fs";
+import { randomUUID } from "crypto";
 import os from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -33,6 +34,9 @@ import { generateMultipleBlogPostsWithOpenRouter, generateBlogPostWithOpenRouter
 import { generateSEOContentWithGemini, generateFAQContentWithGemini, generateTestimonialsWithGemini, generateBlogPostWithGemini } from "./services/gemini.js";
 import { generateWithDeepSeek, generateStructuredJsonWithDeepSeek, generateMultipleBlogPostsWithDeepSeek, generateBlogPostWithDeepSeek } from "./services/deepseek.js";
 import { encrypt, decrypt } from './crypto.js';
+import { getArticles, saveArticle, deleteArticle } from "./services/article-store.js";
+import { generateArticle } from "./services/ai-article-generator.js";
+import { deployRegistry } from "./services/deploy-registry.js";
 import { netlifyService } from "./services/netlify.js";
 import { deployToNetlify, validateNetlifyToken } from "./services/netlify-deployment.js";
 import { generateWaterDamageWebsite, getDefaultBlogPosts, getDynamicDefaultBlogPosts } from "../client/src/lib/water-damage-generator.js";
@@ -5315,6 +5319,200 @@ Total Websites: ${validatedData.businesses.length}
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete API setting" });
+    }
+  });
+
+
+  // ============================================================
+  // Local SEO Articles & Syndication Routes
+  // ============================================================
+
+  app.get("/api/articles", isAuthenticated, async (req, res) => {
+    try {
+      res.json(getArticles());
+    } catch (err) {
+      console.error("[routes] Failed to list articles:", err);
+      res.status(500).json({ message: "Failed to list articles" });
+    }
+  });
+
+  app.post("/api/articles/generate", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user.id;
+      const { title, businessDetails, keywords, dofollowLinks } = req.body;
+
+      if (!title || !businessDetails || !keywords || !Array.isArray(keywords)) {
+        return res.status(400).json({ message: "Title, businessDetails, and keywords are required" });
+      }
+
+      // Check active provider from user settings
+      let activeProvider: 'openai' | 'gemini' | 'openrouter' | 'deepseek' | null = null;
+      let activeKey: string | null = null;
+
+      for (const p of ['gemini', 'openai', 'deepseek', 'openrouter'] as const) {
+        const key = await getAIProviderConfig(userId, p, req);
+        if (key) {
+          activeProvider = p;
+          activeKey = key;
+          break;
+        }
+      }
+
+      if (!activeProvider || !activeKey) {
+        return res.status(400).json({ 
+          message: "No active AI API key found. Please configure Gemini, OpenAI, DeepSeek, or OpenRouter in settings." 
+        });
+      }
+
+      const campaignId = randomUUID();
+      const campaign = {
+        id: campaignId,
+        title,
+        businessDetails,
+        keywords,
+        dofollowLinks: dofollowLinks || [],
+        provider: activeProvider,
+        articles: {},
+        deployments: {},
+        createdAt: new Date().toISOString()
+      } as any;
+
+      const providersToDeploy = Object.keys(deployRegistry);
+      for (const p of providersToDeploy) {
+        campaign.deployments[p] = { status: "pending" };
+      }
+
+      saveArticle(campaign);
+
+      // Trigger background generation
+      void (async () => {
+        try {
+          console.log(`[articles] Starting generation for campaign: ${campaignId} using ${activeProvider}`);
+          for (let i = 0; i < providersToDeploy.length; i++) {
+            const pName = providersToDeploy[i];
+            try {
+              const html = await generateArticle(
+                activeProvider!,
+                activeKey!,
+                businessDetails,
+                keywords,
+                dofollowLinks || [],
+                i + 1
+              );
+              
+              const currentCampaign = getArticles().find(c => c.id === campaignId);
+              if (currentCampaign) {
+                currentCampaign.articles[pName] = html;
+                saveArticle(currentCampaign);
+              }
+            } catch (err: any) {
+              console.error(`[articles] Failed to generate variation for ${pName}:`, err);
+            }
+          }
+          console.log(`[articles] Generation completed for campaign: ${campaignId}`);
+        } catch (err) {
+          console.error(`[articles] Background generation failed:`, err);
+        }
+      })();
+
+      res.json(campaign);
+    } catch (err: any) {
+      console.error("[routes] Failed to generate articles:", err);
+      res.status(500).json({ message: err.message || "Failed to generate articles" });
+    }
+  });
+
+  app.post("/api/articles/:id/deploy", isAuthenticated, async (req, res) => {
+    try {
+      const campaignId = req.params.id;
+      const userId = (req as any).user.id;
+      const campaign = getArticles().find(c => c.id === campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "Article campaign not found" });
+      }
+
+      // Trigger background deployment for all variations
+      void (async () => {
+        const freshCampaign = getArticles().find(c => c.id === campaignId);
+        if (!freshCampaign) return;
+
+        const providersToDeploy = Object.keys(deployRegistry);
+        for (const pName of providersToDeploy) {
+          const htmlContent = freshCampaign.articles[pName];
+          if (!htmlContent) {
+            freshCampaign.deployments[pName] = { status: "failed", error: "No generated article found" };
+            saveArticle(freshCampaign);
+            continue;
+          }
+
+          // Fetch stored settings
+          const setting = await storage.getApiSetting(userId, pName);
+          if (!setting || !setting.isActive) {
+            freshCampaign.deployments[pName] = { status: "failed", error: "Provider not configured or inactive" };
+            saveArticle(freshCampaign);
+            continue;
+          }
+
+          freshCampaign.deployments[pName] = { status: "deploying" };
+          saveArticle(freshCampaign);
+
+          const { decrypt } = await import('./crypto.js').catch(() => ({ decrypt: (k: string) => k }));
+          const credentials = {
+            apiKey: setting.apiKey ? decrypt(setting.apiKey) : undefined,
+            accessKey: setting.accessKey ? decrypt(setting.accessKey) : undefined,
+            secretKey: setting.secretKey ? decrypt(setting.secretKey) : undefined
+          };
+
+          const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `deploy-${pName}-`));
+          try {
+            fs.writeFileSync(path.join(tempDir, "index.html"), htmlContent);
+            const handler = deployRegistry[pName];
+            console.log(`[articles] Deploying campaign ${campaignId} to provider ${pName}`);
+            
+            const result = await handler.deploy(tempDir, credentials as any, { 
+              projectName: `${campaign.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${pName}`,
+              siteName: `${campaign.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${pName}`
+            } as any);
+            
+            const updateCampaign = getArticles().find(c => c.id === campaignId);
+            if (updateCampaign) {
+              updateCampaign.deployments[pName] = { status: "completed", url: result.url };
+              saveArticle(updateCampaign);
+            }
+          } catch (err: any) {
+            console.error(`[articles] Deployment failed for provider ${pName}:`, err);
+            const updateCampaign = getArticles().find(c => c.id === campaignId);
+            if (updateCampaign) {
+              updateCampaign.deployments[pName] = { status: "failed", error: err.message || String(err) };
+              saveArticle(updateCampaign);
+            }
+          } finally {
+            try {
+              fs.rmSync(tempDir, { recursive: true, force: true });
+            } catch (err) {
+              console.error("[articles] Temp cleanup failed:", err);
+            }
+          }
+        }
+      })();
+
+      res.json({ message: "Syndication deployment started in background", id: campaignId });
+    } catch (err: any) {
+      console.error("[routes] Failed to deploy articles:", err);
+      res.status(500).json({ message: err.message || "Failed to deploy articles" });
+    }
+  });
+
+  app.delete("/api/articles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const deleted = deleteArticle(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Article campaign not found" });
+      }
+      res.status(204).send();
+    } catch (err: any) {
+      console.error("[routes] Failed to delete article:", err);
+      res.status(500).json({ message: "Failed to delete article" });
     }
   });
 

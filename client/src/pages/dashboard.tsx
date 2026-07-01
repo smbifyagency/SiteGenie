@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Link, useLocation } from "wouter";
+import ArticlesDashboard from "./articles-dashboard";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -599,6 +600,7 @@ function WebsiteCard({ website }: { website: Website }) {
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const [activeView, setActiveView] = useState<"websites" | "articles">("websites");
 
   // Fetch user websites
   const { data: websites = [], isLoading: websitesLoading, refetch } = useQuery<Website[]>({
@@ -633,143 +635,173 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2" data-testid="heading-dashboard">
-              Your Websites
+              {activeView === "websites" ? "Your Websites" : "SEO Backlinks Syndication"}
             </h1>
             <p className="text-xl text-gray-400" data-testid="text-welcome">
-              Welcome back, {(user as any)?.firstName || "User"}! Manage your websites and deployments.
+              Welcome back, {(user as any)?.firstName || "User"}! {activeView === "websites" ? "Manage your websites and deployments." : "Generate and syndicate backlink articles."}
             </p>
           </div>
 
-          <div className="flex gap-3">
-            <Button asChild data-testid="button-create-website">
-              <Link href="/">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Website
-              </Link>
-            </Button>
-            <Button variant="outline" onClick={() => refetch()} data-testid="button-refresh">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
+          <div className="flex items-center gap-3 self-end sm:self-center">
+            {/* View Switcher Toggle */}
+            <div className="flex bg-white/5 border border-white/10 rounded-lg p-0.5">
+              <Button
+                variant={activeView === "websites" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setActiveView("websites")}
+                className="h-8 text-xs"
+              >
+                Websites
+              </Button>
+              <Button
+                variant={activeView === "articles" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setActiveView("articles")}
+                className="h-8 text-xs"
+              >
+                Articles
+              </Button>
+            </div>
+
+            {activeView === "websites" && (
+              <>
+                <Button asChild data-testid="button-create-website">
+                  <Link href="/">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Website
+                  </Link>
+                </Button>
+                <Button variant="outline" onClick={() => refetch()} data-testid="button-refresh">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Refresh
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-white/[0.02] border-white/10 backdrop-blur-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-[#7C3AED]/15 border border-[#7C3AED]/25 rounded-lg">
-                  <Globe className="w-6 h-6 text-[#7C3AED]" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-400">Total Websites</p>
-                  <p className="text-2xl font-bold text-white" data-testid="stat-total">{websites.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/[0.02] border-white/10 backdrop-blur-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-emerald-500/20 border border-emerald-500/30 rounded-lg">
-                  <Rocket className="w-6 h-6 text-emerald-400" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-400">Live Websites</p>
-                  <p className="text-2xl font-bold text-white" data-testid="stat-deployed">{deployedWebsites.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/[0.02] border-white/10 backdrop-blur-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-amber-500/20 border border-amber-500/30 rounded-lg">
-                  <Edit className="w-6 h-6 text-amber-500" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-400">Draft Websites</p>
-                  <p className="text-2xl font-bold text-white" data-testid="stat-drafts">{draftWebsites.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Website Tabs */}
-        <Tabs defaultValue="all" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="all" data-testid="tab-all">All Websites</TabsTrigger>
-            <TabsTrigger value="deployed" data-testid="tab-deployed">Live Websites</TabsTrigger>
-            <TabsTrigger value="drafts" data-testid="tab-drafts">Draft Websites</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="all" className="space-y-6">
-            {websites.length === 0 ? (
-              <Card className="p-12 text-center">
-                <Globe className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-semibold mb-2" data-testid="text-no-websites">No websites created yet</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Get started by creating your first website with our AI-powered builder.
-                </p>
-                <Button asChild data-testid="button-create-first">
-                  <Link href="/">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Your First Website
-                  </Link>
-                </Button>
+        {activeView === "websites" ? (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <Card className="bg-white/[0.02] border-white/10 backdrop-blur-sm">
+                <CardContent className="p-6">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-[#7C3AED]/15 border border-[#7C3AED]/25 rounded-lg">
+                      <Globe className="w-6 h-6 text-[#7C3AED]" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-400">Total Websites</p>
+                      <p className="text-2xl font-bold text-white" data-testid="stat-total">{websites.length}</p>
+                    </div>
+                  </div>
+                </CardContent>
               </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {websites.map((website) => (
-                  <WebsiteCard key={website.id} website={website} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
 
-          <TabsContent value="deployed" className="space-y-6">
-            {deployedWebsites.length === 0 ? (
-              <Card className="p-12 text-center">
-                <Rocket className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-semibold mb-2">No deployed websites yet</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Deploy your websites to Netlify to make them live on the internet.
-                </p>
+              <Card className="bg-white/[0.02] border-white/10 backdrop-blur-sm">
+                <CardContent className="p-6">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-emerald-500/20 border border-emerald-500/30 rounded-lg">
+                      <Rocket className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-400">Live Websites</p>
+                      <p className="text-2xl font-bold text-white" data-testid="stat-deployed">{deployedWebsites.length}</p>
+                    </div>
+                  </div>
+                </CardContent>
               </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {deployedWebsites.map((website) => (
-                  <WebsiteCard key={website.id} website={website} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
 
-          <TabsContent value="drafts" className="space-y-6">
-            {draftWebsites.length === 0 ? (
-              <Card className="p-12 text-center">
-                <Edit className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-xl font-semibold mb-2">No draft websites</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  All your websites have been deployed. Great job!
-                </p>
+              <Card className="bg-white/[0.02] border-white/10 backdrop-blur-sm">
+                <CardContent className="p-6">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-amber-500/20 border border-amber-500/30 rounded-lg">
+                      <Edit className="w-6 h-6 text-amber-500" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-400">Draft Websites</p>
+                      <p className="text-2xl font-bold text-white" data-testid="stat-drafts">{draftWebsites.length}</p>
+                    </div>
+                  </div>
+                </CardContent>
               </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {draftWebsites.map((website) => (
-                  <WebsiteCard key={website.id} website={website} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+            </div>
+
+            {/* Website Tabs */}
+            <Tabs defaultValue="all" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="all" data-testid="tab-all">All Websites</TabsTrigger>
+                <TabsTrigger value="deployed" data-testid="tab-deployed">Live Websites</TabsTrigger>
+                <TabsTrigger value="drafts" data-testid="tab-drafts">Draft Websites</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="all" className="space-y-6">
+                {websites.length === 0 ? (
+                  <Card className="p-12 text-center">
+                    <Globe className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-xl font-semibold mb-2" data-testid="text-no-websites">No websites created yet</h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      Get started by creating your first website with our AI-powered builder.
+                    </p>
+                    <Button asChild data-testid="button-create-first">
+                      <Link href="/">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Your First Website
+                      </Link>
+                    </Button>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {websites.map((website) => (
+                      <WebsiteCard key={website.id} website={website} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="deployed" className="space-y-6">
+                {deployedWebsites.length === 0 ? (
+                  <Card className="p-12 text-center">
+                    <Rocket className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No deployed websites yet</h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      Deploy your websites to Netlify to make them live on the internet.
+                    </p>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {deployedWebsites.map((website) => (
+                      <WebsiteCard key={website.id} website={website} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="drafts" className="space-y-6">
+                {draftWebsites.length === 0 ? (
+                  <Card className="p-12 text-center">
+                    <Edit className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No draft websites</h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      All your websites have been deployed. Great job!
+                    </p>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {draftWebsites.map((website) => (
+                      <WebsiteCard key={website.id} website={website} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </>
+        ) : (
+          <ArticlesDashboard />
+        )}
       </div>
     </div>
   );
