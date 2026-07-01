@@ -209,7 +209,7 @@ export function PublishWebsiteModal({
   const isRedeploy = Boolean(deployedUrl);
 
   // ── State ─────────────────────────────────────────────────────────────
-  const [provider, setProvider] = useState<'netlify' | 'cloudflare' | 'vercel' | 'firebase' | 'surge'>('netlify');
+  const [provider, setProvider] = useState<'netlify' | 'cloudflare' | 'vercel' | 'firebase' | 'surge' | 'aws-s3' | 'gcs' | 'b2' | 'github-pages' | 'ftp'>('netlify');
   const [cfToken, setCfToken] = useState("");
   const [cfAccountId, setCfAccountId] = useState("");
   const [cfChecking, setCfChecking] = useState(false);
@@ -268,7 +268,12 @@ export function PublishWebsiteModal({
             provider === 'cloudflare' ? 'pages.dev' : 
             provider === 'vercel' ? 'vercel.app' : 
             provider === 'firebase' ? 'web.app' : 
-            provider === 'surge' ? 'surge.sh' : 'netlify.app';
+            provider === 'surge' ? 'surge.sh' : 
+            provider === 'aws-s3' ? 's3.amazonaws.com' :
+            provider === 'gcs' ? 'storage.googleapis.com' :
+            provider === 'b2' ? 'backblazeb2.com' : 
+            provider === 'github-pages' ? 'github.io' :
+            provider === 'ftp' ? 'ftp' : 'netlify.app';
           const finalUrl = `https://${slug || data.siteName || resultSiteName || currentSiteName || defaultSlug}.${domainSuffix}`;
           setResultUrl(finalUrl);
           setResultSiteName(slug || data.siteName || resultSiteName || currentSiteName || defaultSlug);
@@ -388,7 +393,7 @@ export function PublishWebsiteModal({
     setCfConnected(null);
 
     try {
-      const isGeneric = provider === 'vercel' || provider === 'firebase' || provider === 'surge';
+      const isGeneric = provider === 'vercel' || provider === 'firebase' || provider === 'surge' || provider === 'aws-s3' || provider === 'gcs' || provider === 'b2' || provider === 'github-pages' || provider === 'ftp';
       const endpoint = isGeneric ? `/api/settings/generic/${provider}` : `/api/settings/${provider}`;
       const res = await fetch(endpoint, { credentials: "include" });
       if (res.ok) {
@@ -405,7 +410,12 @@ export function PublishWebsiteModal({
               provider === 'cloudflare' ? 'pages.dev' : 
               provider === 'vercel' ? 'vercel.app' : 
               provider === 'firebase' ? 'web.app' : 
-              provider === 'surge' ? 'surge.sh' : 'netlify.app';
+              provider === 'surge' ? 'surge.sh' : 
+              provider === 'aws-s3' ? 's3.amazonaws.com' :
+              provider === 'gcs' ? 'storage.googleapis.com' :
+              provider === 'b2' ? 'backblazeb2.com' : 
+              provider === 'github-pages' ? 'github.io' :
+              provider === 'ftp' ? 'ftp' : 'netlify.app';
             setSlugMessage(`"${currentSiteName}.${domainSuffix}" is your current site. Ready to update.`);
           }
         } else {
@@ -539,7 +549,7 @@ export function PublishWebsiteModal({
 
       // Phase 2: Deploy via the correct endpoint
       console.log(`[PublishWebsiteModal] Sending deploy request to provider ${provider}...`);
-      const isGeneric = provider === 'vercel' || provider === 'firebase' || provider === 'surge';
+      const isGeneric = provider === 'vercel' || provider === 'firebase' || provider === 'surge' || provider === 'aws-s3' || provider === 'gcs' || provider === 'b2' || provider === 'github-pages' || provider === 'ftp';
       const deployEndpoint = isGeneric
         ? `/api/websites/${websiteId}/deploy-generic`
         : provider === 'cloudflare'
@@ -576,7 +586,12 @@ export function PublishWebsiteModal({
           provider === 'cloudflare' ? 'pages.dev' : 
           provider === 'vercel' ? 'vercel.app' : 
           provider === 'firebase' ? 'web.app' : 
-          provider === 'surge' ? 'surge.sh' : 'netlify.app';
+          provider === 'surge' ? 'surge.sh' : 
+          provider === 'aws-s3' ? 's3.amazonaws.com' :
+          provider === 'gcs' ? 'storage.googleapis.com' :
+          provider === 'b2' ? 'backblazeb2.com' : 
+          provider === 'github-pages' ? 'github.io' :
+          provider === 'ftp' ? 'ftp' : 'netlify.app';
         const url = data.url || `https://${targetSlug}.${domainSuffix}`;
         setDeployProgress(100);
         setDeployPhase("Website is live!");
@@ -659,6 +674,11 @@ export function PublishWebsiteModal({
               <option value="vercel">Vercel</option>
               <option value="firebase">Firebase Hosting</option>
               <option value="surge">Surge.sh</option>
+              <option value="aws-s3">AWS S3 Bucket</option>
+              <option value="gcs">Google Cloud Storage</option>
+              <option value="b2">Backblaze B2 Storage</option>
+              <option value="github-pages">GitHub Pages</option>
+              <option value="ftp">FTP/SFTP Server</option>
             </select>
           </div>
         </DialogHeader>

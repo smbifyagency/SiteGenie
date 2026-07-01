@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, Loader2, Key, TestTube2, ExternalLink, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-type Provider = "openai" | "gemini" | "openrouter" | "deepseek" | "netlify" | "unsplash" | "cloudflare" | "vercel" | "firebase" | "surge";
+type Provider = "openai" | "gemini" | "openrouter" | "deepseek" | "netlify" | "unsplash" | "cloudflare" | "vercel" | "firebase" | "surge" | "aws-s3" | "gcs" | "b2" | "github-pages" | "ftp";
 
 interface ApiSetting {
   name: string;
@@ -104,6 +104,41 @@ const providerConfigs: ProviderConfig[] = [
     description: "Deploy generated websites directly to Surge.sh",
     docsUrl: "https://surge.sh/help",
     placeholder: "Surge Token"
+  },
+  {
+    service: "aws-s3",
+    title: "AWS S3 Bucket",
+    description: "Deploy generated websites directly to an AWS S3 Bucket",
+    docsUrl: "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html",
+    placeholder: "Secret Access Key"
+  },
+  {
+    service: "gcs",
+    title: "Google Cloud Storage",
+    description: "Deploy generated websites directly to Google Cloud Storage Bucket (HMAC)",
+    docsUrl: "https://cloud.google.com/storage/docs",
+    placeholder: "GCS HMAC Secret Key"
+  },
+  {
+    service: "b2",
+    title: "Backblaze B2 Storage",
+    description: "Deploy generated websites directly to Backblaze B2 (S3-compatible)",
+    docsUrl: "https://www.backblaze.com/docs/cloud-storage",
+    placeholder: "B2 Application Key"
+  },
+  {
+    service: "github-pages",
+    title: "GitHub Pages",
+    description: "Push website to a GitHub repository branch to host via GitHub Pages",
+    docsUrl: "https://pages.github.com/",
+    placeholder: "GitHub Personal Access Token"
+  },
+  {
+    service: "ftp",
+    title: "FTP/SFTP Server",
+    description: "Upload generated website files directly to any FTP/SFTP server",
+    docsUrl: "https://en.wikipedia.org/wiki/File_Transfer_Protocol",
+    placeholder: "FTP Password"
   }
 ];
 
@@ -117,7 +152,12 @@ const emptyProviderState = {
   cloudflare: "",
   vercel: "",
   firebase: "",
-  surge: ""
+  surge: "",
+  "aws-s3": "",
+  gcs: "",
+  b2: "",
+  "github-pages": "",
+  ftp: ""
 } as const;
 
 export default function ApiSetup() {
@@ -135,7 +175,12 @@ export default function ApiSetup() {
     cloudflare: null,
     vercel: null,
     firebase: null,
-    surge: null
+    surge: null,
+    "aws-s3": null,
+    gcs: null,
+    b2: null,
+    "github-pages": null,
+    ftp: null
   });
   const [testingStates, setTestingStates] = useState<Record<Provider, boolean>>({
     openai: false,
@@ -147,12 +192,43 @@ export default function ApiSetup() {
     cloudflare: false,
     vercel: false,
     firebase: false,
-    surge: false
+    surge: false,
+    "aws-s3": false,
+    gcs: false,
+    b2: false,
+    "github-pages": false,
+    ftp: false
   });
 
   const [cfAccountId, setCfAccountId] = useState("");
   const [firebaseProjectId, setFirebaseProjectId] = useState("");
   const [surgeDomain, setSurgeDomain] = useState("");
+
+  const [awsAccessKeyId, setAwsAccessKeyId] = useState("");
+  const [awsBucket, setAwsBucket] = useState("");
+  const [awsRegion, setAwsRegion] = useState("");
+  const [awsCustomDomain, setAwsCustomDomain] = useState("");
+
+  const [gcsAccessKeyId, setGcsAccessKeyId] = useState("");
+  const [gcsBucket, setGcsBucket] = useState("");
+  const [gcsCustomDomain, setGcsCustomDomain] = useState("");
+
+  const [b2KeyId, setB2KeyId] = useState("");
+  const [b2Bucket, setB2Bucket] = useState("");
+  const [b2Endpoint, setB2Endpoint] = useState("");
+  const [b2CustomDomain, setB2CustomDomain] = useState("");
+
+  const [githubOwner, setGithubOwner] = useState("");
+  const [githubRepo, setGithubRepo] = useState("");
+  const [githubBranch, setGithubBranch] = useState("");
+  const [githubCustomDomain, setGithubCustomDomain] = useState("");
+
+  const [ftpHost, setFtpHost] = useState("");
+  const [ftpPort, setFtpPort] = useState("21");
+  const [ftpUser, setFtpUser] = useState("");
+  const [ftpRemoteDir, setFtpRemoteDir] = useState("");
+  const [ftpSecure, setFtpSecure] = useState("false");
+  const [ftpCustomDomain, setFtpCustomDomain] = useState("");
 
   // Fetch existing API settings
   const { data: openaiSetting } = useQuery({ queryKey: ["/api/settings/openai"], enabled: true });
@@ -165,6 +241,11 @@ export default function ApiSetup() {
   const { data: vercelSetting } = useQuery({ queryKey: ["/api/settings/vercel"], enabled: true });
   const { data: firebaseSetting } = useQuery({ queryKey: ["/api/settings/firebase"], enabled: true });
   const { data: surgeSetting } = useQuery({ queryKey: ["/api/settings/surge"], enabled: true });
+  const { data: awsS3Setting } = useQuery({ queryKey: ["/api/settings/aws-s3"], enabled: true });
+  const { data: gcsSetting } = useQuery({ queryKey: ["/api/settings/gcs"], enabled: true });
+  const { data: b2Setting } = useQuery({ queryKey: ["/api/settings/b2"], enabled: true });
+  const { data: githubPagesSetting } = useQuery({ queryKey: ["/api/settings/github-pages"], enabled: true });
+  const { data: ftpSetting } = useQuery({ queryKey: ["/api/settings/ftp"], enabled: true });
 
   const settingsByProvider: Record<Provider, ApiSetting | undefined> = {
     openai: openaiSetting as ApiSetting | undefined,
@@ -177,6 +258,11 @@ export default function ApiSetup() {
     vercel: vercelSetting as ApiSetting | undefined,
     firebase: firebaseSetting as ApiSetting | undefined,
     surge: surgeSetting as ApiSetting | undefined,
+    "aws-s3": awsS3Setting as ApiSetting | undefined,
+    gcs: gcsSetting as ApiSetting | undefined,
+    b2: b2Setting as ApiSetting | undefined,
+    "github-pages": githubPagesSetting as ApiSetting | undefined,
+    ftp: ftpSetting as ApiSetting | undefined,
   };
 
   useEffect(() => {
@@ -189,20 +275,86 @@ export default function ApiSetup() {
     if (surgeSetting && (surgeSetting as any).accessKey && !surgeDomain) {
       setSurgeDomain("•••••••••••");
     }
-  }, [cloudflareSetting, firebaseSetting, surgeSetting]);
+    if (awsS3Setting) {
+      if ((awsS3Setting as any).accessKey && !awsAccessKeyId) setAwsAccessKeyId("•••••••••••");
+      if ((awsS3Setting as any).secretKey) {
+        try {
+          const parsed = JSON.parse((awsS3Setting as any).secretKey);
+          if (parsed.bucket && !awsBucket) setAwsBucket(parsed.bucket);
+          if (parsed.region && !awsRegion) setAwsRegion(parsed.region);
+          if (parsed.customDomain && !awsCustomDomain) setAwsCustomDomain(parsed.customDomain);
+        } catch {
+          if (!awsBucket) setAwsBucket((awsS3Setting as any).secretKey);
+        }
+      }
+    }
+    if (gcsSetting) {
+      if ((gcsSetting as any).accessKey && !gcsAccessKeyId) setGcsAccessKeyId("•••••••••••");
+      if ((gcsSetting as any).secretKey) {
+        try {
+          const parsed = JSON.parse((gcsSetting as any).secretKey);
+          if (parsed.bucket && !gcsBucket) setGcsBucket(parsed.bucket);
+          if (parsed.customDomain && !gcsCustomDomain) setGcsCustomDomain(parsed.customDomain);
+        } catch {
+          if (!gcsBucket) setGcsBucket((gcsSetting as any).secretKey);
+        }
+      }
+    }
+    if (b2Setting) {
+      if ((b2Setting as any).accessKey && !b2KeyId) setB2KeyId("•••••••••••");
+      if ((b2Setting as any).secretKey) {
+        try {
+          const parsed = JSON.parse((b2Setting as any).secretKey);
+          if (parsed.bucket && !b2Bucket) setB2Bucket(parsed.bucket);
+          if (parsed.endpoint && !b2Endpoint) setB2Endpoint(parsed.endpoint);
+          if (parsed.customDomain && !b2CustomDomain) setB2CustomDomain(parsed.customDomain);
+        } catch {
+          if (!b2Bucket) setB2Bucket((b2Setting as any).secretKey);
+        }
+      }
+    }
+    if (githubPagesSetting) {
+      if ((githubPagesSetting as any).accessKey && !githubOwner) {
+        setGithubOwner((githubPagesSetting as any).accessKey);
+      }
+      if ((githubPagesSetting as any).secretKey) {
+        try {
+          const parsed = JSON.parse((githubPagesSetting as any).secretKey);
+          if (parsed.repo && !githubRepo) setGithubRepo(parsed.repo);
+          if (parsed.branch && !githubBranch) setGithubBranch(parsed.branch);
+          if (parsed.customDomain && !githubCustomDomain) setGithubCustomDomain(parsed.customDomain);
+        } catch {}
+      }
+    }
+    if (ftpSetting) {
+      if ((ftpSetting as any).accessKey && !ftpUser) {
+        setFtpUser((ftpSetting as any).accessKey);
+      }
+      if ((ftpSetting as any).secretKey) {
+        try {
+          const parsed = JSON.parse((ftpSetting as any).secretKey);
+          if (parsed.host && !ftpHost) setFtpHost(parsed.host);
+          if (parsed.port && !ftpPort) setFtpPort(parsed.port);
+          if (parsed.remoteDir && !ftpRemoteDir) setFtpRemoteDir(parsed.remoteDir);
+          if (parsed.secure && !ftpSecure) setFtpSecure(parsed.secure);
+          if (parsed.customDomain && !ftpCustomDomain) setFtpCustomDomain(parsed.customDomain);
+        } catch {}
+      }
+    }
+  }, [cloudflareSetting, firebaseSetting, surgeSetting, awsS3Setting, gcsSetting, b2Setting, githubPagesSetting, ftpSetting]);
 
   const updateApiKeyMutation = useMutation<
-    { service: Provider; apiKey?: string; accessKey?: string },
+    { service: Provider; apiKey?: string; accessKey?: string; secretKey?: string },
     Error,
-    { service: Provider; apiKey?: string; accessKey?: string }
+    { service: Provider; apiKey?: string; accessKey?: string; secretKey?: string }
   >({
-    mutationFn: async ({ service, apiKey, accessKey }) => {
-      const isGeneric = service === 'vercel' || service === 'firebase' || service === 'surge';
+    mutationFn: async ({ service, apiKey, accessKey, secretKey }) => {
+      const isGeneric = service === 'vercel' || service === 'firebase' || service === 'surge' || service === 'aws-s3' || service === 'gcs' || service === 'b2' || service === 'github-pages' || service === 'ftp';
       const endpoint = isGeneric ? `/api/settings/generic/${service}` : `/api/settings/${service}`;
       const response = await fetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey, accessKey, isActive: true })
+        body: JSON.stringify({ apiKey, accessKey, secretKey, isActive: true })
       });
 
       if (!response.ok) {
@@ -313,6 +465,46 @@ export default function ApiSetup() {
         case "surge":
           testResult = await testViaEndpoint("/api/test-generic-connection", { provider: service, apiKey, accessKey: surgeDomain }, "Surge connection successful");
           break;
+        case "aws-s3":
+          testResult = await testViaEndpoint("/api/test-generic-connection", { 
+            provider: service, 
+            apiKey, 
+            accessKey: awsAccessKeyId,
+            secretKey: JSON.stringify({ bucket: awsBucket, region: awsRegion, customDomain: awsCustomDomain })
+          }, "AWS S3 connection successful");
+          break;
+        case "gcs":
+          testResult = await testViaEndpoint("/api/test-generic-connection", { 
+            provider: service, 
+            apiKey, 
+            accessKey: gcsAccessKeyId,
+            secretKey: JSON.stringify({ bucket: gcsBucket, customDomain: gcsCustomDomain })
+          }, "Google Cloud Storage connection successful");
+          break;
+        case "b2":
+          testResult = await testViaEndpoint("/api/test-generic-connection", { 
+            provider: service, 
+            apiKey, 
+            accessKey: b2KeyId,
+            secretKey: JSON.stringify({ bucket: b2Bucket, endpoint: b2Endpoint, customDomain: b2CustomDomain })
+          }, "Backblaze B2 connection successful");
+          break;
+        case "github-pages":
+          testResult = await testViaEndpoint("/api/test-generic-connection", { 
+            provider: service, 
+            apiKey, 
+            accessKey: githubOwner,
+            secretKey: JSON.stringify({ repo: githubRepo, branch: githubBranch, customDomain: githubCustomDomain })
+          }, "GitHub Pages connection successful");
+          break;
+        case "ftp":
+          testResult = await testViaEndpoint("/api/test-generic-connection", { 
+            provider: service, 
+            apiKey, 
+            accessKey: ftpUser,
+            secretKey: JSON.stringify({ host: ftpHost, port: ftpPort, remoteDir: ftpRemoteDir, secure: ftpSecure, customDomain: ftpCustomDomain })
+          }, "FTP connection successful");
+          break;
         default:
           testResult = { success: false, message: "Unknown service" };
       }
@@ -327,13 +519,35 @@ export default function ApiSetup() {
     const apiKey = apiKeys[service];
     
     let accessKey: string | undefined = undefined;
+    let secretKey: string | undefined = undefined;
     if (service === "cloudflare") accessKey = cfAccountId;
     else if (service === "firebase") accessKey = firebaseProjectId;
     else if (service === "surge") accessKey = surgeDomain;
+    else if (service === "aws-s3") {
+      accessKey = awsAccessKeyId;
+      secretKey = JSON.stringify({ bucket: awsBucket, region: awsRegion, customDomain: awsCustomDomain });
+    } else if (service === "gcs") {
+      accessKey = gcsAccessKeyId;
+      secretKey = JSON.stringify({ bucket: gcsBucket, customDomain: gcsCustomDomain });
+    } else if (service === "b2") {
+      accessKey = b2KeyId;
+      secretKey = JSON.stringify({ bucket: b2Bucket, endpoint: b2Endpoint, customDomain: b2CustomDomain });
+    } else if (service === "github-pages") {
+      accessKey = githubOwner;
+      secretKey = JSON.stringify({ repo: githubRepo, branch: githubBranch, customDomain: githubCustomDomain });
+    } else if (service === "ftp") {
+      accessKey = ftpUser;
+      secretKey = JSON.stringify({ host: ftpHost, port: ftpPort, remoteDir: ftpRemoteDir, secure: ftpSecure, customDomain: ftpCustomDomain });
+    }
 
     const isMissingAccessKey = (service === "cloudflare" && !cfAccountId.trim()) || 
                              (service === "firebase" && !firebaseProjectId.trim()) || 
-                             (service === "surge" && !surgeDomain.trim());
+                             (service === "surge" && !surgeDomain.trim()) ||
+                             (service === "aws-s3" && (!awsAccessKeyId.trim() || !awsBucket.trim())) ||
+                             (service === "gcs" && (!gcsAccessKeyId.trim() || !gcsBucket.trim())) ||
+                             (service === "b2" && (!b2KeyId.trim() || !b2Bucket.trim() || !b2Endpoint.trim())) ||
+                             (service === "github-pages" && (!githubOwner.trim() || !githubRepo.trim())) ||
+                             (service === "ftp" && (!ftpHost.trim() || !ftpUser.trim()));
 
     if (!apiKey.trim() && isMissingAccessKey) {
       toast({
@@ -347,12 +561,13 @@ export default function ApiSetup() {
     setTestResults((prev) => ({ ...prev, [service]: null }));
     setApiKeys((prev) => ({ ...prev, [service]: "" }));
     
-    const isGenericOrCF = service === "cloudflare" || service === "vercel" || service === "firebase" || service === "surge";
+    const isGenericOrCF = service === "cloudflare" || service === "vercel" || service === "firebase" || service === "surge" || service === "aws-s3" || service === "gcs" || service === "b2" || service === "github-pages" || service === "ftp";
     if (isGenericOrCF) {
       updateApiKeyMutation.mutate({ 
         service, 
         apiKey: apiKey !== "•••••••••••" ? apiKey : undefined, 
-        accessKey: accessKey !== "•••••••••••" ? accessKey : undefined 
+        accessKey: accessKey !== "•••••••••••" ? accessKey : undefined,
+        secretKey: secretKey !== undefined ? secretKey : undefined
       });
     } else {
       updateApiKeyMutation.mutate({ service, apiKey });
@@ -428,7 +643,299 @@ export default function ApiSetup() {
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {service === "cloudflare" || service === "firebase" || service === "surge" ? (
+                {service === "aws-s3" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="aws-s3-key" className="text-gray-300">Secret Access Key</Label>
+                      <Input
+                        id="aws-s3-key"
+                        type="password"
+                        placeholder={hasCurrentKey ? "•••••••••••••••••••••" : placeholder}
+                        value={apiKeys["aws-s3"]}
+                        onChange={(e) => setApiKeys((prev) => ({ ...prev, "aws-s3": e.target.value }))}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${hasCurrentKey && !apiKeys["aws-s3"] ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="aws-s3-access" className="text-gray-300">Access Key ID</Label>
+                      <Input
+                        id="aws-s3-access"
+                        placeholder={settingsByProvider["aws-s3"]?.accessKey ? "•••••••••••••••••••••" : "Enter Access Key ID"}
+                        value={awsAccessKeyId}
+                        onChange={(e) => setAwsAccessKeyId(e.target.value)}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${settingsByProvider["aws-s3"]?.accessKey && !awsAccessKeyId ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="aws-s3-bucket" className="text-gray-300">S3 Bucket Name</Label>
+                        <Input
+                          id="aws-s3-bucket"
+                          placeholder="e.g. my-site-bucket"
+                          value={awsBucket}
+                          onChange={(e) => setAwsBucket(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="aws-s3-region" className="text-gray-300">AWS Region</Label>
+                        <Input
+                          id="aws-s3-region"
+                          placeholder="e.g. us-east-1"
+                          value={awsRegion}
+                          onChange={(e) => setAwsRegion(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="aws-s3-domain" className="text-gray-300">Custom Domain / CDN URL (Optional)</Label>
+                      <Input
+                        id="aws-s3-domain"
+                        placeholder="e.g. https://my-site.com"
+                        value={awsCustomDomain}
+                        onChange={(e) => setAwsCustomDomain(e.target.value)}
+                        className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                      />
+                    </div>
+                  </>
+                ) : service === "gcs" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="gcs-key" className="text-gray-300">GCS HMAC Secret Key</Label>
+                      <Input
+                        id="gcs-key"
+                        type="password"
+                        placeholder={hasCurrentKey ? "•••••••••••••••••••••" : placeholder}
+                        value={apiKeys["gcs"]}
+                        onChange={(e) => setApiKeys((prev) => ({ ...prev, "gcs": e.target.value }))}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${hasCurrentKey && !apiKeys["gcs"] ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gcs-access" className="text-gray-300">GCS HMAC Access Key</Label>
+                      <Input
+                        id="gcs-access"
+                        placeholder={settingsByProvider["gcs"]?.accessKey ? "•••••••••••••••••••••" : "Enter GCS HMAC Access Key"}
+                        value={gcsAccessKeyId}
+                        onChange={(e) => setGcsAccessKeyId(e.target.value)}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${settingsByProvider["gcs"]?.accessKey && !gcsAccessKeyId ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gcs-bucket" className="text-gray-300">GCS Bucket Name</Label>
+                      <Input
+                        id="gcs-bucket"
+                        placeholder="e.g. my-gcs-bucket"
+                        value={gcsBucket}
+                        onChange={(e) => setGcsBucket(e.target.value)}
+                        className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gcs-domain" className="text-gray-300">Custom Domain / CDN URL (Optional)</Label>
+                      <Input
+                        id="gcs-domain"
+                        placeholder="e.g. https://my-site.com"
+                        value={gcsCustomDomain}
+                        onChange={(e) => setGcsCustomDomain(e.target.value)}
+                        className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                      />
+                    </div>
+                  </>
+                ) : service === "b2" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="b2-key" className="text-gray-300">B2 Application Key</Label>
+                      <Input
+                        id="b2-key"
+                        type="password"
+                        placeholder={hasCurrentKey ? "•••••••••••••••••••••" : placeholder}
+                        value={apiKeys["b2"]}
+                        onChange={(e) => setApiKeys((prev) => ({ ...prev, "b2": e.target.value }))}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${hasCurrentKey && !apiKeys["b2"] ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="b2-access" className="text-gray-300">B2 Key ID</Label>
+                      <Input
+                        id="b2-access"
+                        placeholder={settingsByProvider["b2"]?.accessKey ? "•••••••••••••••••••••" : "Enter Key ID"}
+                        value={b2KeyId}
+                        onChange={(e) => setB2KeyId(e.target.value)}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${settingsByProvider["b2"]?.accessKey && !b2KeyId ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="b2-bucket" className="text-gray-300">B2 Bucket Name</Label>
+                        <Input
+                          id="b2-bucket"
+                          placeholder="e.g. my-b2-bucket"
+                          value={b2Bucket}
+                          onChange={(e) => setB2Bucket(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="b2-endpoint" className="text-gray-300">S3 Endpoint</Label>
+                        <Input
+                          id="b2-endpoint"
+                          placeholder="e.g. s3.us-west-004.backblazeb2.com"
+                          value={b2Endpoint}
+                          onChange={(e) => setB2Endpoint(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="b2-domain" className="text-gray-300">Custom Domain / CDN URL (Optional)</Label>
+                      <Input
+                        id="b2-domain"
+                        placeholder="e.g. https://my-site.com"
+                        value={b2CustomDomain}
+                        onChange={(e) => setB2CustomDomain(e.target.value)}
+                        className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                      />
+                    </div>
+                  </>
+                ) : service === "github-pages" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="github-key" className="text-gray-300">GitHub Personal Access Token (PAT)</Label>
+                      <Input
+                        id="github-key"
+                        type="password"
+                        placeholder={hasCurrentKey ? "•••••••••••••••••••••" : placeholder}
+                        value={apiKeys["github-pages"]}
+                        onChange={(e) => setApiKeys((prev) => ({ ...prev, "github-pages": e.target.value }))}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${hasCurrentKey && !apiKeys["github-pages"] ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="github-owner" className="text-gray-300">Repository Owner (Username/Organization)</Label>
+                      <Input
+                        id="github-owner"
+                        placeholder={(settingsByProvider["github-pages"] as any)?.accessKey ? "•••••••••••••••••••••" : "Enter Owner"}
+                        value={githubOwner}
+                        onChange={(e) => setGithubOwner(e.target.value)}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${(settingsByProvider["github-pages"] as any)?.accessKey && !githubOwner ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="github-repo" className="text-gray-300">Repository Name</Label>
+                        <Input
+                          id="github-repo"
+                          placeholder="e.g. my-website"
+                          value={githubRepo}
+                          onChange={(e) => setGithubRepo(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="github-branch" className="text-gray-300">Target Branch</Label>
+                        <Input
+                          id="github-branch"
+                          placeholder="e.g. gh-pages"
+                          value={githubBranch}
+                          onChange={(e) => setGithubBranch(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="github-domain" className="text-gray-300">Custom Domain (Optional)</Label>
+                      <Input
+                        id="github-domain"
+                        placeholder="e.g. https://my-site.com"
+                        value={githubCustomDomain}
+                        onChange={(e) => setGithubCustomDomain(e.target.value)}
+                        className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                      />
+                    </div>
+                  </>
+                ) : service === "ftp" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="ftp-key" className="text-gray-300">FTP Password</Label>
+                      <Input
+                        id="ftp-key"
+                        type="password"
+                        placeholder={hasCurrentKey ? "•••••••••••••••••••••" : placeholder}
+                        value={apiKeys["ftp"]}
+                        onChange={(e) => setApiKeys((prev) => ({ ...prev, "ftp": e.target.value }))}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${hasCurrentKey && !apiKeys["ftp"] ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700" : "bg-white/5"}`}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="col-span-2 space-y-2">
+                        <Label htmlFor="ftp-host" className="text-gray-300">FTP Host</Label>
+                        <Input
+                          id="ftp-host"
+                          placeholder="e.g. ftp.atwebpages.com"
+                          value={ftpHost}
+                          onChange={(e) => setFtpHost(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ftp-port" className="text-gray-300">Port</Label>
+                        <Input
+                          id="ftp-port"
+                          placeholder="21"
+                          value={ftpPort}
+                          onChange={(e) => setFtpPort(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ftp-username" className="text-gray-300">FTP Username</Label>
+                      <Input
+                        id="ftp-username"
+                        placeholder="Enter Username"
+                        value={ftpUser}
+                        onChange={(e) => setFtpUser(e.target.value)}
+                        className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="ftp-dir" className="text-gray-300">Remote Directory</Label>
+                        <Input
+                          id="ftp-dir"
+                          placeholder="e.g. /public_html"
+                          value={ftpRemoteDir}
+                          onChange={(e) => setFtpRemoteDir(e.target.value)}
+                          className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ftp-secure" className="text-gray-300">Encryption (FTPS)</Label>
+                        <select
+                          id="ftp-secure"
+                          value={ftpSecure}
+                          onChange={(e) => setFtpSecure(e.target.value)}
+                          className="w-full border border-white/10 text-white focus:border-[#7C3AED] bg-gray-900 rounded-lg p-2 text-sm"
+                        >
+                          <option value="false">Plain FTP (Insecure)</option>
+                          <option value="true">Require Implicit FTPS</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ftp-domain" className="text-gray-300">Custom Domain (Optional)</Label>
+                      <Input
+                        id="ftp-domain"
+                        placeholder="e.g. https://my-site.com"
+                        value={ftpCustomDomain}
+                        onChange={(e) => setFtpCustomDomain(e.target.value)}
+                        className="border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] bg-white/5"
+                      />
+                    </div>
+                  </>
+                ) : service === "cloudflare" || service === "firebase" || service === "surge" ? (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor={`${service}-key`} className="text-gray-300">
@@ -539,7 +1046,7 @@ export default function ApiSetup() {
                       } else if (hasCurrentKey) {
                         setTestingStates((prev) => ({ ...prev, [service]: true }));
                         try {
-                          const isGeneric = service === 'vercel' || service === 'firebase' || service === 'surge';
+                          const isGeneric = service === 'vercel' || service === 'firebase' || service === 'surge' || service === 'aws-s3' || service === 'gcs' || service === 'b2' || service === 'github-pages' || service === 'ftp';
                           const endpoint = isGeneric ? `/api/test-generic-connection` : `/api/test-stored-key/${service}`;
                           const body = isGeneric ? JSON.stringify({ provider: service }) : undefined;
                           const res = await fetch(endpoint, {
