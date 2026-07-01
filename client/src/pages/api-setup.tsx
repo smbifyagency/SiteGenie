@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,13 @@ import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, Loader2, Key, TestTube2, ExternalLink, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-type Provider = "openai" | "gemini" | "openrouter" | "deepseek" | "netlify" | "unsplash";
+type Provider = "openai" | "gemini" | "openrouter" | "deepseek" | "netlify" | "unsplash" | "cloudflare";
 
 interface ApiSetting {
   name: string;
   displayName: string;
   apiKey: string;
+  accessKey?: string;
   isActive: boolean;
 }
 
@@ -75,6 +76,13 @@ const providerConfigs: ProviderConfig[] = [
     description: "Fetch high-quality images for generated content",
     docsUrl: "https://unsplash.com/developers",
     placeholder: "Access Key"
+  },
+  {
+    service: "cloudflare",
+    title: "Cloudflare Pages API",
+    description: "Deploy generated websites directly to Cloudflare Pages",
+    docsUrl: "https://dash.cloudflare.com/",
+    placeholder: "API Token"
   }
 ];
 
@@ -84,7 +92,8 @@ const emptyProviderState = {
   openrouter: "",
   deepseek: "",
   netlify: "",
-  unsplash: ""
+  unsplash: "",
+  cloudflare: ""
 } as const;
 
 export default function ApiSetup() {
@@ -98,7 +107,8 @@ export default function ApiSetup() {
     openrouter: null,
     deepseek: null,
     netlify: null,
-    unsplash: null
+    unsplash: null,
+    cloudflare: null
   });
   const [testingStates, setTestingStates] = useState<Record<Provider, boolean>>({
     openai: false,
@@ -106,8 +116,11 @@ export default function ApiSetup() {
     openrouter: false,
     deepseek: false,
     netlify: false,
-    unsplash: false
+    unsplash: false,
+    cloudflare: false
   });
+
+  const [cfAccountId, setCfAccountId] = useState("");
 
   // Fetch existing API settings
   const { data: openaiSetting } = useQuery({ queryKey: ["/api/settings/openai"], enabled: true });
@@ -116,26 +129,36 @@ export default function ApiSetup() {
   const { data: deepseekSetting } = useQuery({ queryKey: ["/api/settings/deepseek"], enabled: true });
   const { data: netlifySetting } = useQuery({ queryKey: ["/api/settings/netlify"], enabled: true });
   const { data: unsplashSetting } = useQuery({ queryKey: ["/api/settings/unsplash"], enabled: true });
+  const { data: cloudflareSetting } = useQuery({ queryKey: ["/api/settings/cloudflare"], enabled: true });
 
   const settingsByProvider: Record<Provider, ApiSetting | undefined> = {
     openai: openaiSetting as ApiSetting | undefined,
     gemini: geminiSetting as ApiSetting | undefined,
     openrouter: openrouterSetting as ApiSetting | undefined,
-      deepseek: deepseekSetting as ApiSetting | undefined,
+    deepseek: deepseekSetting as ApiSetting | undefined,
     netlify: netlifySetting as ApiSetting | undefined,
     unsplash: unsplashSetting as ApiSetting | undefined,
+    cloudflare: cloudflareSetting as ApiSetting | undefined,
   };
 
+  useEffect(() => {
+    if (cloudflareSetting) {
+      if ((cloudflareSetting as any).accessKey && !cfAccountId) {
+        setCfAccountId("•••••••••••");
+      }
+    }
+  }, [cloudflareSetting]);
+
   const updateApiKeyMutation = useMutation<
-    { service: Provider; apiKey: string },
+    { service: Provider; apiKey?: string; accessKey?: string },
     Error,
-    { service: Provider; apiKey: string }
+    { service: Provider; apiKey?: string; accessKey?: string }
   >({
-    mutationFn: async ({ service, apiKey }) => {
+    mutationFn: async ({ service, apiKey, accessKey }) => {
       const response = await fetch(`/api/settings/${service}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey, isActive: true })
+        body: JSON.stringify({ apiKey, accessKey, isActive: true })
       });
 
       if (!response.ok) {
@@ -151,7 +174,7 @@ export default function ApiSetup() {
         throw new Error(errorMessage);
       }
 
-      return { service, apiKey };
+      return { service, apiKey, accessKey };
     },
     onSuccess: ({ service, apiKey }) => {
       toast({
@@ -162,7 +185,7 @@ export default function ApiSetup() {
       queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
 
       setTimeout(() => {
-        testConnection(service, apiKey);
+        testConnection(service, apiKey || "");
       }, 300);
     },
     onError: (error, { service }) => {
@@ -234,6 +257,9 @@ export default function ApiSetup() {
         case "unsplash":
           testResult = await testViaEndpoint("/api/test-unsplash", { apiKey }, "Unsplash API connection successful");
           break;
+        case "cloudflare":
+          testResult = await testViaEndpoint("/api/test-cloudflare", { apiKey, accountId: cfAccountId }, "Cloudflare API connection successful");
+          break;
         default:
           testResult = { success: false, message: "Unknown service" };
       }
@@ -247,7 +273,7 @@ export default function ApiSetup() {
   const handleSaveKey = (service: Provider) => {
     const apiKey = apiKeys[service];
 
-    if (!apiKey.trim()) {
+    if (!apiKey.trim() && (service !== "cloudflare" || !cfAccountId.trim())) {
       toast({
         title: "API Key Required",
         description: "Enter an API key before saving.",
@@ -258,7 +284,16 @@ export default function ApiSetup() {
 
     setTestResults((prev) => ({ ...prev, [service]: null }));
     setApiKeys((prev) => ({ ...prev, [service]: "" }));
-    updateApiKeyMutation.mutate({ service, apiKey });
+    
+    if (service === "cloudflare") {
+      updateApiKeyMutation.mutate({ 
+        service, 
+        apiKey: apiKey !== "•••••••••••" ? apiKey : undefined, 
+        accessKey: cfAccountId !== "•••••••••••" ? cfAccountId : undefined 
+      });
+    } else {
+      updateApiKeyMutation.mutate({ service, apiKey });
+    }
   };
 
   return (
@@ -330,31 +365,70 @@ export default function ApiSetup() {
               </CardHeader>
 
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor={`${service}-key`} className="text-gray-300">API Key</Label>
-                  <Input
-                    id={`${service}-key`}
-                    type="password"
-                    placeholder={hasCurrentKey ? "•••••••••••••••••••••" : placeholder}
-                    value={apiKeys[service]}
-                    onChange={(e) =>
-                      setApiKeys((prev) => ({
-                        ...prev,
-                        [service]: e.target.value,
-                      }))
-                    }
-                    className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${hasCurrentKey && !apiKeys[service]
-                        ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700"
-                        : "bg-white/5"
-                      }`}
-                    data-testid={`input-${service}-key`}
-                  />
-                  {hasCurrentKey && (
-                    <p className="text-xs text-emerald-400/70">
-                      ✓ Key is saved and active. Enter a new value to replace it.
-                    </p>
-                  )}
-                </div>
+                {service === "cloudflare" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor={`${service}-key`} className="text-gray-300">API Token</Label>
+                      <Input
+                        id={`${service}-key`}
+                        type="password"
+                        placeholder={hasCurrentKey ? "•••••••••••••••••••••" : placeholder}
+                        value={apiKeys[service]}
+                        onChange={(e) =>
+                          setApiKeys((prev) => ({
+                            ...prev,
+                            [service]: e.target.value,
+                          }))
+                        }
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${hasCurrentKey && !apiKeys[service]
+                            ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700"
+                            : "bg-white/5"
+                          }`}
+                        data-testid={`input-${service}-key`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`${service}-account-id`} className="text-gray-300">Account ID</Label>
+                      <Input
+                        id={`${service}-account-id`}
+                        placeholder={settingsByProvider[service]?.accessKey ? "•••••••••••••••••••••" : "Enter Account ID"}
+                        value={cfAccountId}
+                        onChange={(e) => setCfAccountId(e.target.value)}
+                        className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${settingsByProvider[service]?.accessKey && !cfAccountId
+                            ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700"
+                            : "bg-white/5"
+                          }`}
+                        data-testid={`input-${service}-account-id`}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor={`${service}-key`} className="text-gray-300">API Key</Label>
+                    <Input
+                      id={`${service}-key`}
+                      type="password"
+                      placeholder={hasCurrentKey ? "•••••••••••••••••••••" : placeholder}
+                      value={apiKeys[service]}
+                      onChange={(e) =>
+                        setApiKeys((prev) => ({
+                          ...prev,
+                          [service]: e.target.value,
+                        }))
+                      }
+                      className={`border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED] ${hasCurrentKey && !apiKeys[service]
+                          ? "bg-emerald-500/5 border-emerald-500/20 placeholder:text-emerald-700"
+                          : "bg-white/5"
+                        }`}
+                      data-testid={`input-${service}-key`}
+                    />
+                  </div>
+                )}
+                {hasCurrentKey && (
+                  <p className="text-xs text-emerald-400/70">
+                    ✓ Key is saved and active. Enter a new value to replace it.
+                  </p>
+                )}
 
                 <div className="flex items-center gap-2">
                   <Button

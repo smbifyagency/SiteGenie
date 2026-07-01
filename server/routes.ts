@@ -2513,6 +2513,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let headers: Record<string, string> = {};
 
       switch (service) {
+        case "cloudflare": {
+          let accountId = setting.accessKey || "";
+          try {
+            const { decrypt } = await import('./crypto.js');
+            if (accountId) {
+              accountId = decrypt(accountId);
+            }
+          } catch {}
+          if (!accountId) {
+            return res.status(400).json({ error: "Cloudflare Account ID is missing" });
+          }
+          testUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects`;
+          headers = { 
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          };
+          break;
+        }
         case "openai":
           testUrl = "https://api.openai.com/v1/models";
           headers = { Authorization: `Bearer ${apiKey}` };
