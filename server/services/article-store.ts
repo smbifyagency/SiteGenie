@@ -13,15 +13,31 @@ export interface ArticleCampaign {
   createdAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), "server", "data");
-const FILE_PATH = path.join(DATA_DIR, "articles.json");
+import os from "os";
+
+let DATA_DIR = path.join(process.cwd(), "server", "data");
+let FILE_PATH = path.join(DATA_DIR, "articles.json");
 
 function ensureFileExists() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (err) {
+    // Fallback to tmp directory if Vercel serverless runtime is read-only
+    DATA_DIR = os.tmpdir();
+    FILE_PATH = path.join(DATA_DIR, "articles.json");
   }
-  if (!fs.existsSync(FILE_PATH)) {
-    fs.writeFileSync(FILE_PATH, JSON.stringify([]));
+
+  try {
+    if (!fs.existsSync(FILE_PATH)) {
+      fs.writeFileSync(FILE_PATH, JSON.stringify([]));
+    }
+  } catch (err) {
+    FILE_PATH = path.join("/tmp", "articles.json");
+    if (!fs.existsSync(FILE_PATH)) {
+      fs.writeFileSync(FILE_PATH, JSON.stringify([]));
+    }
   }
 }
 

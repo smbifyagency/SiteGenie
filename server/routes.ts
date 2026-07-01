@@ -5339,7 +5339,7 @@ Total Websites: ${validatedData.businesses.length}
   app.post("/api/articles/generate", isAuthenticated, async (req, res) => {
     try {
       const userId = (req as any).user.id;
-      const { title, businessDetails, keywords, dofollowLinks } = req.body;
+      const { title, businessDetails, keywords, dofollowLinks, provider } = req.body;
 
       if (!title || !businessDetails || !keywords || !Array.isArray(keywords)) {
         return res.status(400).json({ message: "Title, businessDetails, and keywords are required" });
@@ -5349,12 +5349,24 @@ Total Websites: ${validatedData.businesses.length}
       let activeProvider: 'openai' | 'gemini' | 'openrouter' | 'deepseek' | null = null;
       let activeKey: string | null = null;
 
-      for (const p of ['gemini', 'openai', 'deepseek', 'openrouter'] as const) {
-        const key = await getAIProviderConfig(userId, p, req);
+      if (provider && ['gemini', 'openai', 'deepseek', 'openrouter'].includes(provider)) {
+        const key = await getAIProviderConfig(userId, provider as any, req);
         if (key) {
-          activeProvider = p;
+          activeProvider = provider as any;
           activeKey = key;
-          break;
+        } else {
+          return res.status(400).json({
+            message: `Selected provider '${provider}' is not configured or lacks a valid API key in settings.`
+          });
+        }
+      } else {
+        for (const p of ['gemini', 'openai', 'deepseek', 'openrouter'] as const) {
+          const key = await getAIProviderConfig(userId, p, req);
+          if (key) {
+            activeProvider = p;
+            activeKey = key;
+            break;
+          }
         }
       }
 

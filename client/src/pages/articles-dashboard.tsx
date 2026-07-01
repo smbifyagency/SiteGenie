@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Send, Trash, Plus, FileText, Link, Sparkles, CheckCircle2, AlertTriangle, ExternalLink } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface DofollowLink {
   url: string;
@@ -33,6 +34,7 @@ export default function ArticlesDashboard() {
   const [businessDetails, setBusinessDetails] = useState("");
   const [keywordsInput, setKeywordsInput] = useState("");
   const [links, setLinks] = useState<DofollowLink[]>([{ url: "", anchor: "" }]);
+  const [aiProvider, setAiProvider] = useState<string>("gemini");
 
   // Fetch campaigns
   const { data: campaigns = [], isLoading } = useQuery<ArticleCampaign[]>({
@@ -153,7 +155,8 @@ export default function ArticlesDashboard() {
       title,
       businessDetails,
       keywords,
-      dofollowLinks: validLinks
+      dofollowLinks: validLinks,
+      provider: aiProvider
     });
   };
 
@@ -193,6 +196,21 @@ export default function ArticlesDashboard() {
                     onChange={(e) => setTitle(e.target.value)}
                     className="bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-[#7C3AED]"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-gray-300">AI Provider</Label>
+                  <Select value={aiProvider} onValueChange={setAiProvider}>
+                    <SelectTrigger className="bg-white/5 border-white/10 text-white focus:border-[#7C3AED] h-10">
+                      <SelectValue placeholder="Select AI API" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-950 border-white/10 text-white">
+                      <SelectItem value="gemini">Gemini API</SelectItem>
+                      <SelectItem value="openai">OpenAI API</SelectItem>
+                      <SelectItem value="deepseek">DeepSeek API</SelectItem>
+                      <SelectItem value="openrouter">OpenRouter (Gemini/OpenAI/etc.)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
